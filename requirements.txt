@@ -1,1 +1,4 @@
 z3-solver
+lxml
+pymupdf
+# docling  -- optional, PDF layout-model path only; pulls torch. Lazy-imported.

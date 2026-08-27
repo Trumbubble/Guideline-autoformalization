@@ -1,0 +1,7 @@
+# Downloaded guideline corpus: re-fetchable from a stable PMCID, and keeping
+# third-party guideline text out of git history avoids any redistribution
+# question (DEV_PLAN risk #5).
+corpus/
+# Segmenter output: generated, large, and full of verbatim source text.
+*.jsonl
+__pycache__/

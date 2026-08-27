@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<article article-type="guideline">
+  <front>
+    <article-meta>
+      <title-group><article-title>Synthetic CKD guideline fixture</article-title></title-group>
+    </article-meta>
+    <abstract>
+      <sec><title>Key points</title>
+        <p>We recommend treatment with an ACE inhibitor or ARB in adults with
+        diabetes and a urine albumin-to-creatinine ratio of 30 mg/g or higher (1B).</p>
+      </sec>
+    </abstract>
+  </front>
+  <body>
+    <sec id="s1"><label>1</label><title>Background</title>
+      <p>Chronic kidney disease affects approximately 10% of adults worldwide.
+      Smith et al. reported a prevalence of 13.4% in a cohort of 12,000 partici-
+      pants. Further research is needed to clarify progression in younger adults.</p>
+    </sec>
+
+    <sec id="s2"><label>2</label><title>Methods</title>
+      <p>We searched MEDLINE and Embase from inception to March 2025. Two
+      reviewers independently screened titles and assessed risk of bias.</p>
+    </sec>
+
+    <sec id="s3"><label>3</label><title>Recommendations for pharmacological management</title>
+      <boxed-text id="b1">
+        <label>Recommendation 3.1</label>
+        <p>We recommend treatment with an ACE inhibitor or ARB in adults with
+        diabetes and a urine albumin-to-creatinine ratio of 30 mg/g or higher (1B).
+        Serum potassium and creatinine should be checked within 14 days of
+        starting therapy. See Section 4.2 for monitoring intervals.</p>
+        <p>Strong recommendation, moderate certainty evidence.</p>
+      </boxed-text>
+      <p>The evidence supporting this recommendation was drawn from four
+      randomised trials with a combined enrolment of 8,412 patients.</p>
+      <boxed-text id="b2">
+        <label>Recommendation 3.2</label>
+        <p>In patients with advanced disease, the choice of renal replacement
+        therapy should be discussed in a multidisciplinary team meeting after an
+        adequate trial of conservative management (2D).</p>
+      </boxed-text>
+    </sec>
+
+    <sec id="s4"><label>4</label><title>Referral and monitoring</title>
+      <table-wrap id="t2">
+        <label>Table 2</label>
+        <caption><title>Recommendations for specialist referral</title></caption>
+        <table>
+          <thead><tr><th>Finding</th><th>Action</th><th>Grade</th></tr></thead>
+          <tbody>
+            <tr><td>eGFR below 30 mL/min/1.73m2</td><td>Refer to nephrology</td><td>1A</td></tr>
+            <tr><td>ACR 300 mg/g or higher</td><td>Refer to nephrology</td><td>1B</td></tr>
+            <tr><td>eGFR 30-59 mL/min/1.73m2 and stable</td><td>Monitor annually in primary care</td><td>2C</td></tr>
+          </tbody>
+        </table>
+      </table-wrap>
+      <sec id="s4-2"><label>4.2</label><title>Monitoring intervals</title>
+        <p>Measure eGFR and ACR at least annually in all patients with chronic
+        kidney disease.</p>
+        <list list-type="bullet">
+          <list-item><p>Offer a repeat eGFR within 14 days after starting an ACE inhibitor.</p></list-item>
+          <list-item><p>Do not offer routine bicarbonate testing in the absence of acidosis.</p></list-item>
+        </list>
+      </sec>
+      <fig id="f1"><label>Figure 1</label>
+        <caption><title>Referral pathway flowchart</title></caption>
+      </fig>
+    </sec>
+
+    <sec id="s5"><label>5</label><title>Funding and conflicts of interest</title>
+      <p>This work should be cited as an independent review. The authors declare
+      no competing interests.</p>
+    </sec>
+  </body>
+</article>
