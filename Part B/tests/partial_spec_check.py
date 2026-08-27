@@ -1,3 +1,5 @@
+"""Original minimal reproduction of the three-valued checker. See ../CHECKER.md."""
+
 import random
 
 from z3 import Bool, Real, Solver, And, Implies, Not, sat, unsat

@@ -1,38 +1,6 @@
-"""Hand-authored library of real guideline rules for Track B, expressed in
-the Part A DSL (see `../Part A/DSL.md`) instead of raw Z3.
-
-Earlier versions of this file built Z3 formulas directly, which let the same
-bug classes the DSL exists to catch slip in unnoticed:
-
-  * obligations with no action atom -- "ACE inhibitor on -> potassium<=5.0"
-    puts the drug in `when` and the lab in `then`, but a care plan cannot
-    decide a lab value. The correct framing is the contrapositive: the risk
-    factor is `when`, the thing the plan controls is `then`.
-  * monitoring with no occurrence flag -- a bare `days_since_check <= 14` is
-    satisfiable for a patient who was *never checked* (the solver just picks
-    a small number). `Since` fixes this by requiring `<event>_occurred` too.
-  * no domain axioms -- nothing stopped a MAY-violate witness from using
-    potassium = -400.
-  * duplicate variables -- two independent "creatinine clearance" variables
-    (one per drug) and two independent potassium-monitoring tracks, when a
-    patient has one kidney and one most-recent potassium check.
-
-Every rule below is a `dsl.Rule` (when -> then over a closed `Registry`),
-validated with `dsl.validate_rule` + `dsl.check_nondegenerate` at import
-time -- if a rule is malformed or vacuous, importing this module raises
-instead of silently shipping bad material. `SpecClause` is a thin
-Track-B-shaped view over each validated rule (Z3 predicate, named variable
-refs, boundary metadata) so the rest of Part B (`synthesize_boundary_tests.py`,
-`detection_benchmark.py`, `differential_check.py`, `api.py`) barely has to
-change.
-
-The ``source_sentence`` fields are representative paraphrases of well
-established prescribing guidance (BNF, FDA labeling, NICE/ESC guidelines),
-not verbatim extracted quotes, and `source_page` is a nominal placeholder
-(these fixtures are hand-authored, not extracted from a real paginated
-document) -- treat them as fixtures to exercise the verifier, not as a
-substitute for checking the primary source.
-"""
+"""Track B fixture library: a Registry + ten dsl.Rules + a SpecClause view
+over each. See CHECKER.md for what this is, why it goes through the DSL
+instead of raw Z3, and what each field means."""
 
 import sys
 from dataclasses import dataclass, field

@@ -1,28 +1,16 @@
-"""Detection benchmark: does the three-valued checker actually catch violations?
-
-`synthesize_boundary_tests.py` builds concrete, Z3-solved patient bundles at
-each rule's threshold boundaries, each one built specifically to be either a
-compliant or a violating instantiation. This script re-derives the verdict
-for every one of those bundles independently -- fully pinning every
-variable the rule references and re-running the same MUST-violate /
-MAY-violate / CERTIFIED-compliant check `benchmark.py` uses -- and confirms
-MUST-violate fires on every bundle that was built to violate, and only
-those.
-
-`benchmark.py` already shows the checker doesn't false-positive on fully
-random synthetic plans (`naive_false_violation_rate`). This is the other
-half: true-positive detection on bundles that are ground-truth violations
-by construction, not hand-picked test numbers.
-
-    python3 detection_benchmark.py
-"""
+"""Detection benchmark: does MUST-violate fire on every ground-truth
+violation `synthesize_boundary_tests.py` built, and only those?
+See ../CHECKER.md."""
 
 import csv
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-from real_rules import DOMAIN_AXIOMS, REAL_RULES
-from synthesize_boundary_tests import classify, synthesize_cases
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from real_rules import DOMAIN_AXIOMS, REAL_RULES  # noqa: E402
+from synthesize_boundary_tests import classify, synthesize_cases  # noqa: E402
 
 OUTPUT_CSV = Path(__file__).parent / "detection_benchmark_results.csv"
 

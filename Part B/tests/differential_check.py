@@ -1,33 +1,17 @@
-"""Cheap differential check: a second, independently-worded encoding per rule.
-
-For three fixtures, this hand-writes a second Z3 predicate from an
-independent reading of the same guideline sentence -- the same ambiguity a
-second person (or a second LLM) might resolve differently -- referencing the
-exact same variables as the primary encoding in `real_rules.py`. Both
-predicates are then evaluated on every concrete, fully-pinned bundle
-`synthesize_boundary_tests.py` already solved for.
-
-Any bundle where the two disagree is a signal worth inspecting: it means
-the source sentence was ambiguous enough that two reasonable formalizations
-diverge. That's exactly the failure mode the full dual-LLM-encoding idea is
-meant to catch (encode the same sentence twice, independently, and flag
-disagreement); this is a cheap stand-in usable right now -- a second human
-reading instead of a second model call. Boundary bundles are the highest-
-yield place to run this: inclusive/exclusive threshold wording is where
-independent readings are most likely to differ, and the boundary bundles
-sit exactly on the threshold value.
-
-    python3 differential_check.py
-"""
+"""Cheap differential check: a second, independently-worded Z3 encoding for
+three fixtures, evaluated against the same boundary bundles. See ../CHECKER.md."""
 
 import csv
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
 from z3 import And, Implies, Solver, sat
 
-from real_rules import DOMAIN_AXIOMS, REAL_RULES
-from synthesize_boundary_tests import synthesize_cases
+from real_rules import DOMAIN_AXIOMS, REAL_RULES  # noqa: E402
+from synthesize_boundary_tests import synthesize_cases  # noqa: E402
 
 OUTPUT_CSV = Path(__file__).parent / "differential_check_results.csv"
 

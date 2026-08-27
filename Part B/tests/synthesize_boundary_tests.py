@@ -1,23 +1,16 @@
-"""Coverage-directed test synthesis over the Track B fixtures.
-
-For every numeric threshold declared on a `real_rules.SpecClause`, this
-solves -- with Z3, not by hand -- for a concrete patient bundle sitting on
-each side of the boundary (e.g. eGFR=29 vs 30, a 14-day vs 15-day gap), then
-runs that bundle through the same three-valued MUST/MAY/CERTIFIED check
-`benchmark.py` uses on a full plan. The boundary arithmetic (threshold +-
-step) is the only hand-picked part; every other free variable in the bundle
--- and the resulting verdict -- comes out of the solver.
-
-    python3 synthesize_boundary_tests.py
-"""
+"""Coverage-directed boundary test synthesis over the real_rules.py fixtures.
+See ../CHECKER.md."""
 
 import csv
+import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
 from z3 import BoolRef, Not, Solver, is_bool, is_int, sat
 
-from real_rules import DOMAIN_AXIOMS, REAL_RULES
+from real_rules import DOMAIN_AXIOMS, REAL_RULES  # noqa: E402
 
 OUTPUT_CSV = Path(__file__).parent / "synthesized_cases.csv"
 
