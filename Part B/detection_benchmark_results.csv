@@ -1,0 +1,26 @@
+rule_id,boundary_description,side,source,expected_label,actual_verdict,matched
+ace_inhibitor_hyperkalemia_contraindication,serum potassium (mmol/L),compliant_side,bundle,compliant,CERTIFIED-compliant,1
+ace_inhibitor_hyperkalemia_contraindication,serum potassium (mmol/L),violating_side,bundle,violating,MUST-violate,1
+ace_inhibitor_potassium_monitoring,days since last potassium check,compliant_side,bundle,compliant,CERTIFIED-compliant,1
+ace_inhibitor_potassium_monitoring,days since last potassium check,violating_side,bundle,violating,MUST-violate,1
+apixaban_renal_dose_reduction,"patient age (years) -- deciding vote, weight met",compliant_side,bundle,compliant,CERTIFIED-compliant,1
+apixaban_renal_dose_reduction,"patient age (years) -- deciding vote, weight met",compliant_side,counter_bundle,violating,MUST-violate,1
+apixaban_renal_dose_reduction,"patient age (years) -- deciding vote, weight met",violating_side,bundle,compliant,CERTIFIED-compliant,1
+apixaban_renal_dose_reduction,"patient body weight (kg) -- deciding vote, creatinine met",compliant_side,bundle,compliant,CERTIFIED-compliant,1
+apixaban_renal_dose_reduction,"patient body weight (kg) -- deciding vote, creatinine met",compliant_side,counter_bundle,violating,MUST-violate,1
+apixaban_renal_dose_reduction,"patient body weight (kg) -- deciding vote, creatinine met",violating_side,bundle,compliant,CERTIFIED-compliant,1
+apixaban_renal_dose_reduction,"serum creatinine (mg/dL) -- deciding vote, age met",compliant_side,bundle,compliant,CERTIFIED-compliant,1
+apixaban_renal_dose_reduction,"serum creatinine (mg/dL) -- deciding vote, age met",compliant_side,counter_bundle,violating,MUST-violate,1
+apixaban_renal_dose_reduction,"serum creatinine (mg/dL) -- deciding vote, age met",violating_side,bundle,compliant,CERTIFIED-compliant,1
+rivaroxaban_renal_tiering,creatinine clearance (mL/min) -- absolute contraindication,compliant_side,bundle,compliant,CERTIFIED-compliant,1
+rivaroxaban_renal_tiering,creatinine clearance (mL/min) -- absolute contraindication,compliant_side,counter_bundle,violating,MUST-violate,1
+rivaroxaban_renal_tiering,creatinine clearance (mL/min) -- absolute contraindication,violating_side,bundle,violating,MUST-violate,1
+rivaroxaban_renal_tiering,"creatinine clearance (mL/min) -- dose-reduction tier, dose not reduced",compliant_side,bundle,compliant,CERTIFIED-compliant,1
+rivaroxaban_renal_tiering,"creatinine clearance (mL/min) -- dose-reduction tier, dose not reduced",violating_side,bundle,violating,MUST-violate,1
+warfarin_nsaid_bleeding_interaction,INR monitoring frequency (days),compliant_side,bundle,compliant,CERTIFIED-compliant,1
+warfarin_nsaid_bleeding_interaction,INR monitoring frequency (days),violating_side,bundle,violating,MUST-violate,1
+digoxin_renal_dose_and_monitoring,"creatinine clearance (mL/min) -- dose-reduction gate, monitoring already satisfied",compliant_side,bundle,compliant,CERTIFIED-compliant,1
+digoxin_renal_dose_and_monitoring,"creatinine clearance (mL/min) -- dose-reduction gate, monitoring already satisfied",violating_side,bundle,compliant,CERTIFIED-compliant,1
+digoxin_renal_dose_and_monitoring,"creatinine clearance (mL/min) -- dose-reduction gate, monitoring already satisfied",violating_side,counter_bundle,violating,MUST-violate,1
+digoxin_renal_dose_and_monitoring,"days since last potassium check -- monitoring gate, renal function normal",compliant_side,bundle,compliant,CERTIFIED-compliant,1
+digoxin_renal_dose_and_monitoring,"days since last potassium check -- monitoring gate, renal function normal",violating_side,bundle,violating,MUST-violate,1
