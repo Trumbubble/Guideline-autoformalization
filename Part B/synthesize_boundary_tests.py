@@ -17,7 +17,7 @@ from pathlib import Path
 
 from z3 import BoolRef, Not, Solver, is_bool, is_int, sat
 
-from real_rules import REAL_RULES
+from real_rules import DOMAIN_AXIOMS, REAL_RULES
 
 OUTPUT_CSV = Path(__file__).parent / "synthesized_cases.csv"
 
@@ -93,7 +93,11 @@ def synthesize_cases() -> list:
                 ("compliant_side", compliant_value),
                 ("violating_side", violating_value),
             ):
-                domain = list(boundary.context) + [boundary.variable == value]
+                domain = (
+                    list(DOMAIN_AXIOMS)
+                    + list(boundary.context)
+                    + [boundary.variable == value]
+                )
                 verdict = classify(domain, rule.predicate)
 
                 if verdict == "CERTIFIED-compliant":
