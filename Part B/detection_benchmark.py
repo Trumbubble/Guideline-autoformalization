@@ -21,7 +21,7 @@ import csv
 from dataclasses import dataclass
 from pathlib import Path
 
-from real_rules import REAL_RULES
+from real_rules import DOMAIN_AXIOMS, REAL_RULES
 from synthesize_boundary_tests import classify, synthesize_cases
 
 OUTPUT_CSV = Path(__file__).parent / "detection_benchmark_results.csv"
@@ -42,7 +42,9 @@ class DetectionResult:
 
 def pin_domain(rule, bundle: dict) -> list:
     """Fully pin every variable the rule references to one concrete bundle."""
-    return [var_ref == bundle[name] for name, var_ref in rule.var_refs.items()]
+    return list(DOMAIN_AXIOMS) + [
+        var_ref == bundle[name] for name, var_ref in rule.var_refs.items()
+    ]
 
 
 def run_detection_benchmark() -> list:

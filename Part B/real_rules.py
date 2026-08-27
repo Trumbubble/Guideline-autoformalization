@@ -1,29 +1,277 @@
-"""Hand-authored library of real guideline rules for Track B.
+"""Hand-authored library of real guideline rules for Track B, expressed in
+the Part A DSL (see `../Part A/DSL.md`) instead of raw Z3.
 
-Each ``SpecClause`` below is a small, typed, self-contained fixture: a Z3
-predicate over realistically-named variables, the numeric threshold(s) the
-predicate turns on, and the guideline sentence it was authored from. These
-are written by hand so Track B has real material to test against without
-waiting on a document-extraction pipeline. `partial_spec_check.py` has the
-original metformin/eGFR example this library extends beyond.
+Earlier versions of this file built Z3 formulas directly, which let the same
+bug classes the DSL exists to catch slip in unnoticed:
+
+  * obligations with no action atom -- "ACE inhibitor on -> potassium<=5.0"
+    puts the drug in `when` and the lab in `then`, but a care plan cannot
+    decide a lab value. The correct framing is the contrapositive: the risk
+    factor is `when`, the thing the plan controls is `then`.
+  * monitoring with no occurrence flag -- a bare `days_since_check <= 14` is
+    satisfiable for a patient who was *never checked* (the solver just picks
+    a small number). `Since` fixes this by requiring `<event>_occurred` too.
+  * no domain axioms -- nothing stopped a MAY-violate witness from using
+    potassium = -400.
+  * duplicate variables -- two independent "creatinine clearance" variables
+    (one per drug) and two independent potassium-monitoring tracks, when a
+    patient has one kidney and one most-recent potassium check.
+
+Every rule below is a `dsl.Rule` (when -> then over a closed `Registry`),
+validated with `dsl.validate_rule` + `dsl.check_nondegenerate` at import
+time -- if a rule is malformed or vacuous, importing this module raises
+instead of silently shipping bad material. `SpecClause` is a thin
+Track-B-shaped view over each validated rule (Z3 predicate, named variable
+refs, boundary metadata) so the rest of Part B (`synthesize_boundary_tests.py`,
+`detection_benchmark.py`, `differential_check.py`, `api.py`) barely has to
+change.
 
 The ``source_sentence`` fields are representative paraphrases of well
 established prescribing guidance (BNF, FDA labeling, NICE/ESC guidelines),
-not verbatim extracted quotes -- treat them as fixtures to exercise the
-verifier, not as a substitute for checking the primary source.
-
-Each numeric threshold in a rule is also recorded as a ``Boundary``: the Z3
-variable it constrains, the comparison operator, the threshold itself, a
-step size at the variable's realistic reporting precision, and any extra
-constraints ("context") needed to isolate that one threshold's effect from
-the rest of the predicate. `synthesize_boundary_tests.py` walks these
-boundaries and asks Z3 to solve for concrete patient bundles on both sides
-of each one, instead of hand-picking test numbers.
+not verbatim extracted quotes, and `source_page` is a nominal placeholder
+(these fixtures are hand-authored, not extracted from a real paginated
+document) -- treat them as fixtures to exercise the verifier, not as a
+substitute for checking the primary source.
 """
 
+import sys
 from dataclasses import dataclass, field
+from pathlib import Path
 
-from z3 import And, Bool, BoolRef, If, Implies, Int, Not, Real, Sum
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "Part A"))
+
+import dsl  # noqa: E402
+from dsl import And, Between, Cmp, EventDef, Or, Registry, Rule, Since, VarDef  # noqa: E402
+
+# ---------------------------------------------------------------- registry
+
+REGISTRY = Registry(
+    [
+        VarDef("ace_inhibitor_on", "bool", None, "prescribed an ACE inhibitor",
+               role="action"),
+        VarDef("potassium", "real", "mmol/L", "serum potassium",
+               binding="LOINC:2823-3", plausible=(1.5, 9.0)),
+        VarDef("apixaban_on", "bool", None, "prescribed apixaban", role="action"),
+        VarDef("apixaban_dose_reduced", "bool", None,
+               "apixaban prescribed at the reduced 2.5 mg twice-daily dose",
+               role="action"),
+        VarDef("patient_age_years", "real", "years", "patient age",
+               plausible=(0, 120)),
+        VarDef("patient_weight_kg", "real", "kg", "patient body weight",
+               plausible=(20, 300)),
+        VarDef("serum_creatinine_mg_dl", "real", "mg/dL", "serum creatinine",
+               binding="LOINC:2160-0", plausible=(0.1, 20)),
+        VarDef("rivaroxaban_on", "bool", None, "prescribed rivaroxaban",
+               role="action"),
+        VarDef("rivaroxaban_dose_reduced", "bool", None,
+               "rivaroxaban prescribed at the reduced dose", role="action"),
+        # Shared by rivaroxaban and digoxin -- a patient has one kidney,
+        # not one creatinine clearance per drug.
+        VarDef("creatinine_clearance_ml_min", "real", "mL/min",
+               "creatinine clearance", plausible=(0, 200)),
+        VarDef("warfarin_on", "bool", None, "prescribed warfarin", role="action"),
+        VarDef("nsaid_on", "bool", None, "prescribed an NSAID", role="action"),
+        VarDef("clarithromycin_on", "bool", None, "prescribed clarithromycin",
+               role="action"),
+        VarDef("simvastatin_on", "bool", None, "prescribed simvastatin",
+               role="action"),
+        VarDef("nonselective_beta_blocker_on", "bool", None,
+               "prescribed a non-selective beta-blocker", role="action"),
+        VarDef("asthma_diagnosis", "bool", None, "diagnosis of asthma"),
+        VarDef("digoxin_on", "bool", None, "prescribed digoxin", role="action"),
+        VarDef("digoxin_dose_reduced", "bool", None,
+               "digoxin prescribed at a reduced dose", role="action"),
+    ],
+    events=[
+        # Shared by the ACE inhibitor and digoxin monitoring rules -- one
+        # most-recent potassium check per patient, not one per drug.
+        EventDef("potassium_check", "serum potassium measured",
+                  "LOINC:2823-3"),
+        EventDef("inr_check", "INR measured", "LOINC:6301-6"),
+    ],
+)
+
+# ---------------------------------------------------------------- rules
+#
+# Fixture provenance is hand-authored, not extracted from a real document --
+# source_page is a nominal placeholder, required by validate_rule but not
+# meaningful here.
+_PAGE = 1
+
+_ace_hyperkalemia_trigger = Cmp("potassium", ">", 5.0)
+_apixaban_age = Cmp("patient_age_years", ">=", 80)
+_apixaban_weight = Cmp("patient_weight_kg", "<=", 60)
+_apixaban_creatinine = Cmp("serum_creatinine_mg_dl", ">=", 1.5)
+_rivaroxaban_contraindication_trigger = Cmp("creatinine_clearance_ml_min", "<", 15)
+_rivaroxaban_dose_tier = Between(
+    "creatinine_clearance_ml_min", 15, 50, lo_inclusive=True, hi_inclusive=False
+)
+_digoxin_renal_trigger = Cmp("creatinine_clearance_ml_min", "<", 60)
+
+RULES = [
+    Rule(
+        rule_id="ace_inhibitor_hyperkalemia_contraindication",
+        # Contrapositive of "if on ACEi, potassium must be <= 5.0": the
+        # action atom (ace_inhibitor_on) has to live in `then`, since that's
+        # the only thing a care plan decides.
+        when=_ace_hyperkalemia_trigger,
+        then=Cmp("ace_inhibitor_on", "==", False),
+        action="avoid", target="ACE inhibitor",
+        source_page=_PAGE,
+        source_span=(
+            "An ACE inhibitor should not be started in a patient whose "
+            "serum potassium is above 5.0 mmol/L."
+        ),
+    ),
+    Rule(
+        rule_id="ace_inhibitor_potassium_monitoring",
+        when=Cmp("ace_inhibitor_on", "==", True),
+        then=Since("potassium_check", 14),
+        action="monitor", target="serum potassium",
+        source_page=_PAGE,
+        source_span=(
+            "Serum potassium and renal function should be checked "
+            "within 14 days of starting or increasing the dose of an "
+            "ACE inhibitor."
+        ),
+    ),
+    Rule(
+        rule_id="apixaban_renal_dose_reduction",
+        # >= 2 of 3 criteria, written as an explicit Or of pairwise Ands --
+        # not a cardinality shortcut. P3's own lesson: an AND-for-OR slip
+        # here is exactly the failure mode that typechecks and is wrong.
+        when=And([
+            Cmp("apixaban_on", "==", True),
+            Or([
+                And([_apixaban_age, _apixaban_weight]),
+                And([_apixaban_age, _apixaban_creatinine]),
+                And([_apixaban_weight, _apixaban_creatinine]),
+            ]),
+        ]),
+        then=Cmp("apixaban_dose_reduced", "==", True),
+        action="recommend", target="reduced apixaban dose (2.5 mg twice daily)",
+        source_page=_PAGE,
+        source_span=(
+            "Reduce the apixaban dose to 2.5 mg twice daily if at least "
+            "two of the following apply: age 80 years or older, body "
+            "weight 60 kg or less, or serum creatinine 1.5 mg/dL or "
+            "greater."
+        ),
+    ),
+    Rule(
+        rule_id="rivaroxaban_contraindication",
+        when=_rivaroxaban_contraindication_trigger,
+        then=Cmp("rivaroxaban_on", "==", False),
+        action="avoid", target="rivaroxaban",
+        source_page=_PAGE,
+        source_span=(
+            "Rivaroxaban should be avoided if creatinine clearance is "
+            "below 15 mL/min."
+        ),
+    ),
+    Rule(
+        rule_id="rivaroxaban_dose_reduction",
+        # Between forces the inclusivity decision the original prose left
+        # implicit -- see differential_check.py for what happens when a
+        # second reading picks the other one.
+        when=And([Cmp("rivaroxaban_on", "==", True), _rivaroxaban_dose_tier]),
+        then=Cmp("rivaroxaban_dose_reduced", "==", True),
+        action="recommend", target="reduced rivaroxaban dose",
+        source_page=_PAGE,
+        source_span=(
+            "A reduced dose of rivaroxaban should be used if creatinine "
+            "clearance is 15 mL/min or above but below 50 mL/min."
+        ),
+    ),
+    Rule(
+        rule_id="warfarin_nsaid_bleeding_interaction",
+        when=And([Cmp("warfarin_on", "==", True), Cmp("nsaid_on", "==", True)]),
+        then=Since("inr_check", 7),
+        action="monitor", target="INR",
+        source_page=_PAGE,
+        source_span=(
+            "Concurrent use of an NSAID with warfarin increases bleeding "
+            "risk and should be avoided; where unavoidable, INR should "
+            "be monitored at least weekly."
+        ),
+    ),
+    Rule(
+        rule_id="clarithromycin_simvastatin_contraindication",
+        when=Cmp("clarithromycin_on", "==", True),
+        then=Cmp("simvastatin_on", "==", False),
+        action="avoid", target="simvastatin",
+        source_page=_PAGE,
+        source_span=(
+            "Concomitant use of clarithromycin, a strong CYP3A4 "
+            "inhibitor, with simvastatin is contraindicated because of "
+            "increased risk of myopathy and rhabdomyolysis."
+        ),
+    ),
+    Rule(
+        rule_id="nonselective_beta_blocker_asthma_contraindication",
+        when=Cmp("asthma_diagnosis", "==", True),
+        then=Cmp("nonselective_beta_blocker_on", "==", False),
+        action="avoid", target="non-selective beta-blocker",
+        source_page=_PAGE,
+        source_span=(
+            "Non-selective beta-blockers are contraindicated in "
+            "patients with a diagnosis of asthma because of the risk of "
+            "bronchospasm."
+        ),
+    ),
+    Rule(
+        rule_id="digoxin_renal_dose_reduction",
+        when=And([Cmp("digoxin_on", "==", True), _digoxin_renal_trigger]),
+        then=Cmp("digoxin_dose_reduced", "==", True),
+        action="recommend", target="reduced digoxin dose",
+        source_page=_PAGE,
+        source_span=(
+            "Digoxin dose should be reduced in patients with a "
+            "creatinine clearance below 60 mL/min."
+        ),
+    ),
+    Rule(
+        rule_id="digoxin_potassium_monitoring",
+        when=Cmp("digoxin_on", "==", True),
+        then=Since("potassium_check", 30),
+        action="monitor", target="serum potassium",
+        source_page=_PAGE,
+        source_span=(
+            "Serum potassium should be monitored within 30 days in "
+            "patients prescribed digoxin, given the increased risk of "
+            "toxicity with hypokalemia."
+        ),
+    ),
+]
+
+# Fail loudly at import time rather than shipping an unvalidated rule.
+for _rule in RULES:
+    _issues = dsl.validate_rule(_rule, REGISTRY) + dsl.check_nondegenerate(_rule, REGISTRY)
+    if _issues:
+        raise AssertionError(
+            f"{_rule.rule_id} failed DSL validation: "
+            + "; ".join(f"{i.code}: {i.message}" for i in _issues)
+        )
+
+RULES_BY_ID = {rule.rule_id: rule for rule in RULES}
+
+ENV = dsl.make_env(REGISTRY)
+DOMAIN_AXIOMS = dsl.domain_axioms(REGISTRY, ENV)
+
+# ---------------------------------------------------------------- Track B view
+
+CATEGORY_BY_RULE_ID = {
+    "ace_inhibitor_hyperkalemia_contraindication": "contraindication",
+    "ace_inhibitor_potassium_monitoring": "monitoring",
+    "apixaban_renal_dose_reduction": "dose_adjustment",
+    "rivaroxaban_contraindication": "contraindication",
+    "rivaroxaban_dose_reduction": "dose_adjustment",
+    "warfarin_nsaid_bleeding_interaction": "drug_interaction",
+    "clarithromycin_simvastatin_contraindication": "drug_interaction",
+    "nonselective_beta_blocker_asthma_contraindication": "contraindication",
+    "digoxin_renal_dose_reduction": "dose_adjustment",
+    "digoxin_potassium_monitoring": "monitoring",
+}
 
 
 @dataclass(frozen=True, eq=False)
@@ -32,7 +280,7 @@ class Boundary:
 
     variable: object  # the Z3 Real/Int being constrained
     description: str
-    operator: str  # "<=" | "<" | ">=" | ">", as used in the predicate
+    operator: str  # "<=" | "<" | ">=" | ">", the rule's compliance direction
     threshold: float
     step: float  # smallest realistic increment for this variable's unit
     context: tuple = field(default_factory=tuple)  # extra constraints that isolate this boundary
@@ -40,13 +288,13 @@ class Boundary:
 
 @dataclass(frozen=True, eq=False)
 class SpecClause:
-    """One typed guideline rule, ready to hand to a Z3 solver."""
+    """A Track-B-shaped view over one validated dsl.Rule."""
 
     rule_id: str
     title: str
-    category: str  # contraindication | monitoring | dose_adjustment | drug_interaction
+    category: str
     drug: str
-    predicate: BoolRef
+    predicate: object  # z3 BoolRef = dsl.rule_to_z3(rule, ENV)
     threshold: tuple = field(default_factory=tuple)
     window_days: int = 0
     source: str = ""
@@ -56,412 +304,205 @@ class SpecClause:
     boundaries: tuple = field(default_factory=tuple)
 
 
-def _build_rules() -> list:
-    rules = []
+def _vars_and_events(expr) -> tuple:
+    variables, events = set(), set()
 
-    # -- ACE inhibitor: hyperkalemia at initiation -----------------------
-    ace_inhibitor_on = Bool("ace_inhibitor_on")
-    potassium = Real("serum_potassium_mmol_l")
-    rules.append(
-        SpecClause(
-            rule_id="ace_inhibitor_hyperkalemia_contraindication",
-            title="ACE inhibitor contraindicated with pre-existing hyperkalemia",
-            category="contraindication",
-            drug="ace_inhibitor",
-            predicate=Implies(ace_inhibitor_on, potassium <= 5.0),
-            threshold=(5.0,),
-            source="BNF / NICE hypertension guidance",
-            source_sentence=(
-                "An ACE inhibitor should not be started in a patient whose "
-                "serum potassium is above 5.0 mmol/L."
+    def walk(e):
+        if isinstance(e, (Cmp, Between)):
+            variables.add(e.var)
+        elif isinstance(e, Since):
+            events.add(e.event)
+        elif isinstance(e, dsl.Not):
+            walk(e.operand)
+        elif isinstance(e, (And, Or)):
+            for operand in e.operands:
+                walk(operand)
+
+    walk(expr)
+    return variables, events
+
+
+def _var_refs_for(rule: Rule) -> dict:
+    when_vars, when_events = _vars_and_events(rule.when)
+    then_vars, then_events = _vars_and_events(rule.then)
+    refs = {name: ENV[name] for name in when_vars | then_vars}
+    for event in when_events | then_events:
+        refs[dsl.occurred_var(event)] = ENV[dsl.occurred_var(event)]
+        refs[dsl.days_since_var(event)] = ENV[dsl.days_since_var(event)]
+    return refs
+
+
+# Boundary metadata: the compliance-direction operator/threshold for each
+# rule, hand-derived (contraposition, De Morgan) from the Rule's actual
+# `when`/`then` above -- see the inline comment on each for the derivation.
+# `context` pins every other free variable so the boundary's effect is
+# isolated; where a rule's obligation is a `Since`, the occurrence flag
+# must be pinned True in context too, or the day-count boundary is moot.
+_BOUNDARIES_BY_RULE_ID = {
+    # phi = Implies(K>5.0, not on). At K=5.0 the antecedent is false so phi
+    # is vacuously true regardless of `on`; compliance flips to depending on
+    # `on` only once K>5.0. With on=True pinned: compliant iff K<=5.0.
+    "ace_inhibitor_hyperkalemia_contraindication": (
+        Boundary(
+            variable=ENV["potassium"],
+            description="serum potassium (mmol/L)",
+            operator="<=",
+            threshold=_ace_hyperkalemia_trigger.value,
+            step=0.1,
+            context=(ENV["ace_inhibitor_on"] == True,),
+        ),
+    ),
+    "ace_inhibitor_potassium_monitoring": (
+        Boundary(
+            variable=ENV[dsl.days_since_var("potassium_check")],
+            description="days since last potassium check",
+            operator="<=",
+            threshold=14,
+            step=1,
+            context=(
+                ENV["ace_inhibitor_on"] == True,
+                ENV[dsl.occurred_var("potassium_check")] == True,
             ),
-            variables=("ace_inhibitor_on", "serum_potassium_mmol_l"),
-            var_refs={
-                "ace_inhibitor_on": ace_inhibitor_on,
-                "serum_potassium_mmol_l": potassium,
-            },
-            boundaries=(
-                Boundary(
-                    variable=potassium,
-                    description="serum potassium (mmol/L)",
-                    operator="<=",
-                    threshold=5.0,
-                    step=0.1,
-                    context=(ace_inhibitor_on == True,),
-                ),
+        ),
+    ),
+    # Each criterion's boundary is tested with the other two pinned so that
+    # exactly one of them is already met -- the criterion under test is
+    # then the deciding vote across the 2-of-3 gate.
+    "apixaban_renal_dose_reduction": (
+        Boundary(
+            variable=ENV["patient_age_years"],
+            description="patient age (years) -- deciding vote, weight met",
+            operator=">=",
+            threshold=_apixaban_age.value,
+            step=1,
+            context=(
+                ENV["apixaban_on"] == True,
+                ENV["patient_weight_kg"] == 55,
+                ENV["serum_creatinine_mg_dl"] == 1.0,
             ),
+        ),
+        Boundary(
+            variable=ENV["patient_weight_kg"],
+            description="patient body weight (kg) -- deciding vote, creatinine met",
+            operator="<=",
+            threshold=_apixaban_weight.value,
+            step=1,
+            context=(
+                ENV["apixaban_on"] == True,
+                ENV["patient_age_years"] == 70,
+                ENV["serum_creatinine_mg_dl"] == 2.0,
+            ),
+        ),
+        Boundary(
+            variable=ENV["serum_creatinine_mg_dl"],
+            description="serum creatinine (mg/dL) -- deciding vote, age met",
+            operator=">=",
+            threshold=_apixaban_creatinine.value,
+            step=0.1,
+            context=(
+                ENV["apixaban_on"] == True,
+                ENV["patient_age_years"] == 85,
+                ENV["patient_weight_kg"] == 70,
+            ),
+        ),
+    ),
+    "rivaroxaban_contraindication": (
+        Boundary(
+            variable=ENV["creatinine_clearance_ml_min"],
+            description="creatinine clearance (mL/min) -- absolute contraindication",
+            operator=">=",
+            threshold=_rivaroxaban_contraindication_trigger.value,
+            step=1,
+            context=(ENV["rivaroxaban_on"] == True,),
+        ),
+    ),
+    "rivaroxaban_dose_reduction": (
+        Boundary(
+            variable=ENV["creatinine_clearance_ml_min"],
+            description="creatinine clearance (mL/min) -- dose-reduction tier, dose not reduced",
+            operator=">=",
+            threshold=_rivaroxaban_dose_tier.hi,
+            step=1,
+            context=(
+                ENV["rivaroxaban_on"] == True,
+                ENV["rivaroxaban_dose_reduced"] == False,
+            ),
+        ),
+    ),
+    "warfarin_nsaid_bleeding_interaction": (
+        Boundary(
+            variable=ENV[dsl.days_since_var("inr_check")],
+            description="days since last INR check",
+            operator="<=",
+            threshold=7,
+            step=1,
+            context=(
+                ENV["warfarin_on"] == True,
+                ENV["nsaid_on"] == True,
+                ENV[dsl.occurred_var("inr_check")] == True,
+            ),
+        ),
+    ),
+    "digoxin_renal_dose_reduction": (
+        Boundary(
+            variable=ENV["creatinine_clearance_ml_min"],
+            description="creatinine clearance (mL/min) -- dose-reduction gate",
+            operator=">=",
+            threshold=_digoxin_renal_trigger.value,
+            step=1,
+            context=(ENV["digoxin_on"] == True,),
+        ),
+    ),
+    "digoxin_potassium_monitoring": (
+        Boundary(
+            variable=ENV[dsl.days_since_var("potassium_check")],
+            description="days since last potassium check",
+            operator="<=",
+            threshold=30,
+            step=1,
+            context=(
+                ENV["digoxin_on"] == True,
+                ENV[dsl.occurred_var("potassium_check")] == True,
+            ),
+        ),
+    ),
+}
+
+
+def _build_spec_clauses() -> list:
+    clauses = []
+    for rule in RULES:
+        clauses.append(
+            SpecClause(
+                rule_id=rule.rule_id,
+                title=f"{rule.action}: {rule.target}",
+                category=CATEGORY_BY_RULE_ID[rule.rule_id],
+                drug=rule.target,
+                predicate=dsl.rule_to_z3(rule, ENV),
+                source=f"hand-authored fixture, DSL rule {rule.rule_id!r}",
+                source_sentence=rule.source_span,
+                var_refs=_var_refs_for(rule),
+                variables=tuple(sorted(_var_refs_for(rule))),
+                boundaries=_BOUNDARIES_BY_RULE_ID.get(rule.rule_id, ()),
+            )
         )
-    )
-
-    # -- ACE inhibitor: post-initiation monitoring window -----------------
-    days_since_ace_inhibitor_potassium_check = Int(
-        "days_since_ace_inhibitor_potassium_check"
-    )
-    rules.append(
-        SpecClause(
-            rule_id="ace_inhibitor_potassium_monitoring",
-            title="Potassium and renal function recheck after ACE inhibitor start",
-            category="monitoring",
-            drug="ace_inhibitor",
-            predicate=Implies(
-                ace_inhibitor_on,
-                days_since_ace_inhibitor_potassium_check <= 14,
-            ),
-            threshold=(14.0,),
-            window_days=14,
-            source="NICE NG203 (chronic kidney disease)",
-            source_sentence=(
-                "Serum potassium and renal function should be checked "
-                "within 14 days of starting or increasing the dose of an "
-                "ACE inhibitor."
-            ),
-            variables=(
-                "ace_inhibitor_on",
-                "days_since_ace_inhibitor_potassium_check",
-            ),
-            var_refs={
-                "ace_inhibitor_on": ace_inhibitor_on,
-                "days_since_ace_inhibitor_potassium_check": (
-                    days_since_ace_inhibitor_potassium_check
-                ),
-            },
-            boundaries=(
-                Boundary(
-                    variable=days_since_ace_inhibitor_potassium_check,
-                    description="days since last potassium check",
-                    operator="<=",
-                    threshold=14,
-                    step=1,
-                    context=(ace_inhibitor_on == True,),
-                ),
-            ),
-        )
-    )
-
-    # -- Apixaban: multi-criteria dose reduction by renal function --------
-    apixaban_on = Bool("apixaban_on")
-    apixaban_dose_reduced = Bool("apixaban_dose_reduced")
-    patient_age_years = Real("patient_age_years")
-    patient_weight_kg = Real("patient_weight_kg")
-    serum_creatinine = Real("serum_creatinine_mg_dl")
-    age_criterion = patient_age_years >= 80
-    weight_criterion = patient_weight_kg <= 60
-    creatinine_criterion = serum_creatinine >= 1.5
-    criteria_met = Sum(
-        If(age_criterion, 1, 0),
-        If(weight_criterion, 1, 0),
-        If(creatinine_criterion, 1, 0),
-    )
-    rules.append(
-        SpecClause(
-            rule_id="apixaban_renal_dose_reduction",
-            title="Apixaban dose reduction: 2-of-3 criteria",
-            category="dose_adjustment",
-            drug="apixaban",
-            predicate=Implies(
-                And(apixaban_on, criteria_met >= 2), apixaban_dose_reduced
-            ),
-            threshold=(80.0, 60.0, 1.5),
-            source="FDA prescribing information (apixaban)",
-            source_sentence=(
-                "Reduce the apixaban dose to 2.5 mg twice daily if at least "
-                "two of the following apply: age 80 years or older, body "
-                "weight 60 kg or less, or serum creatinine 1.5 mg/dL or "
-                "greater."
-            ),
-            variables=(
-                "apixaban_on",
-                "apixaban_dose_reduced",
-                "patient_age_years",
-                "patient_weight_kg",
-                "serum_creatinine_mg_dl",
-            ),
-            var_refs={
-                "apixaban_on": apixaban_on,
-                "apixaban_dose_reduced": apixaban_dose_reduced,
-                "patient_age_years": patient_age_years,
-                "patient_weight_kg": patient_weight_kg,
-                "serum_creatinine_mg_dl": serum_creatinine,
-            },
-            # Each criterion's boundary is tested with the other two pinned
-            # so that exactly one of them is already met -- the criterion
-            # under test is then the deciding vote across the 2-of-3 gate.
-            boundaries=(
-                Boundary(
-                    variable=patient_age_years,
-                    description="patient age (years) -- deciding vote, weight met",
-                    operator=">=",
-                    threshold=80,
-                    step=1,
-                    context=(
-                        apixaban_on == True,
-                        patient_weight_kg == 55,
-                        serum_creatinine == 1.0,
-                    ),
-                ),
-                Boundary(
-                    variable=patient_weight_kg,
-                    description="patient body weight (kg) -- deciding vote, creatinine met",
-                    operator="<=",
-                    threshold=60,
-                    step=1,
-                    context=(
-                        apixaban_on == True,
-                        patient_age_years == 70,
-                        serum_creatinine == 2.0,
-                    ),
-                ),
-                Boundary(
-                    variable=serum_creatinine,
-                    description="serum creatinine (mg/dL) -- deciding vote, age met",
-                    operator=">=",
-                    threshold=1.5,
-                    step=0.1,
-                    context=(
-                        apixaban_on == True,
-                        patient_age_years == 85,
-                        patient_weight_kg == 70,
-                    ),
-                ),
-            ),
-        )
-    )
-
-    # -- Rivaroxaban: tiered dosing / contraindication by CrCl ------------
-    rivaroxaban_on = Bool("rivaroxaban_on")
-    rivaroxaban_dose_reduced = Bool("rivaroxaban_dose_reduced")
-    creatinine_clearance = Real("creatinine_clearance_ml_min")
-    rules.append(
-        SpecClause(
-            rule_id="rivaroxaban_renal_tiering",
-            title="Rivaroxaban avoided or dose-reduced by creatinine clearance",
-            category="dose_adjustment",
-            drug="rivaroxaban",
-            predicate=And(
-                Implies(rivaroxaban_on, creatinine_clearance >= 15),
-                Implies(
-                    And(rivaroxaban_on, creatinine_clearance < 50),
-                    rivaroxaban_dose_reduced,
-                ),
-            ),
-            threshold=(15.0, 50.0),
-            source="FDA prescribing information (rivaroxaban)",
-            source_sentence=(
-                "Rivaroxaban should be avoided if creatinine clearance is "
-                "below 15 mL/min; a reduced dose should be used if "
-                "creatinine clearance is between 15 and 50 mL/min."
-            ),
-            variables=(
-                "rivaroxaban_on",
-                "rivaroxaban_dose_reduced",
-                "creatinine_clearance_ml_min",
-            ),
-            var_refs={
-                "rivaroxaban_on": rivaroxaban_on,
-                "rivaroxaban_dose_reduced": rivaroxaban_dose_reduced,
-                "creatinine_clearance_ml_min": creatinine_clearance,
-            },
-            boundaries=(
-                Boundary(
-                    variable=creatinine_clearance,
-                    description="creatinine clearance (mL/min) -- absolute contraindication",
-                    operator=">=",
-                    threshold=15,
-                    step=1,
-                    context=(rivaroxaban_on == True,),
-                ),
-                Boundary(
-                    variable=creatinine_clearance,
-                    description="creatinine clearance (mL/min) -- dose-reduction tier, dose not reduced",
-                    operator=">=",
-                    threshold=50,
-                    step=1,
-                    context=(
-                        rivaroxaban_on == True,
-                        rivaroxaban_dose_reduced == False,
-                    ),
-                ),
-            ),
-        )
-    )
-
-    # -- Warfarin + NSAID: bleeding-risk interaction -----------------------
-    warfarin_on = Bool("warfarin_on")
-    nsaid_on = Bool("nsaid_on")
-    inr_monitoring_frequency_days = Real("inr_monitoring_frequency_days")
-    rules.append(
-        SpecClause(
-            rule_id="warfarin_nsaid_bleeding_interaction",
-            title="Warfarin + NSAID requires tighter INR monitoring",
-            category="drug_interaction",
-            drug="warfarin",
-            predicate=Implies(
-                And(warfarin_on, nsaid_on), inr_monitoring_frequency_days <= 7
-            ),
-            threshold=(7.0,),
-            source="BNF interactions guidance",
-            source_sentence=(
-                "Concurrent use of an NSAID with warfarin increases bleeding "
-                "risk and should be avoided; where unavoidable, INR should "
-                "be monitored at least weekly."
-            ),
-            variables=("warfarin_on", "nsaid_on", "inr_monitoring_frequency_days"),
-            var_refs={
-                "warfarin_on": warfarin_on,
-                "nsaid_on": nsaid_on,
-                "inr_monitoring_frequency_days": inr_monitoring_frequency_days,
-            },
-            boundaries=(
-                Boundary(
-                    variable=inr_monitoring_frequency_days,
-                    description="INR monitoring frequency (days)",
-                    operator="<=",
-                    threshold=7,
-                    step=1,
-                    context=(warfarin_on == True, nsaid_on == True),
-                ),
-            ),
-        )
-    )
-
-    # -- Clarithromycin + simvastatin: absolute contraindication ----------
-    clarithromycin_on = Bool("clarithromycin_on")
-    simvastatin_on = Bool("simvastatin_on")
-    rules.append(
-        SpecClause(
-            rule_id="clarithromycin_simvastatin_contraindication",
-            title="Clarithromycin contraindicated with simvastatin",
-            category="drug_interaction",
-            drug="simvastatin",
-            predicate=Not(And(clarithromycin_on, simvastatin_on)),
-            source="FDA prescribing information (simvastatin)",
-            source_sentence=(
-                "Concomitant use of clarithromycin, a strong CYP3A4 "
-                "inhibitor, with simvastatin is contraindicated because of "
-                "increased risk of myopathy and rhabdomyolysis."
-            ),
-            variables=("clarithromycin_on", "simvastatin_on"),
-            var_refs={
-                "clarithromycin_on": clarithromycin_on,
-                "simvastatin_on": simvastatin_on,
-            },
-            # Purely boolean -- no numeric threshold to boundary-test.
-        )
-    )
-
-    # -- Non-selective beta-blocker in asthma: contraindication -----------
-    nonselective_beta_blocker_on = Bool("nonselective_beta_blocker_on")
-    asthma_diagnosis = Bool("asthma_diagnosis")
-    rules.append(
-        SpecClause(
-            rule_id="nonselective_beta_blocker_asthma_contraindication",
-            title="Non-selective beta-blocker contraindicated in asthma",
-            category="contraindication",
-            drug="nonselective_beta_blocker",
-            predicate=Implies(asthma_diagnosis, Not(nonselective_beta_blocker_on)),
-            source="BNF respiratory contraindications",
-            source_sentence=(
-                "Non-selective beta-blockers are contraindicated in "
-                "patients with a diagnosis of asthma because of the risk of "
-                "bronchospasm."
-            ),
-            variables=("nonselective_beta_blocker_on", "asthma_diagnosis"),
-            var_refs={
-                "nonselective_beta_blocker_on": nonselective_beta_blocker_on,
-                "asthma_diagnosis": asthma_diagnosis,
-            },
-            # Purely boolean -- no numeric threshold to boundary-test.
-        )
-    )
-
-    # -- Digoxin: renal dose adjustment + potassium monitoring ------------
-    digoxin_on = Bool("digoxin_on")
-    digoxin_dose_reduced = Bool("digoxin_dose_reduced")
-    digoxin_creatinine_clearance = Real("digoxin_creatinine_clearance_ml_min")
-    days_since_digoxin_potassium_check = Int(
-        "days_since_digoxin_potassium_check"
-    )
-    rules.append(
-        SpecClause(
-            rule_id="digoxin_renal_dose_and_monitoring",
-            title="Digoxin dose reduction and potassium monitoring by renal function",
-            category="dose_adjustment",
-            drug="digoxin",
-            predicate=And(
-                Implies(
-                    And(digoxin_on, digoxin_creatinine_clearance < 60),
-                    digoxin_dose_reduced,
-                ),
-                Implies(
-                    digoxin_on, days_since_digoxin_potassium_check <= 30
-                ),
-            ),
-            threshold=(60.0, 30.0),
-            window_days=30,
-            source="BNF / NICE narrow-therapeutic-index drug guidance",
-            source_sentence=(
-                "Digoxin dose should be reduced in patients with a "
-                "creatinine clearance below 60 mL/min, and serum potassium "
-                "should be monitored within 30 days, given the increased "
-                "risk of toxicity with hypokalemia."
-            ),
-            variables=(
-                "digoxin_on",
-                "digoxin_dose_reduced",
-                "digoxin_creatinine_clearance_ml_min",
-                "days_since_digoxin_potassium_check",
-            ),
-            var_refs={
-                "digoxin_on": digoxin_on,
-                "digoxin_dose_reduced": digoxin_dose_reduced,
-                "digoxin_creatinine_clearance_ml_min": digoxin_creatinine_clearance,
-                "days_since_digoxin_potassium_check": (
-                    days_since_digoxin_potassium_check
-                ),
-            },
-            boundaries=(
-                Boundary(
-                    variable=digoxin_creatinine_clearance,
-                    description="creatinine clearance (mL/min) -- dose-reduction gate, monitoring already satisfied",
-                    operator=">=",
-                    threshold=60,
-                    step=1,
-                    context=(
-                        digoxin_on == True,
-                        days_since_digoxin_potassium_check == 0,
-                    ),
-                ),
-                Boundary(
-                    variable=days_since_digoxin_potassium_check,
-                    description="days since last potassium check -- monitoring gate, renal function normal",
-                    operator="<=",
-                    threshold=30,
-                    step=1,
-                    context=(
-                        digoxin_on == True,
-                        digoxin_creatinine_clearance == 70,
-                    ),
-                ),
-            ),
-        )
-    )
-
-    return rules
+    return clauses
 
 
-REAL_RULES = _build_rules()
+REAL_RULES = _build_spec_clauses()
 
 
 if __name__ == "__main__":
-    from z3 import Solver, sat
+    from z3 import Not, Solver, sat
 
-    for rule in REAL_RULES:
+    print(f"{len(RULES)} rules, all clean under validate_rule + check_nondegenerate\n")
+    for clause in REAL_RULES:
         compliant = Solver()
-        compliant.add(rule.predicate)
+        compliant.add(*DOMAIN_AXIOMS, clause.predicate)
         violating = Solver()
-        violating.add(Not(rule.predicate))
+        violating.add(*DOMAIN_AXIOMS, Not(clause.predicate))
         compliant_ok = compliant.check() == sat
         violating_ok = violating.check() == sat
         status = "OK" if compliant_ok and violating_ok else "DEGENERATE"
-        print(f"{rule.rule_id:50s} [{rule.category:16s}] {status}")
-        print(f"    {rule.source_sentence}")
+        print(f"{clause.rule_id:50s} [{clause.category:16s}] {status}")
+        print(f"    {clause.source_sentence}")

@@ -26,7 +26,7 @@ from pathlib import Path
 
 from z3 import And, Implies, Solver, sat
 
-from real_rules import REAL_RULES
+from real_rules import DOMAIN_AXIOMS, REAL_RULES
 from synthesize_boundary_tests import synthesize_cases
 
 OUTPUT_CSV = Path(__file__).parent / "differential_check_results.csv"
@@ -43,13 +43,16 @@ class AltEncoding:
 
 def _build_alt_encodings() -> list:
     ace = RULES_BY_ID["ace_inhibitor_hyperkalemia_contraindication"].var_refs
-    rivaroxaban = RULES_BY_ID["rivaroxaban_renal_tiering"].var_refs
-    digoxin = RULES_BY_ID["digoxin_renal_dose_and_monitoring"].var_refs
+    rivaroxaban = RULES_BY_ID["rivaroxaban_dose_reduction"].var_refs
+    digoxin = RULES_BY_ID["digoxin_renal_dose_reduction"].var_refs
 
     return [
         # Primary reads "above 5.0" as a strict cutoff (compliant at
         # exactly 5.0). An equally natural independent reading treats
-        # 5.0 itself as already too high.
+        # 5.0 itself as already too high. Note the primary now frames this
+        # as a contraindication (Implies(K>5.0, not on)) per the DSL's
+        # action-atom requirement; the alt keeps the same shape with the
+        # inclusivity flipped.
         AltEncoding(
             rule_id="ace_inhibitor_hyperkalemia_contraindication",
             alt_source_sentence=(
@@ -57,55 +60,46 @@ def _build_alt_encodings() -> list:
                 "serum potassium at or above 5.0 mmol/L."
             ),
             predicate=Implies(
-                ace["ace_inhibitor_on"], ace["serum_potassium_mmol_l"] < 5.0
+                ace["potassium"] >= 5.0, ace["ace_inhibitor_on"] == False
             ),
         ),
-        # Primary reads "a reduced dose ... between 15 and 50" as applying
-        # up to but not including 50 (50 itself gets the standard dose).
-        # An equally natural independent reading includes the endpoint.
+        # Primary now encodes the dose-reduction tier with an explicit
+        # Between(15, 50, lo_inclusive=True, hi_inclusive=False) -- the DSL
+        # forces this decision to be made rather than left implicit. This
+        # alt picks the other equally natural inclusivity for the same
+        # prose ("between 15 and 50") to show what a second reading would
+        # have produced before that decision was forced.
         AltEncoding(
-            rule_id="rivaroxaban_renal_tiering",
+            rule_id="rivaroxaban_dose_reduction",
             alt_source_sentence=(
-                "Rivaroxaban should be avoided if creatinine clearance is "
-                "below 15 mL/min; a reduced dose should be used up to and "
-                "including a creatinine clearance of 50 mL/min."
+                "A reduced dose of rivaroxaban should be used if "
+                "creatinine clearance is 15 mL/min or above but up to and "
+                "including 50 mL/min."
             ),
-            predicate=And(
-                Implies(
+            predicate=Implies(
+                And(
                     rivaroxaban["rivaroxaban_on"],
                     rivaroxaban["creatinine_clearance_ml_min"] >= 15,
+                    rivaroxaban["creatinine_clearance_ml_min"] <= 50,
                 ),
-                Implies(
-                    And(
-                        rivaroxaban["rivaroxaban_on"],
-                        rivaroxaban["creatinine_clearance_ml_min"] <= 50,
-                    ),
-                    rivaroxaban["rivaroxaban_dose_reduced"],
-                ),
+                rivaroxaban["rivaroxaban_dose_reduced"],
             ),
         ),
         # Primary reads "below 60 mL/min" as a strict cutoff (60 itself
         # needs no dose reduction). An equally natural independent reading
         # of "60 mL/min or less" includes the endpoint.
         AltEncoding(
-            rule_id="digoxin_renal_dose_and_monitoring",
+            rule_id="digoxin_renal_dose_reduction",
             alt_source_sentence=(
                 "Digoxin dose should be reduced in patients with a "
-                "creatinine clearance of 60 mL/min or less, and serum "
-                "potassium should be monitored within 30 days."
+                "creatinine clearance of 60 mL/min or less."
             ),
-            predicate=And(
-                Implies(
-                    And(
-                        digoxin["digoxin_on"],
-                        digoxin["digoxin_creatinine_clearance_ml_min"] <= 60,
-                    ),
-                    digoxin["digoxin_dose_reduced"],
-                ),
-                Implies(
+            predicate=Implies(
+                And(
                     digoxin["digoxin_on"],
-                    digoxin["days_since_digoxin_potassium_check"] <= 30,
+                    digoxin["creatinine_clearance_ml_min"] <= 60,
                 ),
+                digoxin["digoxin_dose_reduced"],
             ),
         ),
     ]
@@ -128,7 +122,9 @@ class DifferentialResult:
 
 
 def pin_domain(rule, bundle: dict) -> list:
-    return [var_ref == bundle[name] for name, var_ref in rule.var_refs.items()]
+    return list(DOMAIN_AXIOMS) + [
+        var_ref == bundle[name] for name, var_ref in rule.var_refs.items()
+    ]
 
 
 def holds(predicate, domain: list) -> bool:

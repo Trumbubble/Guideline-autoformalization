@@ -22,16 +22,37 @@ counterexample core for a MAY-violate result.
 
 ## Real rule fixtures (Track B)
 
-`real_rules.py` hand-authors eight typed guideline rules beyond the
-metformin/eGFR example in `partial_spec_check.py` -- ACE inhibitor +
-potassium monitoring, DOAC dosing by renal function, drug-drug interaction
-flags, and more. Each `SpecClause` bundles a Z3 predicate over realistically
-named variables, the numeric threshold(s) it turns on, and the guideline
-sentence it was authored from, so Track B has real material to check without
-waiting on a document-extraction pipeline. Six of the eight rules also carry
-`Boundary` metadata: the Z3 variable each numeric threshold constrains, the
-comparison operator, and a step size at the variable's realistic reporting
-precision.
+`real_rules.py` hand-authors ten guideline rules beyond the metformin/eGFR
+example in `partial_spec_check.py` -- ACE inhibitor + potassium monitoring,
+DOAC dosing by renal function, drug-drug interaction flags, and more --
+expressed as `dsl.Rule` objects against a shared `Registry`, per
+[`../Part A/DSL.md`](../Part%20A/DSL.md). Each rule is validated with
+`dsl.validate_rule` + `dsl.check_nondegenerate` at import time; the module
+raises rather than shipping an unvalidated or vacuous rule. Going through
+the DSL instead of hand-rolled Z3 fixed three real bugs the earlier version
+had:
+
+- **Action atom in `then`.** A contraindication is the contrapositive of
+  "if the drug is on, the lab must be in range": `when` is the risk factor,
+  `then` is what the care plan controls (`not on_drug`). The old version had
+  it backwards -- an obligation over a lab value alone, which a plan can't
+  act on and the DSL's `NO_ACTION_ATOM` check would reject.
+- **`Since` instead of a bare day-count.** Monitoring rules now use
+  `Since(event, days)`, which lowers to `<event>_occurred AND
+  days_since_<event> <= days`. The old hand-rolled version had no occurrence
+  flag, so "never checked at all" -- the commonest real monitoring
+  violation -- wasn't reachable as a distinct case. It now is: see the
+  `potassium_check_occurred: false` example in the UI.
+- **One registry, not one variable per drug.** `potassium` and
+  `creatinine_clearance_ml_min` are now each a single shared variable/event
+  (a patient has one kidney, not one per drug), so touching either one in
+  `/check` correctly surfaces every rule that depends on it -- e.g. a
+  digoxin plan and an ACE-inhibitor plan share the same
+  `potassium_check_occurred` flag.
+
+`DOMAIN_AXIOMS` (physiological plausible ranges, from `dsl.domain_axioms`)
+is threaded through every downstream file in this directory, so a
+MAY-violate witness can no longer use potassium = -400.
 
 ```sh
 python3 real_rules.py
@@ -90,4 +111,49 @@ show up exactly at the threshold value. Results are written to
 
 ```sh
 python3 differential_check.py
+```
+
+## Local API
+
+`api.py` wraps the checker in a small Flask app so it can be called
+interactively -- from a notebook, curl, or a UI -- instead of only as a
+batch job. `GET /rules` lists the fixtures and the variable names each one
+takes; `POST /check` takes a JSON `patient` + `plan` (merged into one set of
+known values) and returns, for every rule whose variables were touched, the
+same MUST-violate / MAY-violate / CERTIFIED-compliant verdict the rest of
+this project computes, plus -- for MAY-violate -- a minimized
+counterexample: the smallest set of still-free values that would force a
+violation, via the same assumption-dropping minimization as
+`benchmark.py`'s `minimal_counterexample_core`.
+
+```sh
+python3 -m pip install -r ../requirements.txt
+python3 api.py
+
+curl -s localhost:8000/rules | python3 -m json.tool
+
+curl -s -X POST localhost:8000/check -H 'Content-Type: application/json' -d '{
+  "patient": {"potassium": 5.4},
+  "plan": {"ace_inhibitor_on": true}
+}' | python3 -m json.tool
+```
+
+## Minimal UI
+
+`ui.html`, served from `GET /` by `api.py`, is a click-through demo on top of
+the same `/check` and `/rules` endpoints: a dropdown of ten example
+patient/plan scenarios (spanning MUST-violate, MAY-violate, and
+CERTIFIED-compliant, including one that pins `potassium_check_occurred:
+false` to show a monitoring rule catching "never checked at all"), two JSON
+textareas to paste your own, a Check
+button, and a reference table of every rule's variable names. Each result
+shows a color-coded verdict badge and a plain-English explanation --
+including, for MAY-violate, the counterexample translated into a sentence
+("It becomes a certain violation if digoxin dose reduced = false") instead
+of raw JSON. No extra dependency: it's a single static HTML file with
+inline JS that calls the same Flask app.
+
+```sh
+python3 api.py
+# open http://localhost:8000/
 ```

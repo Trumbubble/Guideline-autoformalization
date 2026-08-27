@@ -1,0 +1,350 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Guideline checker</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #f7f7f8;
+    --panel: #ffffff;
+    --text: #1a1a1a;
+    --muted: #6b6b6b;
+    --border: #dcdcdc;
+    --must: #b3261e;
+    --must-bg: #fdecea;
+    --may: #8a5a00;
+    --may-bg: #fff4dc;
+    --certified: #1e6b3a;
+    --certified-bg: #e8f5ec;
+    --accent: #2757c9;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #16171a;
+      --panel: #1f2023;
+      --text: #eaeaea;
+      --muted: #9a9a9a;
+      --border: #35363a;
+      --must-bg: #3a1f1d;
+      --may-bg: #3a2f14;
+      --certified-bg: #163524;
+      --accent: #6f97f0;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    line-height: 1.45;
+  }
+  header {
+    padding: 1.5rem 2rem 0.5rem;
+  }
+  header h1 { margin: 0 0 0.25rem; font-size: 1.4rem; }
+  header p { margin: 0; color: var(--muted); font-size: 0.92rem; }
+  main {
+    max-width: 980px;
+    margin: 0 auto;
+    padding: 1rem 2rem 3rem;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
+  }
+  @media (max-width: 800px) {
+    main { grid-template-columns: 1fr; }
+  }
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1rem 1.25rem;
+  }
+  .panel h2 { margin-top: 0; font-size: 1.05rem; }
+  label { display: block; font-size: 0.85rem; font-weight: 600; margin: 0.6rem 0 0.25rem; }
+  textarea, select {
+    width: 100%;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 0.85rem;
+    padding: 0.5rem;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--bg);
+    color: var(--text);
+  }
+  textarea { min-height: 90px; resize: vertical; }
+  select { font-family: inherit; padding: 0.45rem; margin-bottom: 0.5rem; }
+  button {
+    margin-top: 0.9rem;
+    padding: 0.55rem 1.1rem;
+    border: none;
+    border-radius: 6px;
+    background: var(--accent);
+    color: white;
+    font-size: 0.92rem;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  button:hover { filter: brightness(1.08); }
+  .full-width { grid-column: 1 / -1; }
+  .card {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0.9rem 1.1rem;
+    margin-bottom: 0.9rem;
+    background: var(--panel);
+  }
+  .badge {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    padding: 0.2rem 0.55rem;
+    border-radius: 999px;
+    margin-bottom: 0.4rem;
+  }
+  .badge.must { color: var(--must); background: var(--must-bg); }
+  .badge.may { color: var(--may); background: var(--may-bg); }
+  .badge.certified { color: var(--certified); background: var(--certified-bg); }
+  .card h3 { margin: 0.15rem 0 0.3rem; font-size: 1rem; }
+  .card .source { color: var(--muted); font-size: 0.85rem; margin: 0 0 0.4rem; font-style: italic; }
+  .card .explanation { margin: 0; font-size: 0.92rem; }
+  .card details { margin-top: 0.5rem; }
+  .card summary { cursor: pointer; font-size: 0.78rem; color: var(--muted); }
+  .card pre {
+    font-size: 0.75rem;
+    overflow-x: auto;
+    background: var(--bg);
+    padding: 0.5rem;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+  }
+  .error { color: var(--must); background: var(--must-bg); border-radius: 6px; padding: 0.6rem 0.8rem; font-size: 0.9rem; }
+  .loading { color: var(--muted); font-size: 0.9rem; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
+  th, td { text-align: left; padding: 0.3rem 0.4rem; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; }
+  code { font-size: 0.78rem; background: var(--bg); padding: 0.05rem 0.3rem; border-radius: 4px; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Guideline compliance checker</h1>
+  <p>Paste a patient + plan, or load an example, and check it against the Track&nbsp;B rule library.</p>
+</header>
+
+<main>
+  <section class="panel">
+    <h2>Check a case</h2>
+    <label for="example">Load an example</label>
+    <select id="example"></select>
+
+    <label for="patient">Patient (JSON: lab values)</label>
+    <textarea id="patient" spellcheck="false"></textarea>
+
+    <label for="plan">Plan (JSON: drug/action flags)</label>
+    <textarea id="plan" spellcheck="false"></textarea>
+
+    <button id="check-btn">Check compliance</button>
+  </section>
+
+  <section class="panel">
+    <h2>Result</h2>
+    <div id="results"><p class="loading">Load an example or paste a case, then hit Check.</p></div>
+  </section>
+
+  <section class="panel full-width">
+    <h2>Available rules &amp; variables</h2>
+    <div id="rules-table"><p class="loading">Loading&hellip;</p></div>
+  </section>
+</main>
+
+<script>
+const EXAMPLES = [
+  {
+    label: "ACE inhibitor + high potassium (violates)",
+    patient: { potassium: 5.4 },
+    plan: { ace_inhibitor_on: true },
+  },
+  {
+    label: "ACE inhibitor + safe potassium (compliant)",
+    patient: { potassium: 4.0 },
+    plan: { ace_inhibitor_on: true },
+  },
+  {
+    label: "ACE inhibitor, monitoring not yet done (undetermined)",
+    patient: {},
+    plan: { ace_inhibitor_on: true },
+  },
+  {
+    label: "ACE inhibitor, potassium confirmed never checked (violates)",
+    patient: { potassium_check_occurred: false },
+    plan: { ace_inhibitor_on: true },
+  },
+  {
+    label: "Apixaban, 2 of 3 criteria met, dose unspecified (undetermined)",
+    patient: { patient_age_years: 82, patient_weight_kg: 58 },
+    plan: { apixaban_on: true },
+  },
+  {
+    label: "Rivaroxaban + severe renal impairment (violates)",
+    patient: { creatinine_clearance_ml_min: 10 },
+    plan: { rivaroxaban_on: true },
+  },
+  {
+    label: "Warfarin + NSAID, monitoring frequency unspecified (undetermined)",
+    patient: {},
+    plan: { warfarin_on: true, nsaid_on: true },
+  },
+  {
+    label: "Clarithromycin + simvastatin (violates)",
+    patient: {},
+    plan: { clarithromycin_on: true, simvastatin_on: true },
+  },
+  {
+    label: "Non-selective beta-blocker in asthma (violates)",
+    patient: { asthma_diagnosis: true },
+    plan: { nonselective_beta_blocker_on: true },
+  },
+  {
+    label: "Digoxin + reduced renal function, dose unspecified (undetermined)",
+    patient: { creatinine_clearance_ml_min: 45 },
+    plan: { digoxin_on: true },
+  },
+];
+
+const patientEl = document.getElementById("patient");
+const planEl = document.getElementById("plan");
+const resultsEl = document.getElementById("results");
+const exampleEl = document.getElementById("example");
+
+function populateExamples() {
+  exampleEl.innerHTML = EXAMPLES
+    .map((ex, i) => `<option value="${i}">${ex.label}</option>`)
+    .join("");
+}
+
+function loadExample(index) {
+  const ex = EXAMPLES[index];
+  patientEl.value = JSON.stringify(ex.patient, null, 2);
+  planEl.value = JSON.stringify(ex.plan, null, 2);
+  runCheck();
+}
+
+function humanize(name) {
+  return String(name).replace(/_/g, " ");
+}
+
+function humanizeValue(v) {
+  if (typeof v === "boolean") return v ? "true" : "false";
+  return String(v);
+}
+
+function describeCounterexample(result) {
+  const entries = Object.entries(result.counterexample_core || {});
+  if (entries.length === 0) return "";
+  const clauses = entries.map(([k, v]) => `${humanize(k)} = ${humanizeValue(v)}`);
+  return `It becomes a certain violation if ${clauses.join(" and ")}.`;
+}
+
+function verdictBadgeClass(verdict) {
+  if (verdict === "MUST-violate") return "must";
+  if (verdict === "CERTIFIED-compliant") return "certified";
+  return "may";
+}
+
+function renderResult(result) {
+  const badgeClass = verdictBadgeClass(result.verdict);
+  let explanation;
+  if (result.verdict === "MUST-violate") {
+    explanation = "This plan definitely violates the rule, given what's specified.";
+  } else if (result.verdict === "CERTIFIED-compliant") {
+    explanation = "This plan is certified compliant with the rule -- no completion of the unspecified values could violate it.";
+  } else {
+    explanation = "Compliance isn't determined yet from what's specified. " + describeCounterexample(result);
+  }
+  const known = Object.entries(result.known_variables || {})
+    .map(([k, v]) => `${humanize(k)}=${humanizeValue(v)}`)
+    .join(", ") || "(none)";
+
+  return `
+    <div class="card">
+      <span class="badge ${badgeClass}">${result.verdict}</span>
+      <h3>${result.title}</h3>
+      <p class="source">&ldquo;${result.source_sentence}&rdquo;</p>
+      <p class="explanation">${explanation}</p>
+      <details>
+        <summary>known values: ${known}</summary>
+        <pre>${JSON.stringify(result, null, 2)}</pre>
+      </details>
+    </div>
+  `;
+}
+
+async function runCheck() {
+  let patient, plan;
+  try {
+    patient = patientEl.value.trim() ? JSON.parse(patientEl.value) : {};
+    plan = planEl.value.trim() ? JSON.parse(planEl.value) : {};
+  } catch (err) {
+    resultsEl.innerHTML = `<div class="error">Invalid JSON: ${err.message}</div>`;
+    return;
+  }
+
+  resultsEl.innerHTML = '<p class="loading">Checking&hellip;</p>';
+  try {
+    const response = await fetch("/check", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ patient, plan }),
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      resultsEl.innerHTML = `<div class="error">${data.error}</div>`;
+      return;
+    }
+    resultsEl.innerHTML = data.map(renderResult).join("");
+  } catch (err) {
+    resultsEl.innerHTML = `<div class="error">Request failed: ${err.message}</div>`;
+  }
+}
+
+async function loadRulesTable() {
+  const el = document.getElementById("rules-table");
+  try {
+    const response = await fetch("/rules");
+    const rules = await response.json();
+    const rows = rules
+      .map(
+        (r) => `
+        <tr>
+          <td><code>${r.rule_id}</code></td>
+          <td>${r.title}</td>
+          <td>${r.category}</td>
+          <td>${r.variables.map((v) => `<code>${v}</code>`).join(" ")}</td>
+        </tr>`
+      )
+      .join("");
+    el.innerHTML = `
+      <table>
+        <thead><tr><th>rule_id</th><th>title</th><th>category</th><th>variables</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>`;
+  } catch (err) {
+    el.innerHTML = `<div class="error">Could not load /rules: ${err.message}</div>`;
+  }
+}
+
+document.getElementById("check-btn").addEventListener("click", runCheck);
+exampleEl.addEventListener("change", (e) => loadExample(Number(e.target.value)));
+
+populateExamples();
+loadExample(0);
+loadRulesTable();
+</script>
+
+</body>
+</html>

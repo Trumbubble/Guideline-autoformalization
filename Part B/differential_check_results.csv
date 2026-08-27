@@ -1,13 +1,8 @@
 rule_id,boundary_description,side,source,bundle,primary_holds,alt_holds,agree
-ace_inhibitor_hyperkalemia_contraindication,serum potassium (mmol/L),compliant_side,bundle,ace_inhibitor_on=True;serum_potassium_mmol_l=5.0,1,0,0
-ace_inhibitor_hyperkalemia_contraindication,serum potassium (mmol/L),violating_side,bundle,ace_inhibitor_on=True;serum_potassium_mmol_l=5.1,0,0,1
-rivaroxaban_renal_tiering,creatinine clearance (mL/min) -- absolute contraindication,compliant_side,bundle,creatinine_clearance_ml_min=15.0;rivaroxaban_dose_reduced=True;rivaroxaban_on=True,1,1,1
-rivaroxaban_renal_tiering,creatinine clearance (mL/min) -- absolute contraindication,compliant_side,counter_bundle,creatinine_clearance_ml_min=15.0;rivaroxaban_dose_reduced=False;rivaroxaban_on=True,0,0,1
-rivaroxaban_renal_tiering,creatinine clearance (mL/min) -- absolute contraindication,violating_side,bundle,creatinine_clearance_ml_min=14.0;rivaroxaban_dose_reduced=False;rivaroxaban_on=True,0,0,1
-rivaroxaban_renal_tiering,"creatinine clearance (mL/min) -- dose-reduction tier, dose not reduced",compliant_side,bundle,creatinine_clearance_ml_min=50.0;rivaroxaban_dose_reduced=False;rivaroxaban_on=True,1,0,0
-rivaroxaban_renal_tiering,"creatinine clearance (mL/min) -- dose-reduction tier, dose not reduced",violating_side,bundle,creatinine_clearance_ml_min=49.0;rivaroxaban_dose_reduced=False;rivaroxaban_on=True,0,0,1
-digoxin_renal_dose_and_monitoring,"creatinine clearance (mL/min) -- dose-reduction gate, monitoring already satisfied",compliant_side,bundle,days_since_digoxin_potassium_check=0;digoxin_creatinine_clearance_ml_min=60.0;digoxin_dose_reduced=False;digoxin_on=True,1,0,0
-digoxin_renal_dose_and_monitoring,"creatinine clearance (mL/min) -- dose-reduction gate, monitoring already satisfied",violating_side,bundle,days_since_digoxin_potassium_check=0;digoxin_creatinine_clearance_ml_min=59.0;digoxin_dose_reduced=True;digoxin_on=True,1,1,1
-digoxin_renal_dose_and_monitoring,"creatinine clearance (mL/min) -- dose-reduction gate, monitoring already satisfied",violating_side,counter_bundle,days_since_digoxin_potassium_check=0;digoxin_creatinine_clearance_ml_min=59.0;digoxin_dose_reduced=False;digoxin_on=True,0,0,1
-digoxin_renal_dose_and_monitoring,"days since last potassium check -- monitoring gate, renal function normal",compliant_side,bundle,days_since_digoxin_potassium_check=30;digoxin_creatinine_clearance_ml_min=70.0;digoxin_dose_reduced=False;digoxin_on=True,1,1,1
-digoxin_renal_dose_and_monitoring,"days since last potassium check -- monitoring gate, renal function normal",violating_side,bundle,days_since_digoxin_potassium_check=31;digoxin_creatinine_clearance_ml_min=70.0;digoxin_dose_reduced=False;digoxin_on=True,0,0,1
+ace_inhibitor_hyperkalemia_contraindication,serum potassium (mmol/L),compliant_side,bundle,ace_inhibitor_on=True;potassium=5.0,1,0,0
+ace_inhibitor_hyperkalemia_contraindication,serum potassium (mmol/L),violating_side,bundle,ace_inhibitor_on=True;potassium=5.1,0,0,1
+rivaroxaban_dose_reduction,"creatinine clearance (mL/min) -- dose-reduction tier, dose not reduced",compliant_side,bundle,creatinine_clearance_ml_min=50.0;rivaroxaban_dose_reduced=False;rivaroxaban_on=True,1,0,0
+rivaroxaban_dose_reduction,"creatinine clearance (mL/min) -- dose-reduction tier, dose not reduced",violating_side,bundle,creatinine_clearance_ml_min=49.0;rivaroxaban_dose_reduced=False;rivaroxaban_on=True,0,0,1
+digoxin_renal_dose_reduction,creatinine clearance (mL/min) -- dose-reduction gate,compliant_side,bundle,creatinine_clearance_ml_min=60.0;digoxin_dose_reduced=False;digoxin_on=True,1,0,0
+digoxin_renal_dose_reduction,creatinine clearance (mL/min) -- dose-reduction gate,violating_side,bundle,creatinine_clearance_ml_min=59.0;digoxin_dose_reduced=True;digoxin_on=True,1,1,1
+digoxin_renal_dose_reduction,creatinine clearance (mL/min) -- dose-reduction gate,violating_side,counter_bundle,creatinine_clearance_ml_min=59.0;digoxin_dose_reduced=False;digoxin_on=True,0,0,1
