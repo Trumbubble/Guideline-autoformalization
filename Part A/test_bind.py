@@ -123,6 +123,42 @@ def test_plurals_do_not_block_a_match():
     r = b.bind(Mention("ACE inhibitor", "drug_class"), SENT, IX)
     assert isinstance(r, Binding) and r.code == "C09A" and r.system == ATC
 
+def test_zero_overlap_candidates_are_discarded():
+    """Measured against live tx.fhir.org: `$expand?filter=` does PREFIX
+    matching, and on a miss returns arbitrary concepts rather than an empty
+    set -- "central venous access device" retrieves *Spine board*, *Arrow*,
+    *Atomizer*. Those look like results, so the selector would be choosing from
+    noise. A candidate sharing no word with any query is not a match."""
+    class Noisy:
+        def search(self, phrase, kind, k=8):
+            return [b._score(phrase, Concept(SNOMED, "156009", "Spine board", kind), 0.0),
+                    b._score(phrase, Concept(SNOMED, "210005", "Arrow", kind), 0.0),
+                    b._score(phrase, Concept(SNOMED, "52124006",
+                                             "Central venous catheter", kind), 0.0)]
+        def validate(self, s, c): return True
+        def expand(self, s, c, limit=500): return ()
+        def version(self, s): return None
+    m = Mention("CVAD", "procedure", canonical="central venous catheter")
+    got = [c.concept.term for c in b.search_all(Noisy(), m, 8)]
+    assert got == ["Central venous catheter"], got
+
+def test_a_canonical_form_is_searched_but_never_becomes_the_answer():
+    """The model proposes a QUERY; the index still supplies the code. `text`
+    stays verbatim so provenance is unaffected."""
+    seen = []
+    class Spy:
+        def search(self, phrase, kind, k=8):
+            seen.append(phrase)
+            return IX.search(phrase, kind, k)
+        def validate(self, s, c): return IX.validate(s, c)
+        def expand(self, s, c, limit=500): return IX.expand(s, c, limit)
+        def version(self, s): return IX.version(s)
+    m = Mention("ACEi", "drug_class", canonical="ACE inhibitors")
+    r = b.bind(m, "Start an ACEi.", Spy())
+    assert "ACE inhibitors" in seen                 # the canonical was searched
+    assert isinstance(r, Binding) and r.code == "C09A"
+    assert r.mention == "ACEi"                      # provenance keeps the source words
+
 def test_search_is_scoped_to_the_right_vocabulary():
     assert all(c.concept.system == LOINC for c in IX.search("potassium", "lab"))
     assert all(c.concept.system == SNOMED for c in IX.search("diabetes", "condition"))

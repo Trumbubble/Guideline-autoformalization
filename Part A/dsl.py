@@ -378,11 +378,18 @@ def open_holes(rule: Rule, reg: Registry) -> tuple[str, ...]:
 
 def validate_rule(rule: Rule, reg: Registry) -> list[Issue]:
     issues = validate(rule.when, reg, "when") + validate(rule.then, reg, "then")
-    if rule.source_page is None or not rule.source_span:
+    # Provenance means a POINTER BACK TO THE SOURCE, and what that pointer is
+    # depends on the source. For XML/HTML it is the locator (an XPath) plus
+    # offsets; a page number does not exist. Requiring `source_page` made every
+    # rule extracted from a JATS document fail a hard error, so `encode` was
+    # unreachable on any XML source -- an entire guideline came back 14/14
+    # refused before this was spotted.
+    if not rule.source_span:
         issues.append(Issue("provenance", "MISSING_PROVENANCE",
-                            "every rule must cite its source page and sentence",
+                            "every rule must cite the span it came from",
                             "provenance is non-optional: it is what a governance "
-                            "committee reviews"))
+                            "committee reviews. Use the XPath locator for XML/HTML "
+                            "and the page plus span for PDFs."))
     # The obligation has to be about something the care plan can decide,
     # otherwise the rule constrains nobody and Track B has no atom to frame.
     for h in open_holes(rule, reg):
@@ -494,7 +501,17 @@ def check_nondegenerate(rule: Rule, reg: Registry) -> list[Issue]:
     import z3
     env = make_env(reg)
     D = domain_axioms(reg, env)
-    when, then = to_z3(rule.when, env), to_z3(rule.then, env)
+    try:
+        when, then = to_z3(rule.when, env), to_z3(rule.then, env)
+    except (TypeError, ValueError, KeyError) as exc:
+        # An ill-typed rule cannot be lowered, and CRASHING here is the wrong
+        # answer: this runs on model output, where `has_x == 60` (a boolean
+        # compared to a number) is a normal thing to receive. validate() already
+        # reports it as a TYPE_ERROR; report it here too rather than taking the
+        # process down.
+        return [Issue("rule", "NOT_LOWERABLE",
+                      f"rule cannot be lowered to the solver: {exc}",
+                      "fix the type errors validate() reports first")]
     phi = z3.Implies(when, then)
     out: list[Issue] = []
 
@@ -691,6 +708,47 @@ def json_schema(reg: Registry) -> dict:
 # and a statement that genuinely needs it is a `beyond_dsl` refusal rather
 # than a silent truncation.
 MAX_DECODING_DEPTH = 2
+
+def check_decoding_schema(schema: dict, path: str = "$") -> list[str]:
+    """Constraint-check a schema against what the structured-output validator
+    accepts, WITHOUT a network call.
+
+    Every rule here was learned from a 400. They are cheap to violate and
+    expensive to notice, because a rejected schema surfaces as a fallback to
+    the offline heuristic -- which looks exactly like the model finding
+    nothing. Measured cost of not having this: `MENTION_SCHEMA` was missing one
+    `additionalProperties` and the model path silently never ran."""
+    out: list[str] = []
+    if not isinstance(schema, dict):
+        return out
+    # `type` may be a nullable union like ["string", "null"], so normalise
+    # before comparing -- a raw list is unhashable and blows up a set test.
+    t = schema.get("type")
+    types = set(t) if isinstance(t, list) else ({t} if t else set())
+    if "object" in types:
+        if schema.get("additionalProperties") is not False:
+            out.append(f"{path}: object needs additionalProperties=false")
+        if "required" not in schema and schema.get("properties"):
+            out.append(f"{path}: object needs an explicit `required`")
+    if types & {"number", "integer"}:
+        for k in ("minimum", "maximum", "exclusiveMinimum", "exclusiveMaximum"):
+            if k in schema:
+                out.append(f"{path}: {k} is not supported on {schema['type']}")
+    if "array" in types and schema.get("minItems", 0) not in (0, 1):
+        out.append(f"{path}: minItems must be 0 or 1, got {schema['minItems']}")
+    if "oneOf" in schema:
+        out.append(f"{path}: `oneOf` is not supported (use anyOf)")
+    if "anyOf" in schema and "$defs" in schema:
+        out.append(f"{path}: `$defs` cannot sit alongside a top-level anyOf")
+    for key in ("properties", "$defs"):
+        for name, sub in (schema.get(key) or {}).items():
+            out += check_decoding_schema(sub, f"{path}.{key}.{name}")
+    for key in ("items", "operand"):
+        if isinstance(schema.get(key), dict):
+            out += check_decoding_schema(schema[key], f"{path}.{key}")
+    for i, sub in enumerate(schema.get("anyOf") or []):
+        out += check_decoding_schema(sub, f"{path}.anyOf[{i}]")
+    return out
 
 def decoding_schema(reg: Registry, max_depth: int = MAX_DECODING_DEPTH) -> dict:
     """`json_schema` flattened into what a constrained decoder will accept.

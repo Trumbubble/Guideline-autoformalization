@@ -41,7 +41,7 @@ def test_a_named_undefined_predicate_becomes_a_hole():
     declined = [dsl.Refusal("s", "vague_predicate", "no definition",
                             undefined_predicates=("at high risk",))]
     holes = holes_from(S_HOLE, [], declined)
-    assert [h.name for h in holes] == ["has_at_high_risk"]
+    assert [h.name for h in holes] == ["has_high_risk"]
     assert holes[0].unbound and holes[0].binding is None
 
 def test_a_paraphrased_predicate_is_rejected():
@@ -59,7 +59,7 @@ def test_a_retrieval_failure_is_not_a_hole():
     assert holes_from(S_HOLE, [miss], []) == ()
     vague = dsl.Refusal("s", "unbound_concept", "no candidates",
                         source_span="at high risk")
-    assert [h.name for h in holes_from(S_HOLE, [vague], [])] == ["has_at_high_risk"]
+    assert [h.name for h in holes_from(S_HOLE, [vague], [])] == ["has_high_risk"]
 
 def test_is_vague_lexicon():
     assert is_vague("at high risk") and is_vague("an adequate trial")
@@ -81,17 +81,58 @@ def test_partial_when_the_model_names_a_hole_it_can_then_use():
     calls = []
     def f(text, reg):
         calls.append(sorted(reg.names()))
-        if "has_at_high_risk" not in reg.names():
+        if "has_high_risk" not in reg.names():
             return _refusal("vague_predicate", "'at high risk' is undefined",
                             preds=("at high risk",))
         return _rule({"kind": "or", "operands": [
                         {"kind": "cmp", "var": "egfr", "op": "<", "value": 30},
-                        {"kind": "cmp", "var": "has_at_high_risk", "op": "==", "value": True}]},
+                        {"kind": "cmp", "var": "has_high_risk", "op": "==", "value": True}]},
                      {"kind": "cmp", "var": "on_ace_inhibitor", "op": "==", "value": True})
     t = triage(S_HOLE, IX, statement_id="s3", formalize=f, source_page=1, source_span="s")
     assert t.decision == "partial" and t.encodable
-    assert t.open_holes == ("has_at_high_risk",)
-    assert len(calls) == 2 and "has_at_high_risk" in calls[1]
+    assert t.open_holes == ("has_high_risk",)
+    assert len(calls) == 2 and "has_high_risk" in calls[1]
+
+def test_an_unbound_concept_blocks_a_strict_encode():
+    """MEASURED FAILURE, and the one the gate exists to prevent. On a real
+    guideline: "In pediatric patients with persistently positive APLA without a
+    history of thrombosis, suggest no primary prophylaxis" was encoded as
+    `has_thrombosis == false -> no prophylaxis`. APLA would not bind, so the
+    model silently dropped the whole population restriction and the rule became
+    "anyone without a thrombosis history". It passed as ENCODE, because what
+    remained still typechecked.
+
+    A strict encode is therefore unsafe whenever the binder refused anything:
+    the strict registry cannot express the missing concept, so the rule either
+    dropped it or mis-encoded it, and dropping is invisible."""
+    calls = []
+    def f(text, reg):
+        calls.append(sorted(reg.names()))
+        # always returns a valid-looking rule that ignores the unbound concept
+        return _rule({"kind": "cmp", "var": "has_diabetes", "op": "==", "value": True},
+                     {"kind": "cmp", "var": "on_ace_inhibitor", "op": "==", "value": True})
+    text = S_OK + " Reassess if the patient is at high risk."
+    # inject the mention proposer so "at high risk" is actually offered to the
+    # binder -- which then refuses it, since no value set defines it
+    mentions = lambda _t: {"mentions": [
+        {"text": "diabetes", "kind": "condition", "canonical": None},
+        {"text": "ACE inhibitor", "kind": "drug_class", "canonical": None},
+        {"text": "at high risk", "kind": "condition", "canonical": None}]}
+    t = triage(text, IX, statement_id="s1", formalize=f, mention_llm=mentions,
+               source_page=1, source_span="s")
+    # the binder refuses "at high risk", so a strict encode must not stand
+    assert t.decision != "encode", t.decision
+    assert any(e.code == "DROPPED_CONCEPT_RISK" for e in t.evidence)
+    assert len(calls) == 2                      # it retried with the hole declared
+
+def test_a_clean_statement_still_encodes():
+    """The guard must not block statements where everything bound."""
+    def f(text, reg):
+        return _rule({"kind": "cmp", "var": "has_diabetes", "op": "==", "value": True},
+                     {"kind": "cmp", "var": "on_ace_inhibitor", "op": "==", "value": True})
+    t = triage(S_OK, IX, statement_id="s1", formalize=f, source_page=1, source_span="s")
+    assert t.decision == "encode"
+    assert not any(e.code == "DROPPED_CONCEPT_RISK" for e in t.evidence)
 
 def test_refuse_when_the_model_names_nothing_usable():
     """S_OK binds, so the model is actually consulted and its reason is kept."""
@@ -143,12 +184,12 @@ def test_a_hole_ranges_free_and_produces_MAY_not_a_silent_verdict():
     reg = dsl.Registry([
         dsl.VarDef("egfr", "real", "mL/min/1.73m2", "eGFR", plausible=(0, 200)),
         dsl.VarDef("on_ace_inhibitor", "bool", None, "on ACEi", role="action"),
-        dsl.VarDef("has_at_high_risk", "bool", None, "at high risk", unbound=True)])
+        dsl.VarDef("has_high_risk", "bool", None, "at high risk", unbound=True)])
     rule = dsl.Rule("s3", dsl.Or([dsl.Cmp("egfr", "<", 30),
-                                  dsl.Cmp("has_at_high_risk", "==", True)]),
+                                  dsl.Cmp("has_high_risk", "==", True)]),
                     dsl.Cmp("on_ace_inhibitor", "==", True), "recommend", "ACEi",
                     source_page=1, source_span="s")
-    assert dsl.open_holes(rule, reg) == ("has_at_high_risk",)
+    assert dsl.open_holes(rule, reg) == ("has_high_risk",)
     env = dsl.make_env(reg); D = dsl.domain_axioms(reg, env)
     plan = [env["egfr"] == 45, z3.Not(env["on_ace_inhibitor"])]
 
@@ -187,6 +228,63 @@ def test_open_holes_are_a_warning_not_an_error():
     assert not [c for c, sev in iss.items() if sev == "error"]
 
 # ------------------------------------------------------------- reporting
+
+def test_hole_names_drop_boilerplate_and_stay_readable():
+    """Real output before this: has_pediatric_patients_who_have,
+    has_require_medium_long_term. Unreadable in a governance report, and too
+    coarse to be a variable."""
+    assert hole_for("patients who are critically ill", "condition").name == \
+        "has_critically_ill"
+    assert hole_for("at high risk", "condition").name == "has_high_risk"
+    assert hole_for("pediatric patients with solid tumors", "condition").name == \
+        "has_solid_tumors"
+    assert hole_for("children undergoing noncardiac surgery", "condition").name == \
+        "has_noncardiac_surgery"
+    assert hole_for("pediatric patients who have experienced trauma",
+                    "condition").name == "has_experienced_trauma"
+
+def test_a_whole_clause_is_rejected_as_a_predicate():
+    """An undefined PREDICATE is a phrase. A model quoting half a sentence is
+    not naming a variable."""
+    clause = ("pediatric patients who have experienced trauma and require "
+              "ongoing intensive care support")
+    declined = [dsl.Refusal("s", "vague_predicate", "x",
+                            undefined_predicates=(clause,))]
+    assert holes_from(clause, [], declined) == ()
+    ok = [dsl.Refusal("s", "vague_predicate", "x",
+                      undefined_predicates=("at high risk",))]
+    assert len(holes_from("... at high risk ...", [], ok)) == 1
+
+def test_the_registry_handed_to_the_decoder_is_capped():
+    """The compiled grammar scales with the variable enum; past ~10 it fails to
+    compile at ANY depth and the statement is lost entirely (R8)."""
+    seen = []
+    def f(text, reg):
+        seen.append(len(reg.names()))
+        if not any(n.startswith("has_") and reg[n].unbound for n in reg.names()):
+            return _refusal("vague_predicate", "x",
+                            preds=[f"risk factor {i}" for i in range(12)])
+        return _rule({"kind": "cmp", "var": "has_diabetes", "op": "==", "value": True},
+                     {"kind": "cmp", "var": "on_ace_inhibitor", "op": "==", "value": True})
+    text = S_OK + " " + " ".join(f"risk factor {i}" for i in range(12))
+    t = triage(text, IX, statement_id="s1", formalize=f, source_page=1, source_span="s")
+    assert max(seen) <= gate.MAX_DECODE_VARS, seen
+    assert any(e.code == "REGISTRY_TRUNCATED" for e in t.evidence)
+
+def test_spectrum_separates_index_gaps_from_real_residue():
+    """The bucket that would otherwise blame the guideline for OUR retrieval
+    failures. Measured on a real document: 8 of 14 refusals were index gaps for
+    concepts that exist in SNOMED and VSAC."""
+    gap = Triage("a", "x", "refuse", reason_code="unbound_concept",
+                 evidence=(gate.Evidence("binder", "unbound_index_gap", "nothing found"),))
+    miss = Triage("b", "x", "refuse", reason_code="unbound_concept",
+                  evidence=(gate.Evidence("binder", "unbound_unselected", "none matched"),))
+    vague = Triage("c", "x", "refuse", reason_code="vague_predicate")
+    sp = spectrum([gap, miss, vague])
+    assert sp["buckets"] == {"unbound_concept(index_gap)": 1,
+                             "unbound_concept(unselected)": 1,
+                             "vague_predicate": 1}
+    assert sp["retrieval_attributable"] == 2
 
 def test_spectrum_is_the_M1_six_bucket_table():
     ts = [Triage("a", "x", "encode", fragment="LIA"),
@@ -229,11 +327,11 @@ def test_partial_confidence_describes_the_attempt_that_decided_it():
     once its hole was declared is NOT low-confidence -- reporting the strict
     rate would sort a good PARTIAL to the bottom of the risk-coverage curve."""
     def f(text, reg):
-        if "has_at_high_risk" not in reg.names():
+        if "has_high_risk" not in reg.names():
             return _refusal("vague_predicate", "undefined", preds=("at high risk",))
         return _rule({"kind": "or", "operands": [
                         {"kind": "cmp", "var": "egfr", "op": "<", "value": 30},
-                        {"kind": "cmp", "var": "has_at_high_risk", "op": "==", "value": True}]},
+                        {"kind": "cmp", "var": "has_high_risk", "op": "==", "value": True}]},
                      {"kind": "cmp", "var": "on_ace_inhibitor", "op": "==", "value": True})
     t = triage(S_HOLE, IX, statement_id="s3", formalize=f, samples=4,
                source_page=1, source_span="s")

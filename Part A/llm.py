@@ -80,6 +80,7 @@ class Usage:
     }
     def __init__(self):
         self.calls = self.input = self.output = self.cached = 0
+        self.errors: list[str] = []
     def add(self, u) -> None:
         self.calls += 1
         self.input += u.input_tokens
@@ -88,10 +89,20 @@ class Usage:
     def cost(self, m: str) -> float:
         pin, pout = self.PRICES.get(m, self.PRICES[DEFAULT_MODEL])
         return (self.input * pin + self.output * pout) / 1e6
+    def fail(self, exc: Exception) -> None:
+        self.errors.append(f"{type(exc).__name__}: {str(exc)[:200]}")
+
     def __str__(self):
         m = model()
-        return (f"{self.calls} calls, {self.input} in ({self.cached} cached), "
+        base = (f"{self.calls} calls, {self.input} in ({self.cached} cached), "
                 f"{self.output} out, ~${self.cost(m):.3f}")
+        if self.errors:
+            uniq = sorted(set(self.errors))
+            base += (f"\n  !! {len(self.errors)} FAILED CALL(S) -- these fell back to "
+                     f"the offline heuristic, so any result above is NOT the model's:")
+            for e in uniq[:3]:
+                base += f"\n     {e}"
+        return base
 
 USAGE = Usage()
 
@@ -117,7 +128,11 @@ def ask_json(system: str, user: str, schema: dict, *,
                 f"{m} rejects `temperature` with a 400. Use one of "
                 f"{sorted(TEMPERATURE_CAPABLE)} or leave it unset.")
         kwargs["temperature"] = temperature
-    r = client().messages.create(**kwargs)
+    try:
+        r = client().messages.create(**kwargs)
+    except Exception as exc:
+        USAGE.fail(exc)
+        raise
     USAGE.add(r.usage)
     if r.stop_reason == "refusal":
         raise RuntimeError(f"model refused: {getattr(r.stop_details, 'category', '?')}")

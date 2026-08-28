@@ -45,6 +45,11 @@ import dsl
 
 Decision = str          # encode | partial | refuse
 
+# Measured (R8): a 13-variable registry compiles only at nesting depth 1 and a
+# 3-variable one reaches depth 2. Past roughly this many the grammar fails to
+# compile at ANY depth and the statement is lost.
+MAX_DECODE_VARS = 10
+
 @dataclass(frozen=True)
 class Evidence:
     """One signal, and where it came from. The gate must be auditable: a
@@ -109,7 +114,8 @@ def holes_from(statement: str, refusals, declined) -> tuple[dsl.VarDef, ...]:
     for d in declined:
         for phrase in getattr(d, "undefined_predicates", ()) or ():
             p = (phrase or "").strip()
-            if p and p.lower() in statement.lower() and p.lower() not in seen:
+            if (p and p.lower() in statement.lower() and p.lower() not in seen
+                    and len(p.split()) <= MAX_HOLE_WORDS):
                 seen.add(p.lower())
                 out.append(hole_for(p, "condition"))
     for r in refusals:
@@ -119,10 +125,46 @@ def holes_from(statement: str, refusals, declined) -> tuple[dsl.VarDef, ...]:
             out.append(hole_for(p, "condition"))
     return tuple(out)
 
+def classify_unbound(refusal, index) -> str:
+    """`index_gap` when retrieval returned nothing to choose from; `unselected`
+    when it returned candidates and none was right. Free to compute -- the
+    terminology endpoints cost nothing and the query is already cached."""
+    phrase = (refusal.source_span or "").strip()
+    if not phrase:
+        return "unbound_unknown"
+    for kind in ("condition", "drug_class", "drug", "procedure", "lab"):
+        try:
+            if bind.search_all(index, bind.Mention(phrase, kind), 5):
+                return "unbound_unselected"
+        except Exception:
+            continue
+    return "unbound_index_gap"
+
+# An undefined PREDICATE is a phrase, not a clause. Longer spans are the model
+# quoting half a sentence, which produces holes like
+# `has_pediatric_patients_who_have` -- unreadable in a governance report and
+# too coarse to be a variable.
+MAX_HOLE_WORDS = 6
+
+# Filler that names the population or the sentence frame rather than the
+# predicate. Dropping it turns `has_pediatric_patients_who_have` into
+# `has_experienced_trauma`, which is what a governance reader needs to see.
+HOLE_FILLER = {
+    "the", "a", "an", "of", "in", "on", "at", "with", "from", "for", "to",
+    "and", "or", "if", "when", "that", "which", "who", "whose",
+    "are", "is", "be", "been", "was", "were", "have", "has", "had",
+    "require", "requires", "required", "considered", "receiving", "undergoing",
+    "patients", "patient", "pediatric", "paediatric", "children", "child",
+    "adults", "adult", "adolescents", "infants", "their", "his", "her",
+}
+
 def hole_for(mention: str, kind: str) -> dsl.VarDef:
     """Turn an unbindable predicate into a declared free variable rather than a
     silent omission. It has no binding and no plausible range on purpose."""
-    name = bind.KIND_PREFIX.get(kind, "") + bind._slug(mention)
+    # Strip leading filler so the variable names the PREDICATE, not the
+    # sentence around it: "patients who are critically ill" -> has_critically_ill.
+    words = [w for w in mention.lower().split() if w not in HOLE_FILLER]
+    name = bind.KIND_PREFIX.get(kind, "") + bind._slug(" ".join(words) or mention, 5)
     return dsl.VarDef(name=name, type="bool", description=mention,
                       role="observation", unbound=True)
 
@@ -144,7 +186,13 @@ def triage(statement: str, index, *, statement_id: str = "s",
     bindings, refusals = bind.bind_statement(
         statement, index, mention_llm, select_llm, ref_id=statement_id)
     for r in refusals:
-        ev.append(Evidence("binder", "unbound_concept", r.reason_text))
+        # Attribute the failure. An `unbound_concept` that is really an INDEX
+        # GAP is a bug in our retrieval; one where no candidate exists at all
+        # may be genuine residue. Reporting them in one bucket makes the
+        # formalizability number uninterpretable -- measured on a real
+        # guideline, 8 of 14 refusals were index gaps for concepts (CVAD,
+        # solid tumors, noncardiac surgery) that DO exist in SNOMED and VSAC.
+        ev.append(Evidence("binder", classify_unbound(r, index), r.reason_text))
 
     reg = bind.registry_from_bindings(bindings)
     holes = holes_from(statement, refusals, [])
@@ -183,19 +231,52 @@ def triage(statement: str, index, *, statement_id: str = "s",
         rule, iss = _best(rules, reg)
         ev += [Evidence("validator", i.code, i.message) for i in iss]
         blocking = [i for i in iss if i.severity == "error"]
+
+        # A strict encode is UNSAFE when the binder refused something. The
+        # strict registry does not contain that concept, so a rule it produces
+        # has either dropped the concept or mis-encoded it -- and dropping is
+        # invisible, because what remains still typechecks.
+        #
+        # Measured, and this is the failure the whole gate exists to prevent:
+        # "In pediatric patients with persistently positive APLA without a
+        # history of thrombosis, suggest no primary prophylaxis" encoded as
+        # `has_thrombosis == false -> no prophylaxis`. APLA would not bind, so
+        # the entire population restriction was silently dropped and the rule
+        # became "anyone without a thrombosis history". It passed as ENCODE.
+        #
+        # So: any binder refusal forces the partial path, where the dropped
+        # concept is available as a declared hole. If the model still does not
+        # use it, that is a refusal, not an encoding.
+        if refusals and not blocking:
+            ev.append(Evidence("gate", "DROPPED_CONCEPT_RISK",
+                               f"{len(refusals)} concept(s) did not bind, so a strict "
+                               f"encoding may have silently omitted them; retrying "
+                               f"with them declared as holes"))
+            blocking = list(iss) or [Evidence]      # force the partial path below
         if not blocking:
             return Triage(statement_id, statement, "encode", None,
                           dsl.fragment_of(rule.when, rule.then), 1.0 - rate,
                           tuple(ev), dsl.open_holes(rule, reg), rule=rule,
                           samples=len(outcomes), refusal_rate=rate)
-        ev.append(Evidence("validator", "REJECTED_AFTER_ENCODING",
-                           f"encoding failed validation: {[i.code for i in blocking]}"))
+        if [i for i in iss if getattr(i, "severity", "") == "error"]:
+            ev.append(Evidence("validator", "REJECTED_AFTER_ENCODING",
+                               f"encoding failed validation: "
+                               f"{[i.code for i in iss if i.severity == 'error']}"))
 
     # -- attempt 2: partial. Declare the unbindable predicates as HOLES. --
     # The model names the predicates that defeated it; those are the holes.
     holes = holes_from(statement, refusals, decls) or holes
     if allow_partial and holes:
-        wide = dsl.Registry([reg[n] for n in reg.names()] + list(holes),
+        # The compiled grammar scales with the variable enum (R8), and a wide
+        # registry -- bound vars PLUS every hole -- can exceed the API's limit
+        # even at depth 0, which loses the statement entirely. Cap it, keeping
+        # bound variables first, and say so rather than truncating silently.
+        kept_holes = list(holes)[:max(0, MAX_DECODE_VARS - len(reg.names()))]
+        if len(kept_holes) < len(holes):
+            ev.append(Evidence("gate", "REGISTRY_TRUNCATED",
+                               f"{len(holes) - len(kept_holes)} of {len(holes)} holes "
+                               f"dropped to keep the decoding grammar compilable"))
+        wide = dsl.Registry([reg[n] for n in reg.names()] + kept_holes,
                             [dsl.EventDef(e) for e in reg.event_names()])
         outs = _attempt_k(statement, wide, formalize, statement_id,
                           source_page, source_span, max(1, samples))
@@ -253,8 +334,14 @@ def _best(rules: list[dsl.Rule], reg: dsl.Registry):
     """Prefer a sample that validates. With K>1 the samples agree semantically
     (measured: 0 of 10 statements produced >1 reading), so this is a tie-break,
     not a vote."""
-    scored = [(r, dsl.validate_rule(r, reg) + dsl.check_nondegenerate(r, reg))
-              for r in rules]
+    def issues(r):
+        # Only ask the solver about a rule that typechecks. check_nondegenerate
+        # has to build a Z3 term, which an ill-typed rule cannot do.
+        v = dsl.validate_rule(r, reg)
+        if [i for i in v if i.severity == "error"]:
+            return v
+        return v + dsl.check_nondegenerate(r, reg)
+    scored = [(r, issues(r)) for r in rules]
     scored.sort(key=lambda t: sum(1 for i in t[1] if i.severity == "error"))
     return scored[0]
 
@@ -267,7 +354,18 @@ def spectrum(triages: Iterable[Triage]) -> dict:
     t = list(triages)
     buckets: dict[str, int] = {}
     for x in t:
-        key = x.fragment if x.encodable and x.fragment else (x.reason_code or "unknown")
+        if x.encodable and x.fragment:
+            key = x.fragment
+        elif x.reason_code == "unbound_concept":
+            # Split the bucket that would otherwise attribute OUR retrieval
+            # failures to the guideline. Only `unbound_index_gap` is arguably
+            # residue; `unbound_unselected` means candidates existed.
+            gaps = {e.code for e in x.evidence if e.code.startswith("unbound_")}
+            key = ("unbound_concept(index_gap)" if "unbound_index_gap" in gaps
+                   else "unbound_concept(unselected)" if "unbound_unselected" in gaps
+                   else "unbound_concept")
+        else:
+            key = x.reason_code or "unknown"
         buckets[key] = buckets.get(key, 0) + 1
     enc = [x for x in t if x.encodable]
     return {
@@ -278,6 +376,13 @@ def spectrum(triages: Iterable[Triage]) -> dict:
         "in_fragment_rate": round(len(enc) / len(t), 3) if t else 0.0,
         "buckets": dict(sorted(buckets.items())),
         "open_holes": sum(len(x.open_holes) for x in t),
+        # Statements lost to OUR retrieval rather than to the guideline. A
+        # formalizability fraction reported without this number is not
+        # interpretable.
+        "retrieval_attributable": sum(
+            1 for x in t if not x.encodable
+            and any(e.code in {"unbound_index_gap", "unbound_unselected"}
+                    for e in x.evidence)),
         "mean_confidence": round(statistics.mean([x.confidence for x in t]), 3) if t else 0.0,
     }
 

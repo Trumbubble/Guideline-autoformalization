@@ -166,6 +166,16 @@ def test_tautological_antecedent_is_a_warning():
     assert "TAUTOLOGICAL_ANTECEDENT" in codes(iss)
     assert all(i.severity == "warn" for i in iss if i.code == "TAUTOLOGICAL_ANTECEDENT")
 
+def test_check_nondegenerate_reports_an_illtyped_rule_instead_of_crashing():
+    """It runs on MODEL OUTPUT, where a boolean compared to a number is a
+    normal thing to receive. Crashing there took down a whole guideline run."""
+    bad = Rule("b", And([Cmp("has_diabetes", "==", 60)]),
+               Cmp("on_acei_arb", "==", True), "recommend", "x",
+               source_page=1, source_span="s")
+    assert "TYPE_ERROR" in codes(validate_rule(bad, R))
+    got = codes(dsl.check_nondegenerate(bad, R))
+    assert got == ["NOT_LOWERABLE"], got
+
 def test_a_good_rule_is_nondegenerate():
     good = Rule("g", And([Cmp("has_diabetes", "==", True), Cmp("acr_mg_g", ">=", 30)]),
                 Cmp("on_acei_arb", "==", True), "recommend", "ACEi or ARB",
@@ -183,6 +193,17 @@ def test_missing_provenance_is_an_error():
     r = Rule("p", Cmp("egfr", "<", 30), Cmp("nephrology_referral", "==", True),
              "refer", "nephrology")
     assert "MISSING_PROVENANCE" in codes(validate_rule(r, R))
+
+def test_an_xml_locator_is_provenance_even_without_a_page():
+    """JATS has no page numbers -- the XPath IS the pointer back to the source.
+    Requiring `source_page` made every rule from an XML document fail a hard
+    error, so `encode` was unreachable and a whole guideline came back 14/14
+    refused."""
+    r = Rule("p", Cmp("egfr", "<", 30), Cmp("nephrology_referral", "==", True),
+             "refer", "nephrology", source_page=None,
+             source_span="/article/body/sec[5]/boxed-text")
+    assert "MISSING_PROVENANCE" not in codes(validate_rule(r, R))
+    assert validate_rule(r, R) == []
 
 def test_semantic_equivalence_sees_what_the_compiler_cannot():
     """Both rules typecheck; only the solver can see they mean different
@@ -235,6 +256,36 @@ def test_decoding_schema_avoids_every_unsupported_construct():
     defs = sch["$defs"]
     assert "expr2" in defs and "expr0" in defs
     assert _json.dumps(defs["expr0"]).count("expr") == 0    # leaves bottom out
+
+def test_every_schema_we_send_is_api_compatible():
+    """Constraint-check without a network call. Each rule was learned from a
+    400, and a rejected schema does NOT surface as an error -- it falls back to
+    the offline heuristic, which looks exactly like the model finding nothing.
+    `bind.MENTION_SCHEMA` was missing one `additionalProperties` and the model
+    path silently never ran on a whole guideline."""
+    import bind, segment
+    for name, sch in [("decoding_schema", dsl.decoding_schema(R)),
+                      ("decoding_schema d1", dsl.decoding_schema(R, 1)),
+                      ("MENTION_SCHEMA", bind.MENTION_SCHEMA),
+                      ("SELECT_SCHEMA", bind.SELECT_SCHEMA),
+                      ("CLASSIFIER_SCHEMA", segment.CLASSIFIER_SCHEMA)]:
+        assert dsl.check_decoding_schema(sch) == [], (name, dsl.check_decoding_schema(sch))
+
+def test_the_schema_checker_catches_each_known_rejection():
+    bad = [
+        ({"type": "object", "required": [], "properties": {"a": {"type": "string"}}},
+         "additionalProperties"),
+        ({"type": "object", "required": [], "additionalProperties": False,
+          "properties": {"n": {"type": "integer", "minimum": 0}}}, "minimum"),
+        ({"type": "object", "required": [], "additionalProperties": False,
+          "properties": {"xs": {"type": "array", "minItems": 2,
+                                "items": {"type": "string"}}}}, "minItems"),
+        ({"oneOf": [{"type": "string"}]}, "oneOf"),
+        ({"anyOf": [{"type": "string"}], "$defs": {"x": {"type": "string"}}}, "$defs"),
+    ]
+    for schema, needle in bad:
+        found = dsl.check_decoding_schema(schema)
+        assert any(needle in f for f in found), (needle, found)
 
 def test_decoding_schema_still_closes_the_vocabulary():
     sch = dsl.decoding_schema(R)

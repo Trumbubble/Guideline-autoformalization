@@ -33,6 +33,7 @@ import json
 import os
 import re
 import sqlite3
+import threading
 import unicodedata
 from dataclasses import dataclass, field, replace
 from typing import Callable, Iterable, Protocol
@@ -122,6 +123,17 @@ class Mention:
     char_start: int = 0
     char_end: int = 0
     unit: str | None = None         # the unit the statement used, if any
+    # An expanded or canonical form of the phrase, used ONLY as an extra search
+    # query. Guideline prose is abbreviation-dense and terminology indexes are
+    # not: measured against live SNOMED, "CVAD" retrieves *Structure of central
+    # axillary lymph node*, "APS" retrieves *Dapsone and pyrimethamine*, and
+    # "home TPN" retrieves *Homeria poisoning*. A hand-written abbreviation
+    # table cannot cover a specialty it was not written for.
+    #
+    # This is safe in a way that generating a code is not: the model proposes
+    # a QUERY, the index still supplies the answer, and the selector still picks
+    # from what the index returned. `text` stays verbatim for provenance.
+    canonical: str | None = None
 
 @dataclass(frozen=True)
 class Binding:
@@ -200,53 +212,67 @@ class SqliteIndex:
 
     def __init__(self, path: str = ":memory:"):
         self.path = path
-        self.db = sqlite3.connect(path)
+        # A sqlite3 connection is bound to its creating thread unless told
+        # otherwise, and the binder IS used from a thread pool (K samples, or
+        # one worker per statement). So the connection is shared explicitly and
+        # `_lock` serialises every access. Without this a concurrent run dies
+        # with "SQLite objects created in a thread can only be used in that
+        # same thread" -- and only under concurrency, which is the worst way to
+        # discover it.
+        self.db = sqlite3.connect(path, check_same_thread=False)
         self.db.row_factory = sqlite3.Row
+        self._lock = threading.RLock()
         self.db.executescript(SCHEMA)
 
     # -- writing -------------------------------------------------------
     def add(self, concepts: Iterable[Concept]) -> int:
-        n = 0
-        for c in concepts:
-            cur = self.db.execute(
-                "INSERT OR IGNORE INTO concept(system,code,term,kind,version,unit) "
-                "VALUES (?,?,?,?,?,?)",
-                (c.system, c.code, c.term, c.kind, c.version, c.unit))
-            if cur.rowcount:
-                self.db.execute(
-                    "INSERT INTO concept_fts(term,system,code,kind) VALUES (?,?,?,?)",
-                    (c.term, c.system, c.code, c.kind))
-                n += 1
-        self.db.commit()
-        return n
+        with self._lock:
+            n = 0
+            for c in concepts:
+                cur = self.db.execute(
+                    "INSERT OR IGNORE INTO concept(system,code,term,kind,version,unit) "
+                    "VALUES (?,?,?,?,?,?)",
+                    (c.system, c.code, c.term, c.kind, c.version, c.unit))
+                if cur.rowcount:
+                    self.db.execute(
+                        "INSERT INTO concept_fts(term,system,code,kind) VALUES (?,?,?,?)",
+                        (c.term, c.system, c.code, c.kind))
+                    n += 1
+            self.db.commit()
+            return n
 
     def add_expansion(self, system: str, code: str,
                       members: Iterable[tuple[str, str]]) -> None:
-        self.db.executemany(
-            "INSERT OR IGNORE INTO expansion VALUES (?,?,?,?)",
-            [(system, code, ms, mc) for ms, mc in members])
-        self.db.commit()
+        with self._lock:
+            self.db.executemany(
+                "INSERT OR IGNORE INTO expansion VALUES (?,?,?,?)",
+                [(system, code, ms, mc) for ms, mc in members])
+            self.db.commit()
 
     def set_version(self, system: str, version: str) -> None:
-        self.db.execute("INSERT OR REPLACE INTO meta VALUES (?,?)",
-                        (f"version:{system}", version))
-        self.db.commit()
+        with self._lock:
+            self.db.execute("INSERT OR REPLACE INTO meta VALUES (?,?)",
+                            (f"version:{system}", version))
+            self.db.commit()
 
     # -- reading -------------------------------------------------------
     def version(self, system: str) -> str | None:
-        r = self.db.execute("SELECT value FROM meta WHERE key=?",
-                            (f"version:{system}",)).fetchone()
+        with self._lock:
+            r = self.db.execute("SELECT value FROM meta WHERE key=?",
+                                (f"version:{system}",)).fetchone()
         return r["value"] if r else None
 
     def validate(self, system: str, code: str) -> bool:
-        return self.db.execute(
-            "SELECT 1 FROM concept WHERE system=? AND code=? LIMIT 1",
-            (system, code)).fetchone() is not None
+        with self._lock:
+            return self.db.execute(
+                "SELECT 1 FROM concept WHERE system=? AND code=? LIMIT 1",
+                (system, code)).fetchone() is not None
 
     def expand(self, system: str, code: str, limit: int = 500) -> tuple[str, ...]:
-        rows = self.db.execute(
-            "SELECT member_code FROM expansion WHERE system=? AND code=? LIMIT ?",
-            (system, code, limit)).fetchall()
+        with self._lock:
+            rows = self.db.execute(
+                "SELECT member_code FROM expansion WHERE system=? AND code=? LIMIT ?",
+                (system, code, limit)).fetchall()
         return tuple(r["member_code"] for r in rows)
 
     def search(self, phrase: str, kind: Kind, k: int = 8) -> list[Candidate]:
@@ -258,19 +284,21 @@ class SqliteIndex:
         # phrase rarely matches a terminology term token-for-token, so requiring
         # every token (AND) loses far more than the noise it removes.
         q = " OR ".join(f'"{t}"*' for t in toks)
-        rows = self.db.execute(
-            "SELECT term, system, code, kind, bm25(concept_fts) AS bm "
-            "FROM concept_fts WHERE concept_fts MATCH ? ORDER BY bm LIMIT ?",
-            (q, max(k * 8, 40))).fetchall()
+        with self._lock:
+            rows = self.db.execute(
+                "SELECT term, system, code, kind, bm25(concept_fts) AS bm "
+                "FROM concept_fts WHERE concept_fts MATCH ? ORDER BY bm LIMIT ?",
+                (q, max(k * 8, 40))).fetchall()
         out = []
         for r in rows:
             if systems and r["system"] not in systems:
                 continue
             if r["kind"] != kind:
                 continue
-            meta = self.db.execute(
-                "SELECT version, unit FROM concept WHERE system=? AND code=? AND term=?",
-                (r["system"], r["code"], r["term"])).fetchone()
+            with self._lock:
+                meta = self.db.execute(
+                    "SELECT version, unit FROM concept WHERE system=? AND code=? AND term=?",
+                    (r["system"], r["code"], r["term"])).fetchone()
             c = Concept(r["system"], r["code"], r["term"], r["kind"],
                         meta["version"] if meta else None, meta["unit"] if meta else None)
             out.append(_score(phrase, c, -float(r["bm"])))
@@ -366,8 +394,28 @@ def search_all(index: TerminologyIndex, mention: Mention, k: int) -> list[Candid
     """Union over the phrase and its expansion. Union, not intersection: each
     query sees terms the other misses, and the selector decides between them."""
     found: list[Candidate] = []
-    for q in expand_query(mention.text):
+    queries = expand_query(mention.text)
+    if mention.canonical and mention.canonical.lower() not in {q.lower() for q in queries}:
+        queries.append(mention.canonical)
+        bare = normalise_query(mention.canonical)
+        if bare and bare not in queries:
+            queries.append(bare)
+    for q in queries:
         found.extend(index.search(q, mention.kind, k=k))
+
+    # Drop candidates that share NO word with any query. Measured: tx.fhir.org's
+    # $expand?filter= does prefix matching, and on a MISS it returns arbitrary
+    # concepts rather than an empty set -- "central venous access device"
+    # retrieves *Spine board*, *Arrow*, *Atomizer*. Those look like results, so
+    # a selector sees a full candidate list and may pick from noise. A candidate
+    # with zero token overlap is not a match; discarding it turns a silent
+    # wrong answer into an honest "no candidates", which routes to a refusal.
+    qtokens = set()
+    for q in queries:
+        qtokens |= set(_stems(q))
+    if qtokens:
+        found = [c for c in found if set(_stems(c.concept.term)) & qtokens]
+
     found.sort(key=lambda c: -c.score)
     return _dedupe_candidates(found)[:k]
 
@@ -408,13 +456,15 @@ def unit_near(text: str, at: int, window: int = 60) -> str | None:
 MENTION_SCHEMA = {
     "type": "object",
     "required": ["mentions"],
+    "additionalProperties": False,
     "properties": {"mentions": {"type": "array", "items": {
         "type": "object",
-        "required": ["text", "kind"],
+        "required": ["text", "kind", "canonical"],
         "additionalProperties": False,
         "properties": {
             "text": {"type": "string"},
-            "kind": {"enum": ["lab", "condition", "drug", "drug_class", "procedure"]}}}}},
+            "kind": {"enum": ["lab", "condition", "drug", "drug_class", "procedure"]},
+            "canonical": {"type": ["string", "null"]}}}}},
 }
 
 MENTION_INSTRUCTIONS = """\
@@ -427,7 +477,13 @@ normalise wording, or invent a canonical name. Do not list severity words,
 populations ("adults"), or vague qualifiers ("high-risk") -- those are not
 bindable concepts and are handled elsewhere.
 
-kind is one of: lab, condition, drug, drug_class, procedure."""
+kind is one of: lab, condition, drug, drug_class, procedure.
+
+Also give `canonical`: the unabbreviated, standard clinical name for the same
+concept -- "CVAD" -> "central venous access device", "APS" -> "antiphospholipid
+syndrome", "TPN" -> "total parenteral nutrition". This is used only to SEARCH a
+terminology index; the code itself still comes from that index, never from you.
+Use null when the phrase is already the standard name."""
 
 def build_mention_prompt(text: str) -> str:
     return f'{MENTION_INSTRUCTIONS}\n\nSentence:\n"""\n{text}\n"""'
@@ -461,7 +517,8 @@ def propose_mentions(text: str,
         for pat, kind in _HEURISTIC_MENTIONS:
             for m in re.finditer(pat, text, re.I):
                 found.append(Mention(m.group(0), kind, m.start(), m.end(),
-                                     unit_near(text, m.end()) if kind == "lab" else None))
+                                     unit_near(text, m.end()) if kind == "lab" else None,
+                                     ABBREVIATIONS.get(" ".join(_tokens(m.group(0)))))) 
         return _drop_overlaps(found)
     try:
         raw = llm(text)
@@ -473,8 +530,10 @@ def propose_mentions(text: str,
         at = text.find(span)
         if not span or at < 0 or kind not in KIND_SYSTEMS:
             continue                     # not verbatim, or not a bindable kind
+        canon = (m.get("canonical") or "").strip() or None
         out.append(Mention(span, kind, at, at + len(span),
-                           unit_near(text, at + len(span)) if kind == "lab" else None))
+                           unit_near(text, at + len(span)) if kind == "lab" else None,
+                           canon))
     return _drop_overlaps(out)
 
 def _drop_overlaps(ms: list[Mention]) -> list[Mention]:
