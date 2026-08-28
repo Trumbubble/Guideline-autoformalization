@@ -224,6 +224,60 @@ fixture. Guidelines restate recommendations in an executive summary, in a
 per-section summary, AND in a table. Deduplication is not a nicety; without it
 the M1 denominator would be inflated by a third on some documents.
 
+## Stage 2: what building the binder taught us
+
+Every source is reachable with **no UMLS account**, all verified live:
+SNOMED search/expand/validate via `tx.fhir.org` (`$expand?filter=`,
+`?fhir_vs=isa/<code>`, `$validate-code`), LOINC via NLM Clinical Tables, drugs
+and ATC classes via RxNav. A UTS licence buys VSAC's curated, steward-versioned
+value sets -- better than a computed is-a expansion, and what the AHRQ CDS
+Connect reference artifacts bind to -- but nothing is blocked without it.
+
+**Live LOINC bound `eGFR` to the wrong gene.** The query "eGFR" returns
+*"EGFR gene exon 20 insertion [Presence] ... by Molecular genetics method"* --
+epidermal growth factor receptor -- and, being the only candidate, the selector
+called it a "clear lexical win" and bound it to a kidney-function threshold.
+Three fixes, all deterministic:
+
+- **being the only candidate is not evidence.** `POSITIVE_EVIDENCE` requires an
+  exact term match, a unit match, or full query-token coverage before the
+  offline selector will bind anything. This alone turns the eGFR case from a
+  wrong binding into a refusal, which is the safe outcome.
+- **abbreviation expansion** (`ABBREVIATIONS`): search the phrase *and* its
+  expansion, union the candidates. "eGFR" alone cannot be disambiguated;
+  "estimated glomerular filtration rate" can.
+- **grouper codes are penalised.** LOINC carries "HEDIS MY 2020 Value Set -
+  Estimated Glomerular Filtration Rate" alongside the real result code, and it
+  wins on token overlap. You cannot threshold a value set, so
+  `NOT_AN_OBSERVATION` demotes value sets, panels, and deprecated codes.
+
+**Plurals were silently refusing correct bindings.** Guideline prose says "an
+ACE inhibitor"; ATC says "ACE INHIBITORS, PLAIN". Without stemming the two
+share no evidence and a correct binding is refused. `_stem` is applied for
+comparison only, never to the FTS query, where a prefix match already covers it.
+
+**Units are a deterministic disambiguator and should run before any model.**
+LOINC 9318-7 is mg/g and 14585-4 is mg/mmol -- the same clinical threshold a
+factor of 8.84 apart. The sentence states the unit, so `rerank_by_unit` settles
+it with no judgement required. Without the unit the two score *identically* and
+the binder correctly refuses.
+
+**`RxClass class/byName` needs the exact class name** -- "ACE inhibitor" gets 0
+hits, "ACE INHIBITORS, PLAIN" gets 2. Useless against guideline prose. There
+are only 1,319 ATC1-4 classes, so the fix is to seed them all into the local
+index and search lexically rather than query the endpoint per phrase.
+
+**NLM Clinical Tables returns no units.** `df=EXAMPLE_UCUM_UNITS` comes back
+empty for every row, so unit matching cannot work against that source. The
+fixture carries units and the tests exercise the path; real unit data needs the
+licensed LOINC download.
+
+**The offline heuristic refuses a lot on live terminology, and that is the
+design.** It is the fallback, deliberately conservative; the LLM selector,
+which sees the whole sentence, is what converts those abstentions into
+bindings. Any abstention it cannot resolve is residue, which is a measured
+deliverable rather than a failure.
+
 ## Known gaps
 
 - **The Docling path is written but untested here** — docling is not installed,
@@ -238,5 +292,12 @@ the M1 denominator would be inflated by a third on some documents.
   pipeline and nothing crashed, but nobody has read one and marked every
   recommendation by hand. Until that exists, "9/9 on the fixture" is a
   regression guarantee, not evidence.
+- **The ATC class seed is not implemented** -- `RemoteIndex` still calls
+  `rxclass/class/byName`, which needs exact class names, so live drug-class
+  binding is unreliable until the 1,319-class seed lands.
+- **`bind.py` has never run with a real LLM selector**, only the offline
+  heuristic and mock callables in tests. The heuristic is deliberately
+  conservative, so live-terminology refusal rates are an upper bound, not the
+  real residue.
 - The classifier has only ever run as the offline heuristic. No LLM has been
   wired in, so `prefilter_disagreements` has not been measured for real.
