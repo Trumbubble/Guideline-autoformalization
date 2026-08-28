@@ -1,0 +1,215 @@
+"""
+The model hooks, wired to Claude.
+
+Every stage of Track A takes its model as an injected callable so the pipeline
+runs offline on heuristics and the tests need no key. This module supplies the
+real implementations of those callables and nothing else -- no stage imports
+it, and importing it never makes a network call.
+
+    import llm, segment, bind
+    stmts, man = segment.segment(blocks, doc, llm=llm.classify_block)
+    bs, rs = bind.bind_statement(text, ix, llm.propose_mentions, llm.select_candidate)
+
+Design notes:
+  * Structured outputs, not prose parsing. `output_config.format` constrains
+    generation to the JSON schema each stage already declares, so the model
+    cannot emit a variable outside the registry or a field the validator does
+    not know. That is the "constrained decoding" step the plan assumes.
+  * Instructions go in a CACHED system block. The prefix is identical across
+    every call in a run, so a document's 600+ classifier calls pay for it once.
+  * TEMPERATURE IS NOT AVAILABLE. Claude Opus 5 / Sonnet 5 / Opus 4.8 / 4.7
+    reject `temperature`, `top_p` and `top_k` with a 400; only Sonnet 4.6 and
+    Haiku 4.5 still accept them. `sample()` therefore varies by re-calling, not
+    by dialling temperature -- which is also what a real deployment would see.
+"""
+from __future__ import annotations
+
+import json
+import os
+import threading
+from typing import Any, Callable
+
+DEFAULT_MODEL = "claude-opus-5"
+# Only these still accept `temperature`; needed by the sampling-variance probe
+# if variance at default settings turns out to be zero.
+TEMPERATURE_CAPABLE = {"claude-sonnet-4-6", "claude-haiku-4-5"}
+
+def load_env(path: str | None = None) -> None:
+    """Read a .env into os.environ without adding a dependency. Existing
+    environment variables win, so an exported key overrides the file."""
+    if path is None:
+        here = os.path.dirname(os.path.abspath(__file__))
+        path = os.path.join(os.path.dirname(here), ".env")
+    if not os.path.exists(path):
+        return
+    with open(path) as fh:
+        for line in fh:
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            k, v = line.split("=", 1)
+            os.environ.setdefault(k.strip(), v.strip().strip("'\""))
+
+_client = None
+_lock = threading.Lock()
+
+def client():
+    global _client
+    with _lock:
+        if _client is None:
+            load_env()
+            import anthropic
+            if not os.environ.get("ANTHROPIC_API_KEY"):
+                raise RuntimeError(
+                    "ANTHROPIC_API_KEY is not set. Copy .env.example to .env and "
+                    "add your key (console.anthropic.com -> API Keys).")
+            _client = anthropic.Anthropic()
+        return _client
+
+def model() -> str:
+    load_env()
+    return os.environ.get("GF_MODEL", DEFAULT_MODEL)
+
+# ---------------------------------------------------------------- core call
+
+class Usage:
+    """Running token/cost tally, so an experiment can report what it cost."""
+    PRICES = {  # USD per 1M tokens, input/output
+        "claude-opus-5": (5.0, 25.0), "claude-sonnet-5": (2.0, 10.0),
+        "claude-sonnet-4-6": (3.0, 15.0), "claude-haiku-4-5": (1.0, 5.0),
+    }
+    def __init__(self):
+        self.calls = self.input = self.output = self.cached = 0
+    def add(self, u) -> None:
+        self.calls += 1
+        self.input += u.input_tokens
+        self.output += u.output_tokens
+        self.cached += getattr(u, "cache_read_input_tokens", 0) or 0
+    def cost(self, m: str) -> float:
+        pin, pout = self.PRICES.get(m, self.PRICES[DEFAULT_MODEL])
+        return (self.input * pin + self.output * pout) / 1e6
+    def __str__(self):
+        m = model()
+        return (f"{self.calls} calls, {self.input} in ({self.cached} cached), "
+                f"{self.output} out, ~${self.cost(m):.3f}")
+
+USAGE = Usage()
+
+def ask_json(system: str, user: str, schema: dict, *,
+             effort: str = "medium", max_tokens: int = 4000,
+             model_id: str | None = None, temperature: float | None = None) -> dict:
+    """One structured-output call. Returns the parsed object.
+
+    `system` is cached: it is the fixed instruction prefix, identical across a
+    run, so only `user` is billed at full rate after the first call."""
+    m = model_id or model()
+    kwargs: dict[str, Any] = dict(
+        model=m, max_tokens=max_tokens,
+        system=[{"type": "text", "text": system,
+                 "cache_control": {"type": "ephemeral"}}],
+        output_config={"format": {"type": "json_schema", "schema": schema},
+                       "effort": effort},
+        messages=[{"role": "user", "content": user}],
+    )
+    if temperature is not None:
+        if m not in TEMPERATURE_CAPABLE:
+            raise ValueError(
+                f"{m} rejects `temperature` with a 400. Use one of "
+                f"{sorted(TEMPERATURE_CAPABLE)} or leave it unset.")
+        kwargs["temperature"] = temperature
+    r = client().messages.create(**kwargs)
+    USAGE.add(r.usage)
+    if r.stop_reason == "refusal":
+        raise RuntimeError(f"model refused: {getattr(r.stop_details, 'category', '?')}")
+    text = next((b.text for b in r.content if b.type == "text"), "")
+    return json.loads(text)
+
+# ---------------------------------------------------------------- hooks
+
+def classify_block(block) -> dict:
+    """segment.segment(..., llm=llm.classify_block)"""
+    import segment as sg
+    prompt = sg.build_prompt(block)
+    head, _, tail = prompt.partition("\n\nSection:")
+    return ask_json(head, "Section:" + tail, sg.CLASSIFIER_SCHEMA, effort="low",
+                    max_tokens=1500)
+
+def propose_mentions(text: str) -> dict:
+    """bind.propose_mentions(text, llm=llm.propose_mentions)"""
+    import bind as b
+    return ask_json(b.MENTION_INSTRUCTIONS,
+                    f'Sentence:\n"""\n{text}\n"""', b.MENTION_SCHEMA,
+                    effort="low", max_tokens=1500)
+
+def select_candidate(prompt: str) -> dict:
+    """bind.select(..., llm=llm.select_candidate) -- receives a built prompt."""
+    import bind as b
+    head, _, tail = prompt.partition("\n\nSentence:")
+    return ask_json(head, "Sentence:" + tail, b.SELECT_SCHEMA,
+                    effort="medium", max_tokens=1500)
+
+# ---------------------------------------------------------------- formalize
+
+FORMALIZE_INSTRUCTIONS = """\
+Encode this clinical recommendation as a rule in the given schema.
+
+  `when` is the applicability condition -- when does the recommendation apply?
+  `then` is the obligation -- what must be true of the care plan?
+
+The rule means `when -> then`. Use ONLY the variables and events in the schema
+enums; there are no others. Give `then` at least one action variable.
+
+If the recommendation cannot be faithfully encoded -- an unstated threshold
+("adequate", "high risk", "significant"), an exception or discretion the logic
+cannot carry, a statement about services rather than a patient -- return a
+refusal with the reason code that fits. DO NOT invent a threshold the source
+text does not state. A refusal is a correct and expected answer.
+
+When you refuse, list in `undefined_predicates` the exact phrases that made it
+unencodable, copied VERBATIM from the recommendation -- "at high risk", "an
+adequate trial of conservative therapy". Quote only the undefined predicate,
+not the whole sentence. These become named free variables in a partial
+encoding, so a wrong or paraphrased phrase there is worse than none."""
+
+class GrammarTooLarge(RuntimeError):
+    """The decoding schema did not compile. Measured on claude-opus-5: a
+    13-variable registry compiles only at depth 1, a 3-variable one at depth 2.
+    So the registry handed to the decoder should be the STATEMENT's bound
+    vocabulary, not the whole document's -- smaller, and it also stops the
+    model reaching for a variable this statement never mentioned."""
+
+def formalize(statement: str, registry, *, effort: str = "high",
+              model_id: str | None = None, max_depth: int | None = None,
+              temperature: float | None = None) -> dict:
+    """One encoding attempt. Returns what `dsl.decoding_schema` produces --
+    pass it to `dsl.from_decoded()` for a Rule or a Refusal. The model must
+    commit to one or the other in the same decode, which is what makes refusal
+    a first-class output rather than an afterthought."""
+    import anthropic, dsl
+    depth = dsl.MAX_DECODING_DEPTH if max_depth is None else max_depth
+    while depth >= 0:
+        try:
+            return ask_json(FORMALIZE_INSTRUCTIONS,
+                            f'Recommendation:\n"""\n{statement}\n"""',
+                            dsl.decoding_schema(registry, depth), effort=effort,
+                            max_tokens=4000, model_id=model_id,
+                            temperature=temperature)
+        except anthropic.BadRequestError as e:
+            # The grammar-size ceiling depends on registry size, so it cannot be
+            # predicted from the depth alone. Step down rather than fail: a
+            # shallower encoding is still sound, and anything that genuinely
+            # needed the depth surfaces as a validation error, not silently.
+            if "grammar" not in str(e).lower() and "too complex" not in str(e).lower():
+                raise
+            depth -= 1
+    raise GrammarTooLarge(
+        f"registry of {len(registry.names())} variables will not compile at any "
+        f"depth; bind per-statement and pass that smaller registry")
+
+def sample(statement: str, registry, k: int = 8, **kw) -> list[dict]:
+    """K independent encodings of one statement.
+
+    Variance comes from re-calling, not from a temperature setting -- current
+    models do not expose one. That makes this a measurement of the variance a
+    real deployment sees, which is the number worth reporting."""
+    return [formalize(statement, registry, **kw) for _ in range(k)]

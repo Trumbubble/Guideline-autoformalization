@@ -3,13 +3,16 @@
 Run: python3 test_dsl.py    (no pytest dependency; asserts + a summary line)
 """
 import json
+
 import z3
+
+import dsl
 
 from dsl import (
     And, Between, Cmp, EventDef, Not, Or, Refusal, Registry, Rule, Since, VarDef,
     CKD_REGISTRY, check_nondegenerate, domain_axioms, dumps, errors, fragment_of,
-    from_dict, json_schema, loads, make_env, rule_to_z3, to_dict, to_z3, validate,
-    validate_rule,
+    distinguishing_patient, equivalence_classes, equivalent, from_dict, json_schema,
+    loads, make_env, rule_to_z3, to_dict, to_z3, validate, validate_rule,
 )
 
 R = CKD_REGISTRY
@@ -180,6 +183,86 @@ def test_missing_provenance_is_an_error():
     r = Rule("p", Cmp("egfr", "<", 30), Cmp("nephrology_referral", "==", True),
              "refer", "nephrology")
     assert "MISSING_PROVENANCE" in codes(validate_rule(r, R))
+
+def test_semantic_equivalence_sees_what_the_compiler_cannot():
+    """Both rules typecheck; only the solver can see they mean different
+    things. This is the oracle the whole differential-validation idea rests on."""
+    mk = lambda when: Rule("r", when, Cmp("nephrology_referral", "==", True),
+                           "refer", "nephrology", source_page=1, source_span="s")
+    # P3's bug: a disjunction rendered as a conjunction. Well-typed, wrong.
+    or_rule = mk(Or([Cmp("egfr", "<", 30), Cmp("acr_mg_g", ">=", 300)]))
+    and_rule = mk(And([Cmp("egfr", "<", 30), Cmp("acr_mg_g", ">=", 300)]))
+    assert validate_rule(or_rule, R) == [] and validate_rule(and_rule, R) == []
+    assert not equivalent(or_rule, and_rule, R)
+    p = distinguishing_patient(or_rule, and_rule, R)
+    assert p is not None and (p["egfr"] < 30) != (p["acr_mg_g"] >= 300)
+
+def test_equivalent_rules_written_differently_are_recognised():
+    a = Rule("a", Between("egfr", 30, 60, True, True), Cmp("nephrology_referral", "==", True),
+             "refer", "n", source_page=1, source_span="s")
+    b = Rule("b", And([Cmp("egfr", ">=", 30), Cmp("egfr", "<=", 60)]),
+             Cmp("nephrology_referral", "==", True), "refer", "n",
+             source_page=1, source_span="s")
+    assert equivalent(a, b, R) and distinguishing_patient(a, b, R) is None
+
+def test_an_inclusivity_slip_is_a_real_disagreement():
+    """eGFR exactly 30: the boundary bug that compiles cleanly."""
+    a = Rule("a", Cmp("egfr", "<", 30), Cmp("nephrology_referral", "==", True),
+             "refer", "n", source_page=1, source_span="s")
+    b = Rule("b", Cmp("egfr", "<=", 30), Cmp("nephrology_referral", "==", True),
+             "refer", "n", source_page=1, source_span="s")
+    p = distinguishing_patient(a, b, R)
+    assert p is not None and p["egfr"] == 30.0
+
+def test_equivalence_classes_partition_samples():
+    mk = lambda t: Rule("r", Cmp("egfr", "<", t), Cmp("nephrology_referral", "==", True),
+                        "refer", "n", source_page=1, source_span="s")
+    classes = equivalence_classes([mk(30), mk(30), mk(45), mk(30)], R)
+    assert sorted(len(c) for c in classes) == [1, 3]
+
+def test_decoding_schema_avoids_every_unsupported_construct():
+    """Measured against claude-opus-5's structured-output validator. Each of
+    these is a 400, and a recursive expression grammar hits the first one by
+    construction -- so the recursion is unrolled to a fixed depth instead."""
+    import json as _json
+    sch = dsl.decoding_schema(R, max_depth=2)
+    blob = _json.dumps(sch)
+    assert "oneOf" not in blob                     # `oneOf` is rejected outright
+    assert '"minimum"' not in blob and '"maximum"' not in blob
+    assert '"minItems": 2' not in blob             # only 0 or 1 are accepted
+    assert sch["type"] == "object"                 # $defs needs an object root
+    # no cycles: every $ref target is defined earlier than its user
+    defs = sch["$defs"]
+    assert "expr2" in defs and "expr0" in defs
+    assert _json.dumps(defs["expr0"]).count("expr") == 0    # leaves bottom out
+
+def test_decoding_schema_still_closes_the_vocabulary():
+    sch = dsl.decoding_schema(R)
+    assert sch["$defs"]["var"]["enum"] == R.names()
+    assert sch["$defs"]["event"]["enum"] == R.event_names()
+    assert set(sch["properties"]["outcome"]["enum"]) == {"rule", "refusal"}
+
+def test_from_decoded_unwraps_the_discriminator():
+    rule = Rule("r", Cmp("egfr", "<", 30), Cmp("nephrology_referral", "==", True),
+                "refer", "nephrology", source_page=1, source_span="s")
+    assert dsl.from_decoded({"outcome": "rule", "rule": to_dict(rule),
+                             "refusal": None}) == rule
+    ref = Refusal("r", "vague_predicate", "no threshold stated")
+    assert dsl.from_decoded({"outcome": "refusal", "rule": None,
+                             "refusal": to_dict(ref)}) == ref
+    try:
+        dsl.from_decoded({"outcome": "rule", "rule": None, "refusal": None})
+        assert False, "should have raised"
+    except ValueError:
+        pass
+
+def test_a_smaller_registry_permits_deeper_nesting():
+    """The grammar-size ceiling scales with the variable enum, so the registry
+    handed to the decoder should be the STATEMENT's bound vocabulary."""
+    import json as _json
+    small = Registry([R["egfr"], R["nephrology_referral"]])
+    assert len(_json.dumps(dsl.decoding_schema(small, 2))) < \
+           len(_json.dumps(dsl.decoding_schema(R, 2)))
 
 # --------------------------------------------------------------- (5) json
 

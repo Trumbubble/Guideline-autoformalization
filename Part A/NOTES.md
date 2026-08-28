@@ -278,6 +278,133 @@ which sees the whole sentence, is what converts those abstentions into
 bindings. Any abstention it cannot resolve is residue, which is a measured
 deliverable rather than a failure.
 
+## Wiring the model in: what constrained decoding actually allows
+
+`llm.py` supplies the real implementations of the injected callables. No stage
+imports it, and importing it makes no network call.
+
+**The API's structured-output validator accepts a strict subset of JSON Schema.**
+Probed directly against `claude-opus-5`:
+
+| construct | verdict |
+|---|---|
+| acyclic `$ref`, `enum`, `const`, nullable unions, `anyOf`, `minItems: 1` | accepted |
+| **circular `$ref`** (`expr -> expr`) | rejected |
+| `minimum` / `maximum` on `number` or `integer` | rejected |
+| `minItems` other than 0 or 1 | rejected |
+| `oneOf` | rejected |
+| `$defs` alongside a top-level `anyOf` (root must be an object) | rejected |
+
+**A recursive expression grammar is therefore not directly expressible.** This
+is the practical form of the DEV_PLAN's point that the target grammar is
+context-free and FSA-based decoders are unsound for it -- the constraint shows
+up as a flat 400, not as silent breakage. `dsl.decoding_schema()` unrolls the
+recursion to a fixed depth; `dsl.json_schema()` keeps the honest recursive
+version for documentation. Constraints dropped for decoding (`minItems: 2` on
+junctions, the confidence bounds) are all re-checked by `validate()`, so
+nothing is lost -- the decoder is a filter, not the oracle.
+
+**Grammar size scales with the variable enum, and that has an architectural
+consequence.** Measured: a 13-variable registry compiles only at nesting depth
+1; a 3-variable one reaches depth 2; leaves must be defined once behind a
+`$ref` rather than inlined per level, or even depth 2 fails. So the registry
+handed to the decoder should be the STATEMENT's bound vocabulary -- what stage
+2 produces for that sentence -- not the whole document's. Smaller, and it also
+stops the model reaching for a variable the statement never mentioned.
+`llm.formalize` steps the depth down on a grammar error rather than failing.
+
+**Refusal is a first-class output of the same decode.** Because `oneOf` is
+rejected, the rule/refusal choice is a discriminator field on one object; the
+model must commit to one or the other in a single constrained decode. On the
+smoke test it refused *"Consider referral after an adequate trial of
+conservative therapy"* with `vague_predicate` rather than inventing a
+threshold, and encoded *"eGFR below 30 OR ACR 300 mg/g or higher"* as `Or` --
+the P3 AND-for-OR bug does not reproduce under structured decoding.
+
+**Temperature is gone.** `claude-opus-5`, `sonnet-5`, `opus-4-8` and `opus-4-7`
+reject `temperature`, `top_p` and `top_k` with a 400; only `claude-sonnet-4-6`
+and `claude-haiku-4-5` still accept them. The sampling-variance probe therefore
+measures the spread from re-calling at default settings -- which is what a
+deployment actually sees, and arguably the more honest number. Worth stating in
+the paper: VERIMED's ambiguity-by-sampling-variance estimator assumes a
+temperature control current frontier models no longer expose.
+
+**Costs, measured.** ~$0.007 per formalization call at `effort=medium` with the
+instruction prefix cached (7.3k cached tokens on a 4-call smoke test). The
+20-statement x K=8 probe is about $1.
+
+## Sampling-variance probe: the result
+
+20 statements (10 precise, 10 vague, hand-written), K=8 samples each, 160 real
+`claude-opus-5` calls at `effort=medium`. Agreement = share of the K samples in
+the largest **semantic** equivalence class, decided by Z3 over the domain
+axioms (`dsl.equivalence_classes`), not by string comparison.
+
+```
+             mean agreement   refusals/K
+precise           0.99            0.1
+vague             0.00            8.0
+AUC                                    1.000
+```
+
+**Perfect separation -- but not by the mechanism the design assumed.** Every
+one of the 80 vague samples was REFUSED. There were no competing encodings to
+disagree about, so the disagreement signal had nothing to measure. AUC from
+refusal rate alone is also 1.000, and **0 of the 10 statements that got encoded
+at all produced more than one semantic reading**.
+
+The operational consequence is a simplification: offered refusal as a branch of
+the constrained decode, the model declines vague statements outright. **One
+call does what the K-sample estimator was supposed to do.** VERIMED's
+ambiguity-by-sampling-variance is redundant on this evidence -- the gate should
+lead with refusal-under-constrained-decoding and keep sampling variance in
+reserve for borderline statements, if at all. It is also 8x cheaper.
+
+**Semantic equivalence was load-bearing.** 9 of the 10 precise statements
+produced textually different encodings -- up to **6 distinct strings for one
+meaning** -- that the solver collapsed to a single class. A string-comparison
+metric would have reported those as ambiguous and inverted the result. This is
+the strongest argument for `distinguishing_patient` / `equivalence_classes`
+living in the DSL rather than in the probe.
+
+**What this does NOT establish.** The statements and their labels are both
+mine, and the precise/vague split is obvious by construction; real guideline
+prose is far more borderline. And the model refusing is not evidence that
+refusing was *correct* -- that is exactly what E3's clinician adjudication is
+for. Treat this as: the mechanism works and the cheap version suffices, not as
+a calibration result.
+
+One incidental finding worth keeping: the single refusal among the precise
+statements was *"Screen for retinopathy annually in adults with diabetes"* --
+arguably right, since "annually" states no window.
+
+## VSAC (needs the UMLS licence)
+
+`VsacIndex` queries `cts.nlm.nih.gov/fhir` with HTTP Basic auth, literal
+username `apikey` and the UMLS API key as the password. Routed ahead of
+SNOMED/ATC for the set-valued kinds (`condition`, `drug_class`, `procedure`)
+and unioned with them, so the selector sees both a curated set and the single
+concept it would otherwise expand itself.
+
+Three fixes it forced:
+
+- **Search `title:contains`, not `name=`.** Prose says "ACE inhibitor"; a
+  steward titles the set "ACE Inhibitors" or "ACE Inhibitor or ARB Ingredient".
+  Exact-name matching finds neither.
+- **Ask for enough results to rank.** VSAC returns matches in no useful order,
+  so `_count` is `k*6` and `_score` does the ranking. At `_count=10` the
+  curated "Diabetes" sets never surfaced and an unrelated gestational-diabetes
+  set won.
+- **Normalise the query.** `"albumin-to-creatinine ratio"` returned **zero**
+  LOINC candidates: hyphens and the infix "to" defeat the keyword endpoints.
+  `normalise_query` strips both, and `expand_query` sends the original, the
+  bare form, and any abbreviation expansion as a union.
+
+And one prompt fix: the selector was abstaining on *redundancy* (two stewards
+publishing the same concept) rather than only on under-determination. It is now
+told that redundancy is not a reason to abstain, and to prefer a curated value
+set over a single code for category phrases.
+
 ## Known gaps
 
 - **The Docling path is written but untested here** — docling is not installed,
@@ -295,8 +422,8 @@ deliverable rather than a failure.
 - **The ATC class seed is not implemented** -- `RemoteIndex` still calls
   `rxclass/class/byName`, which needs exact class names, so live drug-class
   binding is unreliable until the 1,319-class seed lands.
-- **`bind.py` has never run with a real LLM selector**, only the offline
-  heuristic and mock callables in tests. The heuristic is deliberately
+- ~~`bind.py` has never run with a real LLM selector~~ -- now wired via
+  `llm.select_candidate`, but only smoke-tested, not measured at scale. The heuristic is deliberately
   conservative, so live-terminology refusal rates are an upper bound, not the
   real residue.
 - The classifier has only ever run as the offline heuristic. No LLM has been

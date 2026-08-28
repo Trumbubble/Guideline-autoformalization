@@ -66,6 +66,14 @@ class VarDef:
     # For `code` vars: the retrieved value set. A code outside it is a
     # hallucinated code, which is a checkable property rather than a claim.
     codes: tuple[str, ...] = ()
+    # A HOLE: a predicate the source states but the pipeline cannot bind or
+    # quantify ("high risk", "adequate trial"). It is a real free variable --
+    # no binding, no data source, no domain axiom -- so the three-valued
+    # verdict reports MAY-violate and names it, instead of the rule silently
+    # never firing. PathWISE stubs such nodes as `false`, which narrows the
+    # rule invisibly; `true` over-fires. Leaving it free is the honest option
+    # and is what makes a PARTIAL encoding meaningful.
+    unbound: bool = False
 
 @dataclass(frozen=True)
 class EventDef:
@@ -85,6 +93,7 @@ class Registry:
     def type_of(self, k): return self._v[k].type
     def role_of(self, k): return self._v[k].role
     def actions(self): return sorted(n for n, v in self._v.items() if v.role == "action")
+    def unbound(self): return sorted(n for n, v in self._v.items() if v.unbound)
     def has_event(self, k): return k in self._e
     def event_names(self): return sorted(self._e)
     def event(self, k): return self._e[k]
@@ -164,6 +173,11 @@ class Refusal:
     source_span: str | None = None
     # E3 needs a risk-coverage curve, which needs a score on the gate decision.
     confidence: float | None = None
+    # The exact predicates that made this unencodable, VERBATIM from the source
+    # ("high risk", "an adequate trial"). Naming them is what lets a partial
+    # encoding turn each one into a declared free variable instead of dropping
+    # the whole statement -- and it is what a governance reader wants to see.
+    undefined_predicates: tuple[str, ...] = ()
 
 # ---------------------------------------------------------------- fragment
 
@@ -346,6 +360,22 @@ def _action_atoms(expr: Expr, reg: Registry) -> set[str]:
         return set().union(*(_action_atoms(o, reg) for o in expr.operands)) if expr.operands else set()
     return set()
 
+def open_holes(rule: Rule, reg: Registry) -> tuple[str, ...]:
+    """Unbound variables this rule actually mentions -- what a PARTIAL
+    encoding is partial ABOUT, and what the verdict must name."""
+    used = set()
+    def walk(e):
+        if isinstance(e, (Cmp, Between)):
+            if e.var in reg and reg[e.var].unbound:
+                used.add(e.var)
+        elif isinstance(e, Not):
+            walk(e.operand)
+        elif isinstance(e, (And, Or)):
+            for o in e.operands:
+                walk(o)
+    walk(rule.when); walk(rule.then)
+    return tuple(sorted(used))
+
 def validate_rule(rule: Rule, reg: Registry) -> list[Issue]:
     issues = validate(rule.when, reg, "when") + validate(rule.then, reg, "then")
     if rule.source_page is None or not rule.source_span:
@@ -355,6 +385,12 @@ def validate_rule(rule: Rule, reg: Registry) -> list[Issue]:
                             "committee reviews"))
     # The obligation has to be about something the care plan can decide,
     # otherwise the rule constrains nobody and Track B has no atom to frame.
+    for h in open_holes(rule, reg):
+        issues.append(Issue(h, "OPEN_HOLE",
+                            f"{h!r} is an unbound predicate the guideline states but "
+                            f"does not define",
+                            "the rule is a PARTIAL encoding: verdicts that depend on "
+                            "this variable are MAY, not MUST", severity="warn"))
     if not _action_atoms(rule.then, reg):
         issues.append(Issue("then", "NO_ACTION_ATOM",
                             "the obligation mentions no action variable or event",
@@ -392,6 +428,8 @@ def domain_axioms(reg: Registry, env: dict) -> list:
     ax = []
     for n in reg.names():
         vd = reg[n]
+        if vd.unbound:
+            continue          # a hole ranges free; constraining it would be a claim
         if vd.type in NUMERIC and vd.plausible:
             ax.append(z3.And(env[n] >= vd.plausible[0], env[n] <= vd.plausible[1]))
         if vd.type == "code" and vd.codes:
@@ -484,6 +522,53 @@ def check_nondegenerate(rule: Rule, reg: Registry) -> list[Issue]:
                          "every applicable patient is in violation by construction"))
     return out
 
+# ---------------------------------------------------------------- equivalence
+
+def distinguishing_patient(a: Rule, b: Rule, reg: Registry) -> dict | None:
+    """A patient the two rules disagree about, or None if they are equivalent.
+
+    This is the semantic-difference oracle. The compiler cannot see that two
+    rules mean different things -- both typecheck -- so equivalence has to be
+    decided by the solver over the domain axioms. Used by the sampling-variance
+    probe (do k samples of one statement agree?) and by differential validation
+    (do two independent encoders agree?)."""
+    import z3
+    env = make_env(reg)
+    s = z3.Solver()
+    s.add(domain_axioms(reg, env))
+    s.add(rule_to_z3(a, env) != rule_to_z3(b, env))
+    if s.check() != z3.sat:
+        return None
+    m = s.model()
+    out = {}
+    for n in reg.names():
+        v = m.eval(env[n], model_completion=True)
+        out[n] = (z3.is_true(v) if reg.type_of(n) == "bool"
+                  else float(v.as_fraction()) if hasattr(v, "as_fraction")
+                  else str(v))
+    for e in reg.event_names():
+        out[occurred_var(e)] = z3.is_true(m.eval(env[occurred_var(e)], True))
+        out[days_since_var(e)] = str(m.eval(env[days_since_var(e)], True))
+    return out
+
+def equivalent(a: Rule, b: Rule, reg: Registry) -> bool:
+    """True iff no patient in the domain is judged differently by the two."""
+    return distinguishing_patient(a, b, reg) is None
+
+def equivalence_classes(rules: list[Rule], reg: Registry) -> list[list[int]]:
+    """Partition rules into semantic equivalence classes. One class means the
+    encodings agree; more than one means the statement admits more than one
+    reading, which is the ambiguity signal."""
+    classes: list[list[int]] = []
+    for i, r in enumerate(rules):
+        for cls in classes:
+            if equivalent(r, rules[cls[0]], reg):
+                cls.append(i)
+                break
+        else:
+            classes.append([i])
+    return classes
+
 # ---------------------------------------------------------------- json
 
 def expr_to_dict(e: Expr) -> dict:
@@ -519,13 +604,15 @@ def to_dict(obj: Rule | Refusal) -> dict:
     if isinstance(obj, Refusal):
         return {"rule_id": obj.rule_id, "reason_code": obj.reason_code,
                 "reason_text": obj.reason_text, "source_page": obj.source_page,
-                "source_span": obj.source_span, "confidence": obj.confidence}
+                "source_span": obj.source_span, "confidence": obj.confidence,
+                "undefined_predicates": list(obj.undefined_predicates)}
     raise TypeError(obj)
 
 def from_dict(d: dict) -> Rule | Refusal:
     if "reason_code" in d:
         return Refusal(d["rule_id"], d["reason_code"], d["reason_text"],
-                       d.get("source_page"), d.get("source_span"), d.get("confidence"))
+                       d.get("source_page"), d.get("source_span"), d.get("confidence"),
+                       tuple(d.get("undefined_predicates") or ()))
     return Rule(d["rule_id"], expr_from_dict(d["when"]), expr_from_dict(d["then"]),
                 d["action"], d["target"], d.get("strength"),
                 d.get("source_page"), d.get("source_span"))
@@ -585,6 +672,109 @@ def json_schema(reg: Registry) -> dict:
             "confidence":{"type":["number","null"],"minimum":0,"maximum":1}}}}}
 
 # ---------------------------------------------------------------- fixture
+
+# The API's structured-output validator accepts a strict subset of JSON Schema.
+# Measured against claude-opus-5:
+#   REJECTED  circular $ref (expr -> expr), minimum/maximum on number|integer,
+#             minItems other than 0 or 1, `oneOf`, `$defs` alongside a top-level
+#             `anyOf` (the root must be an object for $defs to be allowed)
+#   ACCEPTED  acyclic $ref chains, enum, const, nullable unions, `anyOf`, minItems: 1
+# A recursive expression grammar is therefore not directly expressible: this is
+# the practical form of the point that the target grammar is context-free and
+# FSA-based decoders are unsound for it. The workaround is to UNROLL the
+# recursion to a fixed depth, which is sound here because guideline logic is
+# shallow -- and anything deeper is a `beyond_dsl` refusal rather than a silent
+# truncation. The constraints dropped for decoding (minItems: 2 on junctions,
+# the confidence bounds) are all re-checked by validate(), so nothing is lost.
+# Depth 2 covers `and/or` over `not/cmp` -- every rule shape seen in the
+# corpora so far. Deeper nesting trips the API's compiled-grammar size limit,
+# and a statement that genuinely needs it is a `beyond_dsl` refusal rather
+# than a silent truncation.
+MAX_DECODING_DEPTH = 2
+
+def decoding_schema(reg: Registry, max_depth: int = MAX_DECODING_DEPTH) -> dict:
+    """`json_schema` flattened into what a constrained decoder will accept.
+
+    Use this for generation and `json_schema` for documentation: the recursive
+    version says what the DSL IS, this one says what the decoder can emit."""
+    def obj(required, props):
+        return {"type": "object", "required": required,
+                "additionalProperties": False, "properties": props}
+
+    leaves = [
+        obj(["kind", "var", "op", "value"],
+            {"kind": {"const": "cmp"}, "var": {"$ref": "#/$defs/var"},
+             "op": {"enum": sorted(CMP)},
+             "value": {"type": ["number", "boolean", "string"]}}),
+        obj(["kind", "var", "lo", "hi", "lo_inclusive", "hi_inclusive"],
+            {"kind": {"const": "between"}, "var": {"$ref": "#/$defs/var"},
+             "lo": {"type": "number"}, "hi": {"type": "number"},
+             "lo_inclusive": {"type": "boolean"}, "hi_inclusive": {"type": "boolean"}}),
+    ]
+    if reg.event_names():
+        leaves.append(obj(["kind", "event", "days"],
+                          {"kind": {"const": "since"},
+                           "event": {"$ref": "#/$defs/event"},
+                           "days": {"type": "integer"},
+                           "inclusive": {"type": "boolean"}}))
+
+    defs: dict = {"var": {"enum": reg.names()}}
+    if reg.event_names():
+        defs["event"] = {"enum": reg.event_names()}
+    # Leaves are defined ONCE and referenced. Inlining them at every level
+    # multiplies the compiled grammar by the depth and trips the API's
+    # grammar-size limit.
+    defs["leaf"] = {"anyOf": list(leaves)}
+    leaf_ref = {"$ref": "#/$defs/leaf"}
+    defs["expr0"] = leaf_ref
+    for d in range(1, max_depth + 1):
+        child = {"$ref": f"#/$defs/expr{d - 1}"}
+        defs[f"expr{d}"] = {"anyOf": [leaf_ref] + [
+            obj(["kind", "operand"], {"kind": {"const": "not"}, "operand": child}),
+            obj(["kind", "operands"], {"kind": {"const": "and"},
+                                       "operands": {"type": "array", "minItems": 1,
+                                                    "items": child}}),
+            obj(["kind", "operands"], {"kind": {"const": "or"},
+                                       "operands": {"type": "array", "minItems": 1,
+                                                    "items": child}}),
+        ]}
+    top = {"$ref": f"#/$defs/expr{max_depth}"}
+
+    defs["rule"] = obj(
+        ["rule_id", "when", "then", "action", "target", "source_page", "source_span"],
+        {"rule_id": {"type": "string"}, "when": top, "then": top,
+         "action": {"enum": ["recommend", "avoid", "hold", "monitor", "refer", "screen"]},
+         "target": {"type": "string"}, "strength": {"type": ["string", "null"]},
+         "source_page": {"type": ["integer", "null"]},
+         "source_span": {"type": ["string", "null"]}})
+    defs["refusal"] = obj(
+        ["rule_id", "reason_code", "reason_text"],
+        {"rule_id": {"type": "string"},
+         "reason_code": {"enum": ["vague_predicate", "defeasible", "not_patient_level",
+                                  "unsupported_temporal", "unbound_concept", "beyond_dsl"]},
+         "reason_text": {"type": "string"},
+         "source_page": {"type": ["integer", "null"]},
+         "source_span": {"type": ["string", "null"]},
+         "confidence": {"type": ["number", "null"]},
+         "undefined_predicates": {"type": "array", "items": {"type": "string"}}})
+    # The root has to be an object for `$defs` to be legal, so the rule/refusal
+    # choice becomes a discriminator rather than a top-level anyOf. The model
+    # still has to commit to one or the other, which is the point: refusal is a
+    # first-class output of the same decode, not a separate call.
+    return obj(["outcome"],
+               {"outcome": {"enum": ["rule", "refusal"]},
+                "rule": {"anyOf": [{"$ref": "#/$defs/rule"}, {"type": "null"}]},
+                "refusal": {"anyOf": [{"$ref": "#/$defs/refusal"}, {"type": "null"}]}}
+               ) | {"$defs": defs}
+
+def from_decoded(d: dict) -> Rule | Refusal:
+    """Unwrap what `decoding_schema` produces. Raises if the model set the
+    discriminator without filling in the matching branch."""
+    outcome = d.get("outcome")
+    payload = d.get(outcome) if outcome in {"rule", "refusal"} else None
+    if payload is None:
+        raise ValueError(f"decoder returned outcome={outcome!r} with no {outcome} body")
+    return from_dict(payload)
 
 CKD_REGISTRY = Registry([
     VarDef("egfr", "real", "mL/min/1.73m2", "estimated glomerular filtration rate",

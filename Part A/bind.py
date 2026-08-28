@@ -30,6 +30,7 @@ proposes and the selector -- which sees the whole guideline sentence -- decides.
 from __future__ import annotations
 
 import json
+import os
 import re
 import sqlite3
 import unicodedata
@@ -40,23 +41,47 @@ import dsl
 
 # ---------------------------------------------------------------- systems
 
+def load_env(path: str | None = None) -> None:
+    """Read a .env into os.environ. No dependency; existing env vars win."""
+    if path is None:
+        here = os.path.dirname(os.path.abspath(__file__))
+        path = os.path.join(os.path.dirname(here), ".env")
+    if not os.path.exists(path):
+        return
+    with open(path) as fh:
+        for line in fh:
+            line = line.strip()
+            if line and not line.startswith("#") and "=" in line:
+                k, v = line.split("=", 1)
+                os.environ.setdefault(k.strip(), v.strip().strip("'\""))
+
 SNOMED = "http://snomed.info/sct"
 LOINC = "http://loinc.org"
 RXNORM = "http://www.nlm.nih.gov/research/umls/rxnorm"
 ATC = "http://www.whocc.no/atc"
+# A VSAC candidate is a VALUE SET, not a single concept: its "code" is the OID
+# and its expansion is the member code list. That is the right shape -- a
+# clinical concept is a set, and binding to a single code silently fails any
+# patient recorded under a sibling term.
+VSAC = "http://cts.nlm.nih.gov/fhir/ValueSet"
 
-SYSTEM_NAMES = {SNOMED: "SNOMED CT", LOINC: "LOINC", RXNORM: "RxNorm", ATC: "ATC"}
+SYSTEM_NAMES = {SNOMED: "SNOMED CT", LOINC: "LOINC", RXNORM: "RxNorm",
+                ATC: "ATC", VSAC: "VSAC"}
 
 # What kind of thing a phrase denotes decides which vocabulary can answer.
 Kind = str      # lab | condition | drug | drug_class | procedure
 
 KIND_SYSTEMS: dict[Kind, tuple[str, ...]] = {
-    "lab":        (LOINC,),
-    "condition":  (SNOMED,),
-    "procedure":  (SNOMED,),
-    "drug":       (RXNORM,),
-    "drug_class": (ATC, RXNORM),
+    "lab":        (LOINC, VSAC),
+    "condition":  (SNOMED, VSAC),
+    "procedure":  (SNOMED, VSAC),
+    "drug":       (RXNORM, VSAC),
+    "drug_class": (ATC, RXNORM, VSAC),
 }
+
+# Kinds denoting a SET of codes rather than one, and so better served by a
+# curated value set than by a single concept plus a computed is-a expansion.
+SET_VALUED_KINDS = {"condition", "drug_class", "procedure"}
 
 # A lab is a measured quantity; everything else is a yes/no about the patient
 # or the plan. `role` is what Track B needs to write frame axioms.
@@ -313,12 +338,28 @@ ABBREVIATIONS = {
     "af": "atrial fibrillation",
 }
 
+# Words that carry no retrieval signal but break keyword endpoints when left
+# in. "albumin-to-creatinine ratio" returns zero LOINC hits; "albumin
+# creatinine ratio" returns the right ones.
+QUERY_STOPWORDS = {"to", "for", "with", "per", "by", "on", "at"}
+
+def normalise_query(phrase: str) -> str:
+    """Bare keyword form: hyphens to spaces, infix connectives dropped."""
+    return " ".join(t for t in _tokens(phrase.replace("-", " "))
+                    if t not in QUERY_STOPWORDS)
+
 def expand_query(phrase: str) -> list[str]:
-    """The phrase, plus its expansion if it is a known abbreviation."""
+    """The phrase, its bare keyword form, and its expansion if it is a known
+    abbreviation. Union, so a query that works on one endpoint is not lost
+    because another prefers a different shape."""
     key = " ".join(_tokens(phrase))
     out = [phrase]
-    if key in ABBREVIATIONS:
-        out.append(ABBREVIATIONS[key])
+    bare = normalise_query(phrase)
+    if bare and bare != phrase:
+        out.append(bare)
+    for k in (key, bare):
+        if k in ABBREVIATIONS and ABBREVIATIONS[k] not in out:
+            out.append(ABBREVIATIONS[k])
     return out
 
 def search_all(index: TerminologyIndex, mention: Mention, k: int) -> list[Candidate]:
@@ -453,7 +494,9 @@ SELECT_SCHEMA = {
     "additionalProperties": False,
     "properties": {
         # An INDEX into the candidate list, or -1 to abstain. Never a code.
-        "choice": {"type": "integer", "minimum": -1},
+        # No `minimum`: the structured-output validator rejects numeric bounds.
+        # select() range-checks the value instead.
+        "choice": {"type": "integer"},
         "reason": {"type": "string"},
     },
 }
@@ -464,7 +507,13 @@ sentence it came from. Answer with the INDEX of one candidate, or -1 to abstain.
 
 Abstain when no candidate is the concept, when the phrase is too vague to
 have one ("high-risk", "adequate trial"), or when two candidates differ in a
-way the sentence does not settle. Abstaining sends the statement to the
+way the sentence does not settle.
+
+Do NOT abstain merely because two candidates are REDUNDANT -- the same concept
+published by different stewards, or a value set and the single concept it
+expands. That is not under-determination. Prefer a curated value set over a
+single code when the phrase denotes a category of patients or drugs, prefer the
+more specific steward, and say which you took. Abstaining sends the statement to the
 refusal report, which is a correct and expected outcome -- a wrong binding is
 far worse, because nothing downstream can detect it.
 
@@ -685,8 +734,9 @@ class RemoteIndex:
     nor reproducible."""
 
     def __init__(self, tx: str = TX_FHIR, tables: str = CLINICAL_TABLES,
-                 rxnav: str = RXNAV):
+                 rxnav: str = RXNAV, vsac: "VsacIndex | None" = None):
         self.tx, self.tables, self.rxnav = tx, tables, rxnav
+        self.vsac = vsac if vsac is not None else VsacIndex()
         self._versions: dict[str, str | None] = {}
 
     # -- SNOMED, via a FHIR terminology server --------------------------
@@ -730,19 +780,27 @@ class RemoteIndex:
         return out
 
     def search(self, phrase: str, kind: Kind, k: int = 8) -> list[Candidate]:
+        cands: list[Candidate] = []
+        # Curated value sets first for the set-valued kinds, then the
+        # single-concept sources. Union, not either/or: the selector should see
+        # both a curated set and the concept it would otherwise expand itself.
+        if kind in SET_VALUED_KINDS and self.vsac.available:
+            cands += self.vsac.search(phrase, kind, k)
         try:
             if kind == "lab":
-                cands = self._loinc_search(phrase, k)
+                cands += self._loinc_search(phrase, k)
             elif kind in {"drug", "drug_class"}:
-                cands = self._rx_search(phrase, kind, k)
+                cands += self._rx_search(phrase, kind, k)
             else:
-                cands = self._snomed_search(phrase, kind, k)
+                cands += self._snomed_search(phrase, kind, k)
         except Exception:
-            return []
+            pass
         cands.sort(key=lambda c: -c.score)
         return _dedupe_candidates(cands)[:k]
 
     def validate(self, system: str, code: str) -> bool:
+        if system == VSAC:
+            return self.vsac.validate(system, code)
         try:
             if system == SNOMED:
                 d = _get_json(f"{self.tx}/CodeSystem/$validate-code",
@@ -763,6 +821,8 @@ class RemoteIndex:
         return False
 
     def expand(self, system: str, code: str, limit: int = 500) -> tuple[str, ...]:
+        if system == VSAC:
+            return self.vsac.expand(system, code, limit)
         try:
             if system == SNOMED:
                 d = _get_json(f"{self.tx}/ValueSet/$expand",
@@ -794,6 +854,87 @@ class RemoteIndex:
             v = None
         self._versions[system] = v
         return v
+
+VSAC_FHIR = "https://cts.nlm.nih.gov/fhir"
+
+class VsacIndex:
+    """Curated value sets from the NLM Value Set Authority Center.
+
+    The one source here that needs a UMLS/UTS licence, and the one worth it:
+    VSAC value sets are expert-authored, steward-attributed and VERSIONED, and
+    they are what the AHRQ CDS Connect reference artifacts bind to -- which is
+    what makes a clause-level comparison against that expert CQL like-for-like
+    rather than apples-to-oranges. Measured: the curated `Diabetes` value set
+    holds 773 codes where a computed SNOMED is-a expansion holds 124.
+
+    Auth is HTTP Basic with the literal username `apikey` and the UMLS API key
+    as the password."""
+
+    def __init__(self, api_key: str | None = None, base: str = VSAC_FHIR):
+        if api_key is None:
+            load_env()
+            api_key = os.environ.get("UMLS_API_KEY")
+        self.api_key, self.base = api_key, base
+
+    @property
+    def available(self) -> bool:
+        return bool(self.api_key)
+
+    def _get(self, path: str, params: dict, timeout: int = 40):
+        import base64, urllib.parse, urllib.request
+        if not self.api_key:
+            raise RuntimeError("UMLS_API_KEY is not set; VSAC needs a UMLS licence")
+        url = f"{self.base}/{path}?{urllib.parse.urlencode(params, doseq=True)}"
+        token = base64.b64encode(f"apikey:{self.api_key}".encode()).decode()
+        req = urllib.request.Request(url, headers={
+            "Accept": "application/fhir+json", "Authorization": f"Basic {token}",
+            "User-Agent": "GuidelineForge/0.1 (research; terminology binder)"})
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            return json.loads(r.read())
+
+    def search(self, phrase: str, kind: Kind, k: int = 8) -> list[Candidate]:
+        """Value sets whose title contains the phrase. `title:contains` rather
+        than `name=`: guideline prose says "ACE inhibitor", a steward titles the
+        set "ACE Inhibitor or ARB Ingredient", and an exact-name match finds
+        neither."""
+        try:
+            d = self._get("ValueSet", {"title:contains": phrase,
+                                       "_count": max(k * 6, 50)})
+        except Exception:
+            return []
+        out = []
+        for e in d.get("entry", []) or []:
+            r = e.get("resource", {})
+            oid = (r.get("id") or "").rsplit("-", 1)[0]
+            name = r.get("title") or r.get("name") or ""
+            if not oid or not name:
+                continue
+            out.append(_score(phrase, Concept(VSAC, oid, name, kind,
+                                              r.get("version")), 0.0))
+        out.sort(key=lambda c: -c.score)
+        return _dedupe_candidates(out)[:k]
+
+    def expand(self, system: str, code: str, limit: int = 500) -> tuple[str, ...]:
+        if system != VSAC:
+            return ()
+        try:
+            d = self._get(f"ValueSet/{code}/$expand", {"count": limit})
+        except Exception:
+            return ()
+        return tuple(c["code"] for c in
+                     d.get("expansion", {}).get("contains", []) if "code" in c)
+
+    def validate(self, system: str, code: str) -> bool:
+        if system != VSAC:
+            return False
+        try:
+            d = self._get("ValueSet", {"_id": code, "_count": 1})
+            return bool(d.get("entry"))
+        except Exception:
+            return False
+
+    def version(self, system: str) -> str | None:
+        return None      # VSAC versions are per value set, carried on the Concept
 
 class CachedIndex:
     """SqliteIndex first; on a miss, ask the remote and write through.
@@ -850,6 +991,10 @@ FIXTURE_CONCEPTS = [
             "2.78", "mg/mmol"),
     Concept(LOINC, "33914-3", "Glomerular filtration rate/1.73 sq M.predicted", "lab",
             "2.78", "mL/min/1.73m2"),
+    # A synonym row for the same code. Real terminologies carry many terms per
+    # concept, and without the short form "eGFR" -- the form guidelines
+    # actually use -- the phrase reaches only the oncology EGFR gene assays.
+    Concept(LOINC, "33914-3", "eGFR", "lab", "2.78", "mL/min/1.73m2"),
     Concept(LOINC, "2823-3", "Potassium [Moles/volume] in Serum or Plasma", "lab",
             "2.78", "mmol/L"),
     Concept(LOINC, "4548-4", "Hemoglobin A1c/Hemoglobin.total in Blood", "lab",
