@@ -476,6 +476,110 @@ against the rules learned in R7, so the first bug cannot recur.
 
 ---
 
+# R13 · M2 cannot be run against either obvious reference corpus
+
+M2 asks whether the determinism machinery buys **meaning** or only
+compilation, by scoring generated clauses against hand-authored expert CQL. Its
+premise is that public expert CQL exists which encodes guideline
+recommendations clause-for-clause. **Measured: for the two obvious sources,
+it does not.**
+
+## R13a · The AHRQ CDS Connect artifact is not a rules artifact
+
+The DEV_PLAN names AHRQ CDS Connect as the reference. Its own header says
+otherwise:
+
+> *"The CDS is not a direct representation of any one recommendation statement
+> within the guideline. Instead, the CDS compiles clinical concepts mentioned
+> throughout the guideline in one consolidated summary for clinician review."*
+>
+> *"In the process of authoring the logic, certain assumptions were made and
+> details developed when the guideline did not provide enough specificity."*
+
+Measured on `FactorsToConsiderInManagingChronicPainFHIRv401.cql` (52 KB,
+89 defines): **33 are `Report*` display formatters, 13 are helper functions**,
+and the only clinical logic is
+`Is18orOlder and (chronic-pain condition or recent opioid or recent non-opioid)`.
+The numbers in the file are lookback windows (180 days, 2 years) and an age
+floor. There is **no MME threshold, no benzodiazepine co-prescribing rule, no
+naloxone offering rule** — i.e. none of the CDC recommendations that carry
+thresholds. It is a retrieve-and-display artifact.
+
+Worth quoting for a different reason too: the expert authors **added
+specificity the guideline lacked**, and documented doing so. That is exactly
+what the refusal gate exists to prevent, done deliberately by humans, in the
+artifact proposed as ground truth.
+
+## R13b · eCQM measures are cohort definitions, not recommendations
+
+The natural substitute is CMS eCQM content (`cqframework/ecqm-content-cms-2025`,
+10 measure bundles, 116 CQL files). These *do* carry real clinical thresholds:
+
+```cql
+define "Has Systolic Blood Pressure Less Than 140":
+  "Lowest Systolic Reading on Most Recent Blood Pressure Day" < 140 'mm[Hg]'
+```
+
+But an eCQM population description has **no obligation**. Run through the
+pipeline, the formalizer refused, and its reason is the finding:
+
+> *"This is a measure population/denominator definition of 'adequately
+> controlled' blood pressure, not a recommendation with an obligation."*
+
+The DSL is `when -> then` where `then` must name an action a care plan decides.
+A measure numerator is a **filter over a cohort**, not a directive. So arm (c)
+correctly declines the entire corpus — its F1 of 0.000 in the run below is a
+refusal, not a bad encoding, and must not be read as one.
+
+## R13c · The run, and why it is not a result
+
+Four statements x three arms, 27 calls, $0.44.
+
+| arm | F1 | P | R |
+|---|---|---|---|
+| (a) direct CQL, no DSL, no terminology gate | 0.143 | 0.321 | 0.092 |
+| (b) + bounded repair against the CQL checker | 0.143 | 0.321 | 0.092 |
+| (c) bind -> constrained DSL -> deterministic lowering | **0.000** | 0.000 | 0.000 |
+
+**Three reasons not to report these numbers as M2:**
+
+1. **(c) produced no output at all** (R13b) — a refusal, correctly given, on a
+   corpus of non-recommendations.
+2. **(a) and (b) are identical** because the structural checker never rejected
+   anything, so the repair loop never fired. Without the real `cql-to-elm`
+   translator (P6) the (b) arm is indistinguishable from (a) by construction —
+   which means **M2 cannot separate its two baselines until P6 lands.**
+3. **The reference scope is wrong.** Each statement describes one population,
+   but it is scored against every clause in the whole measure library (12-14
+   clauses covering all populations, exclusions and value sets). That alone
+   caps recall near 0.09. The reference must be narrowed to the define subtree
+   for the population under test.
+
+## What M2 needs to become runnable
+
+- **A reference of the right kind**: expert CQL encoding *recommendations with
+  obligations*. Neither source examined has it. Worth checking the remaining
+  CDS Connect artifacts (the browsable repository at cds.ahrq.gov is off the
+  network allowlist and would need a grant).
+- **Or a re-scope, which is defensible**: an eCQM population *is* an
+  applicability condition, so score our `when` against theirs on exactly the
+  fields M2 names — predicate, threshold, comparator, unit, value set — and
+  drop the obligation half. That tests the part the corpus can test, and the
+  paper says so.
+- **P6**, without which arms (a) and (b) are the same experiment.
+- **Binder coverage**: "systolic blood pressure" did not bind despite LOINC
+  8480-6 being exactly that (R5 again).
+
+**For the paper.** The DEV_PLAN calls M2 *"the experiment most likely to fail
+and must be run first."* It is failing, but not in the predicted way: not
+"the constrained pipeline is no better than the baseline", but **"there is no
+public expert artifact of the right kind to compare against."** That is a
+finding about the field's reference standards, and it is worth reporting on its
+own — the absence of clause-level gold data is precisely why compile-success
+became the field's default metric.
+
+---
+
 # Costs
 
 | | |

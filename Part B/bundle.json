@@ -1,0 +1,248 @@
+{
+ "bundle_version": "1",
+ "registry": {
+  "variables": [
+   {
+    "name": "acr_mg_g",
+    "type": "real",
+    "unit": "mg/g",
+    "description": "urine albumin-to-creatinine ratio",
+    "binding": "LOINC:9318-7",
+    "role": "observation",
+    "plausible": [
+     0,
+     30000
+    ],
+    "codes": [],
+    "unbound": false
+   },
+   {
+    "name": "age",
+    "type": "real",
+    "unit": "years",
+    "description": "patient age",
+    "binding": null,
+    "role": "observation",
+    "plausible": [
+     0,
+     120
+    ],
+    "codes": [],
+    "unbound": false
+   },
+   {
+    "name": "contrast_within_48h",
+    "type": "bool",
+    "unit": null,
+    "description": "iodinated contrast within 48 hours",
+    "binding": null,
+    "role": "observation",
+    "plausible": null,
+    "codes": [],
+    "unbound": false
+   },
+   {
+    "name": "egfr",
+    "type": "real",
+    "unit": "mL/min/1.73m2",
+    "description": "estimated glomerular filtration rate",
+    "binding": "LOINC:33914-3",
+    "role": "observation",
+    "plausible": [
+     0,
+     200
+    ],
+    "codes": [],
+    "unbound": false
+   },
+   {
+    "name": "has_diabetes",
+    "type": "bool",
+    "unit": null,
+    "description": "diagnosis of diabetes mellitus",
+    "binding": null,
+    "role": "observation",
+    "plausible": null,
+    "codes": [],
+    "unbound": false
+   },
+   {
+    "name": "has_hypertension",
+    "type": "bool",
+    "unit": null,
+    "description": "diagnosis of hypertension",
+    "binding": null,
+    "role": "observation",
+    "plausible": null,
+    "codes": [],
+    "unbound": false
+   },
+   {
+    "name": "hba1c",
+    "type": "real",
+    "unit": "%",
+    "description": "hemoglobin A1c",
+    "binding": "LOINC:4548-4",
+    "role": "observation",
+    "plausible": [
+     3.0,
+     20.0
+    ],
+    "codes": [],
+    "unbound": false
+   },
+   {
+    "name": "metabolic_acidosis",
+    "type": "bool",
+    "unit": null,
+    "description": "acute or chronic metabolic acidosis",
+    "binding": null,
+    "role": "observation",
+    "plausible": null,
+    "codes": [],
+    "unbound": false
+   },
+   {
+    "name": "nephrology_referral",
+    "type": "bool",
+    "unit": null,
+    "description": "referral to nephrology placed",
+    "binding": null,
+    "role": "action",
+    "plausible": null,
+    "codes": [],
+    "unbound": false
+   },
+   {
+    "name": "on_acei_arb",
+    "type": "bool",
+    "unit": null,
+    "description": "currently prescribed an ACEi or ARB",
+    "binding": null,
+    "role": "action",
+    "plausible": null,
+    "codes": [],
+    "unbound": false
+   },
+   {
+    "name": "on_dialysis",
+    "type": "bool",
+    "unit": null,
+    "description": "receiving maintenance dialysis",
+    "binding": null,
+    "role": "observation",
+    "plausible": null,
+    "codes": [],
+    "unbound": false
+   },
+   {
+    "name": "potassium",
+    "type": "real",
+    "unit": "mmol/L",
+    "description": "serum potassium",
+    "binding": "LOINC:2823-3",
+    "role": "observation",
+    "plausible": [
+     1.5,
+     9.0
+    ],
+    "codes": [],
+    "unbound": false
+   },
+   {
+    "name": "sglt2_on",
+    "type": "bool",
+    "unit": null,
+    "description": "currently prescribed an SGLT2 inhibitor",
+    "binding": null,
+    "role": "action",
+    "plausible": null,
+    "codes": [],
+    "unbound": false
+   }
+  ],
+  "events": [
+   {
+    "name": "acr_check",
+    "description": "urine ACR measured",
+    "binding": "LOINC:9318-7"
+   },
+   {
+    "name": "egfr_check",
+    "description": "eGFR measured",
+    "binding": "LOINC:33914-3"
+   },
+   {
+    "name": "potassium_check",
+    "description": "serum potassium measured",
+    "binding": "LOINC:2823-3"
+   }
+  ]
+ },
+ "rules": [
+  {
+   "rule_id": "kdigo-3.1",
+   "when": {
+    "kind": "and",
+    "operands": [
+     {
+      "kind": "cmp",
+      "var": "has_diabetes",
+      "op": "==",
+      "value": true
+     },
+     {
+      "kind": "cmp",
+      "var": "acr_mg_g",
+      "op": ">=",
+      "value": 30
+     }
+    ]
+   },
+   "then": {
+    "kind": "cmp",
+    "var": "on_acei_arb",
+    "op": "==",
+    "value": true
+   },
+   "action": "recommend",
+   "target": "ACEi or ARB",
+   "strength": "1B",
+   "source_page": 12,
+   "source_span": "Treat with an ACEi or ARB in adults with diabetes and ACR >= 30 mg/g."
+  },
+  {
+   "rule_id": "kdigo-mon",
+   "when": {
+    "kind": "cmp",
+    "var": "on_acei_arb",
+    "op": "==",
+    "value": true
+   },
+   "then": {
+    "kind": "since",
+    "event": "potassium_check",
+    "days": 14,
+    "inclusive": true
+   },
+   "action": "monitor",
+   "target": "serum potassium",
+   "strength": null,
+   "source_page": 12,
+   "source_span": "Check serum potassium within 14 days of starting therapy."
+  }
+ ],
+ "refusals": [
+  {
+   "rule_id": "kdigo-vague",
+   "reason_code": "vague_predicate",
+   "reason_text": "'an adequate trial of conservative therapy' states no duration",
+   "source_page": null,
+   "source_span": "Consider referral after an adequate trial...",
+   "confidence": null,
+   "undefined_predicates": [
+    "an adequate trial"
+   ]
+  }
+ ]
+}

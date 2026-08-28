@@ -640,6 +640,72 @@ def dumps(objs: list[Rule | Refusal], **kw) -> str:
 def loads(s: str) -> list[Rule | Refusal]:
     return [from_dict(d) for d in json.loads(s)]
 
+# ---------------------------------------------------------- interface bundle
+
+# The DEV_PLAN's Track A / Track B contract is "the typed intermediate DSL and
+# its JSON serialization". Rules alone do not satisfy it: a rule is a set of
+# names, and without the REGISTRY those names have no type, no unit, no
+# terminology binding and no plausible range -- so the consumer cannot build a
+# solver environment, cannot assert domain axioms, and cannot tell a hole from
+# a bound variable. The bundle is the unit that actually crosses the boundary.
+
+def vardef_to_dict(v: VarDef) -> dict:
+    return {"name": v.name, "type": v.type, "unit": v.unit,
+            "description": v.description, "binding": v.binding, "role": v.role,
+            "plausible": list(v.plausible) if v.plausible else None,
+            "codes": list(v.codes), "unbound": v.unbound}
+
+def vardef_from_dict(d: dict) -> VarDef:
+    p = d.get("plausible")
+    return VarDef(d["name"], d["type"], d.get("unit"), d.get("description", ""),
+                  d.get("binding"), d.get("role", "observation"),
+                  tuple(p) if p else None, tuple(d.get("codes") or ()),
+                  bool(d.get("unbound", False)))
+
+def eventdef_to_dict(e: EventDef) -> dict:
+    return {"name": e.name, "description": e.description, "binding": e.binding}
+
+def eventdef_from_dict(d: dict) -> EventDef:
+    return EventDef(d["name"], d.get("description", ""), d.get("binding"))
+
+def registry_to_dict(reg: Registry) -> dict:
+    return {"variables": [vardef_to_dict(reg[n]) for n in reg.names()],
+            "events": [eventdef_to_dict(reg.event(e)) for e in reg.event_names()]}
+
+def registry_from_dict(d: dict) -> Registry:
+    return Registry([vardef_from_dict(v) for v in d.get("variables", [])],
+                    [eventdef_from_dict(e) for e in d.get("events", [])])
+
+BUNDLE_VERSION = "1"
+
+def bundle_to_dict(reg: Registry, rules: Iterable[Rule],
+                   refusals: Iterable[Refusal] = ()) -> dict:
+    """Everything a consumer needs: the vocabulary, the rules over it, and the
+    statements that were refused. The refusals travel WITH the rules on
+    purpose -- a consumer that sees only what compiled cannot report the
+    residue, and the residue is a deliverable."""
+    return {"bundle_version": BUNDLE_VERSION,
+            "registry": registry_to_dict(reg),
+            "rules": [to_dict(r) for r in rules],
+            "refusals": [to_dict(r) for r in refusals]}
+
+def bundle_from_dict(d: dict) -> tuple[Registry, list[Rule], list[Refusal]]:
+    if str(d.get("bundle_version", BUNDLE_VERSION)) != BUNDLE_VERSION:
+        raise ValueError(f"unsupported bundle version {d.get('bundle_version')!r}")
+    reg = registry_from_dict(d.get("registry", {}))
+    rules = [from_dict(r) for r in d.get("rules", [])]
+    refusals = [from_dict(r) for r in d.get("refusals", [])]
+    return reg, rules, refusals
+
+def write_bundle(path: str, reg: Registry, rules: Iterable[Rule],
+                 refusals: Iterable[Refusal] = (), **kw) -> None:
+    with open(path, "w") as fh:
+        json.dump(bundle_to_dict(reg, rules, refusals), fh, indent=1, **kw)
+
+def read_bundle(path: str) -> tuple[Registry, list[Rule], list[Refusal]]:
+    with open(path) as fh:
+        return bundle_from_dict(json.load(fh))
+
 def json_schema(reg: Registry) -> dict:
     """The schema handed to structured decoding. Closed variable set by construction."""
     expr_ref = {"$ref": "#/$defs/expr"}

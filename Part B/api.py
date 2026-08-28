@@ -2,6 +2,7 @@
 See CHECKER.md for the endpoints, the verdict semantics, and how the
 counterexample is minimized."""
 
+import os
 from pathlib import Path
 
 from flask import Flask, jsonify, request, send_from_directory
@@ -9,10 +10,26 @@ from z3 import Not, Solver, is_bool, is_int, sat, unsat
 
 from real_rules import DOMAIN_AXIOMS, REAL_RULES
 
+# A Track A bundle, when one is present, is served alongside the fixtures.
+# Its rules carry their OWN domain axioms (from the bundle's registry), which
+# is why `_pin` reads `rule.domain` rather than the module-level constant --
+# a global axiom set only works while every rule comes from one hand-written
+# file.
+BUNDLE_PATH = os.environ.get("GF_BUNDLE", str(Path(__file__).parent / "bundle.json"))
+LOADED_RULES, LOADED_REFUSALS, LOADED_REGISTRY = [], [], None
+if Path(BUNDLE_PATH).exists():
+    try:
+        from from_dsl import load_bundle
+        LOADED_RULES, LOADED_REFUSALS, LOADED_REGISTRY = load_bundle(BUNDLE_PATH)
+    except Exception as exc:            # a bad bundle must not take the app down
+        print(f"[warn] could not load bundle {BUNDLE_PATH}: {exc}")
+
+ALL_RULES = list(REAL_RULES) + list(LOADED_RULES)
+
 app = Flask(__name__)
 
 APP_DIR = Path(__file__).parent
-RULES_BY_ID = {rule.rule_id: rule for rule in REAL_RULES}
+RULES_BY_ID = {rule.rule_id: rule for rule in ALL_RULES}
 
 
 def _python_value(ref, model):
@@ -33,7 +50,8 @@ def _coerce(ref, value):
 
 
 def _pin(rule, known: dict) -> tuple:
-    domain = list(DOMAIN_AXIOMS)
+    # Track A rules bring their own axioms; fixtures fall back to the global set.
+    domain = list(getattr(rule, "domain", None) or DOMAIN_AXIOMS)
     provided = {}
     for name, ref in rule.var_refs.items():
         if name in known:
@@ -94,6 +112,7 @@ def check_rule(rule, known: dict) -> dict:
         if verdict == "MAY-violate"
         else {}
     )
+    holes = list(getattr(rule, "holes", ()) or ())
     return {
         "rule_id": rule.rule_id,
         "title": rule.title,
@@ -104,6 +123,14 @@ def check_rule(rule, known: dict) -> dict:
         "source_sentence": rule.source_sentence,
         "known_variables": provided,
         "free_variables": sorted(free_names),
+        # A PARTIAL encoding's holes are unbound BY DESIGN -- predicates the
+        # source states but never defines. Naming them separates "we do not
+        # know this patient's value" from "the guideline never said".
+        "open_holes": holes,
+        "partial": bool(holes),
+        "source_page": getattr(rule, "source_page", None),
+        "provenance": getattr(rule, "source_span", None),
+        "origin": "track-a" if hasattr(rule, "domain") else "fixture",
     }
 
 
@@ -125,7 +152,7 @@ def list_rules():
                 "source_sentence": rule.source_sentence,
                 "variables": sorted(rule.var_refs.keys()),
             }
-            for rule in REAL_RULES
+            for rule in ALL_RULES
         ]
     )
 
@@ -149,7 +176,7 @@ def check():
             return jsonify(check_rule(rule, known))
 
         touched_rules = [
-            rule for rule in REAL_RULES if set(rule.var_refs) & set(known)
+            rule for rule in ALL_RULES if set(rule.var_refs) & set(known)
         ]
     except (TypeError, ValueError) as error:
         return jsonify({"error": f"bad patient/plan value: {error}"}), 400
@@ -173,9 +200,25 @@ def check():
         return jsonify({"error": f"bad patient/plan value: {error}"}), 400
 
 
+@app.get("/residue")
+def residue():
+    """What Track A REFUSED to encode, and why.
+
+    A checker that serves only the rules that compiled tells a governance
+    reader the tool covered everything. This route is the other half of the
+    deliverable, and it is why the bundle carries refusals alongside rules."""
+    from from_dsl import residue_report
+    return jsonify(residue_report(LOADED_REFUSALS))
+
+
 @app.get("/health")
 def health():
-    return jsonify({"status": "ok", "rules_loaded": len(REAL_RULES)})
+    return jsonify({"status": "ok",
+                    "rules_loaded": len(ALL_RULES),
+                    "fixture_rules": len(REAL_RULES),
+                    "track_a_rules": len(LOADED_RULES),
+                    "refused_statements": len(LOADED_REFUSALS),
+                    "bundle": BUNDLE_PATH if LOADED_RULES else None})
 
 
 if __name__ == "__main__":

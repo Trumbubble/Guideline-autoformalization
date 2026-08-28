@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import threading
 from typing import Any, Callable
 
@@ -228,3 +229,42 @@ def sample(statement: str, registry, k: int = 8, **kw) -> list[dict]:
     models do not expose one. That makes this a measurement of the variance a
     real deployment sees, which is the number worth reporting."""
     return [formalize(statement, registry, **kw) for _ in range(k)]
+
+# ---------------------------------------------------------------- M2 baselines
+
+DIRECT_CQL_INSTRUCTIONS = """\
+Write an HL7 CQL library that encodes this clinical statement.
+
+Emit ONLY CQL. Start with a `library` declaration, declare `using FHIR version
+'4.0.1'`, declare `context Patient`, declare any value sets you reference, and
+define the logic. Use explicit units on every quantity comparison.
+
+Encode exactly what the statement says. Do not add thresholds, populations, or
+exclusions it does not state."""
+
+def direct_cql(statement: str, *, effort: str = "medium",
+               feedback: list[str] | None = None) -> str:
+    """BASELINE (a) and (b): the model writes CQL directly.
+
+    No DSL, no closed vocabulary, no terminology gate -- the model types value
+    set names and codes itself. This is the comparison M2 exists to make: if
+    the constrained pipeline does not beat this on clause-level fidelity, the
+    determinism machinery buys only compilation, and the method contribution is
+    empty."""
+    user = f'Statement:\n"""\n{statement}\n"""'
+    if feedback:
+        user += ("\n\nThe previous attempt was rejected:\n"
+                 + "\n".join(f"  - {f}" for f in feedback)
+                 + "\nFix exactly these problems.")
+    m = model()
+    r = client().messages.create(
+        model=m, max_tokens=4000,
+        system=[{"type": "text", "text": DIRECT_CQL_INSTRUCTIONS,
+                 "cache_control": {"type": "ephemeral"}}],
+        output_config={"effort": effort},
+        messages=[{"role": "user", "content": user}])
+    USAGE.add(r.usage)
+    text = "".join(b.text for b in r.content if b.type == "text")
+    # strip any markdown fence the model adds despite the instruction
+    m2 = re.search(r"```(?:cql)?\n(.*?)```", text, re.S)
+    return (m2.group(1) if m2 else text).strip()
