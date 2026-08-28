@@ -1,3 +1,5 @@
+"""Synthetic 200-patient / 25-clause solve-performance benchmark. See ../CHECKER.md."""
+
 import csv
 import random
 import time
@@ -13,7 +15,7 @@ DRUG_COUNT = 15
 MONITOR_COUNT = 15
 ACTION_COUNT = DRUG_COUNT + MONITOR_COUNT
 VISIT_HORIZON = 52
-OUTPUT_CSV = Path("benchmark_results.csv")
+OUTPUT_CSV = Path(__file__).parent / "benchmark_results.csv"
 
 
 @dataclass(frozen=True)

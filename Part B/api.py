@@ -1,33 +1,6 @@
-"""Small local API wrapping the Track B checker.
-
-POST a JSON patient + plan and get back, for each real guideline rule whose
-variables you touched, the same three-valued verdict
-(MUST-violate / MAY-violate / CERTIFIED-compliant) `benchmark.py` computes
-in batch -- plus, for a MAY-violate result, a minimized counterexample: the
-smallest set of still-unspecified patient/plan values that would force a
-violation, computed the same way `benchmark.py`'s
-`minimal_counterexample_core` does. This turns the checker into something
-callable interactively -- from a notebook, curl, or a UI -- instead of only
-a batch job.
-
-    python3 -m pip install -r ../requirements.txt
-    python3 api.py
-
-    curl -s localhost:8000/rules | python3 -m json.tool
-
-    curl -s -X POST localhost:8000/check -H 'Content-Type: application/json' -d '{
-      "patient": {"potassium": 5.4},
-      "plan": {"ace_inhibitor_on": true}
-    }' | python3 -m json.tool
-
-A rule is only included in a /check response if the request touches at
-least one of that rule's variables -- GET /rules first to see what's
-available.
-
-GET / serves a minimal HTML UI (ui.html) over these same endpoints: paste
-or load an example patient/plan, hit Check, see the verdict and a
-plain-English counterexample.
-"""
+"""Flask API for the Track B checker: GET /rules, POST /check, GET / (ui.html).
+See CHECKER.md for the endpoints, the verdict semantics, and how the
+counterexample is minimized."""
 
 from pathlib import Path
 
@@ -86,7 +59,7 @@ def classify(domain: list, predicate) -> str:
 def minimal_counterexample_core(rule, domain: list, free_names: list) -> dict:
     """The smallest set of free-variable values that forces a violation.
 
-    Same assumption-dropping minimization as `benchmark.py`'s function of
+    Same assumption-dropping minimization as `tests/benchmark.py`'s function of
     the same name, generalized from generic drug/monitor indices to named
     fixture variables.
     """
