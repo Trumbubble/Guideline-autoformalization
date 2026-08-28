@@ -42,6 +42,10 @@ class LoadedRule:
     source_sentence: str
     domain: list = field(default_factory=list)   # per-rule, not global
     holes: tuple = ()                    # unbound predicates, left free
+    # `source` is the citation the fixtures carry ("BNF / NICE guidance"); for a
+    # Track A rule the citation IS the provenance, so /rules renders both kinds
+    # without special-casing.
+    source: str = ""
     source_page: int | None = None
     source_span: str | None = None
     strength: str | None = None
@@ -84,6 +88,8 @@ def load_bundle(path: str) -> tuple[list[LoadedRule], list, "dsl.Registry"]:
             predicate=dsl.rule_to_z3(r, env),
             var_refs={n: env[n] for n in names if n in env},
             source_sentence=r.source_span or "",
+            source=f"Track A · {r.rule_id}"
+                   + (f" · page {r.source_page}" if r.source_page else ""),
             domain=list(axioms),
             holes=dsl.open_holes(r, reg),
             source_page=r.source_page, source_span=r.source_span,

@@ -216,3 +216,15 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# LOINC is licensed -- load it locally, never redistribute it.
+Loinc_*/
+Part A/loinc.db
+Part A/demo.db
+Part B/engine/node_modules/
+Part B/engine/*.jar
+Part B/engine/cs
+Part B/engine/classes/
+Part B/engine/cp.txt
+Part B/engine/*.json
+!Part B/engine/package.json

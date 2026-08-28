@@ -111,6 +111,52 @@ def test_value_set_groupers_do_not_outrank_real_lab_codes():
                                "lab"), 0.0)
     assert "not_an_observation" in grouper.why and real.score > grouper.score
 
+# ------------------------------------------------------------------- units
+
+def test_ucum_comparison_is_dimensional_not_textual():
+    """String equality is wrong here and the failure is silent. LOINC records
+    9318-7 (albumin/creatinine MASS ratio) as `ug/mg{creat}` -- dimensionally
+    identical to the `mg/g` a guideline writes. A textual test rejects the
+    correct code, and has no way to distinguish it from `mg/mmol`, which is a
+    molar ratio and a different quantity (~8.84x)."""
+    assert b.units_match("ug/mg{creat}", "mg/g")          # same dimension AND scale
+    assert b.units_match("mmol/L", "mmol/L")
+    assert not b.units_match("mg/mmol{creat}", "mg/g")    # mass/amount vs mass/mass
+    assert not b.units_match("mmol/mol{creat}", "mg/g")
+
+def test_a_convertible_unit_is_preferred_but_never_rejected():
+    """mmol/L vs mol/L is a conversion, not a different quantity: same
+    dimension, different scale. (g/kg and mg/g are not an example -- they are
+    the SAME ratio, 1e-3, and units_match rightly says so.)"""
+    assert b.units_comparable("mmol/L", "mol/L")
+    assert not b.units_match("mmol/L", "mol/L")
+    assert b.units_match("g/kg", "mg/g")               # identical ratios
+    assert not b.units_comparable("mg/mmol", "mg/g")   # mass/amount vs mass/mass
+
+def test_annotations_are_stripped():
+    assert b.ucum_key("mg/g{creat}") == b.ucum_key("mg/g")
+
+def test_the_unit_in_the_sentence_picks_between_the_acr_codes():
+    """The R5b minimal pair, against real LOINC spellings."""
+    mass = Candidate(Concept(LOINC, "9318-7", "Albumin/Creatinine [Mass Ratio] in Urine",
+                             "lab", unit="ug/mg{creat}"), 10.0, ("exact_term",))
+    molar = Candidate(Concept(LOINC, "32294-1", "Albumin/Creatinine [Ratio] in Urine",
+                              "lab", unit="mg/mmol{creat}"), 10.0, ("exact_term",))
+    for unit, want in [("mg/g", "9318-7"), ("mg/mmol", "32294-1")]:
+        m = Mention("urine albumin-to-creatinine ratio", "lab", unit=unit)
+        top = b.rerank_by_unit([mass, molar], m)[0]
+        assert top.concept.code == want, (unit, top.concept.code)
+
+def test_loinc_loader_is_optional_and_says_where_to_get_it():
+    import os
+    if b.find_loinc_table():
+        return                                  # a release is present; nothing to assert
+    try:
+        b.load_loinc(b.SqliteIndex(":memory:"), path="/nonexistent")
+        assert False, "should have raised"
+    except FileNotFoundError as exc:
+        assert "loinc.org/downloads" in str(exc)
+
 # --------------------------------------------------------------- retrieval
 
 def test_abbreviations_are_expanded():

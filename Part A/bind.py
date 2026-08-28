@@ -104,6 +104,12 @@ class Concept:
     kind: Kind
     version: str | None = None
     unit: str | None = None
+    # LOINC's COMMON_TEST_RANK: 1 is the most commonly ordered test, 0 is
+    # unranked. A guideline threshold almost always names a common test, so
+    # this separates "Glomerular filtration rate" from "Tubular reabsorption of
+    # phosphorus/Glomerular filtration rate" -- which share every token and are
+    # indistinguishable on lexical overlap alone.
+    rank: int = 0
 
     @property
     def curie(self) -> str:
@@ -174,7 +180,8 @@ class TerminologyIndex(Protocol):
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS concept(
   system TEXT NOT NULL, code TEXT NOT NULL, term TEXT NOT NULL,
-  kind TEXT NOT NULL, version TEXT, unit TEXT, is_preferred INTEGER DEFAULT 1,
+  kind TEXT NOT NULL, version TEXT, unit TEXT, rank INTEGER DEFAULT 0,
+  is_preferred INTEGER DEFAULT 1,
   PRIMARY KEY (system, code, term));
 CREATE INDEX IF NOT EXISTS idx_concept_kind ON concept(kind);
 CREATE VIRTUAL TABLE IF NOT EXISTS concept_fts USING fts5(
@@ -230,9 +237,9 @@ class SqliteIndex:
             n = 0
             for c in concepts:
                 cur = self.db.execute(
-                    "INSERT OR IGNORE INTO concept(system,code,term,kind,version,unit) "
-                    "VALUES (?,?,?,?,?,?)",
-                    (c.system, c.code, c.term, c.kind, c.version, c.unit))
+                    "INSERT OR IGNORE INTO concept(system,code,term,kind,version,unit,rank) "
+                    "VALUES (?,?,?,?,?,?,?)",
+                    (c.system, c.code, c.term, c.kind, c.version, c.unit, c.rank))
                 if cur.rowcount:
                     self.db.execute(
                         "INSERT INTO concept_fts(term,system,code,kind) VALUES (?,?,?,?)",
@@ -297,10 +304,13 @@ class SqliteIndex:
                 continue
             with self._lock:
                 meta = self.db.execute(
-                    "SELECT version, unit FROM concept WHERE system=? AND code=? AND term=?",
+                    "SELECT version, unit, rank FROM concept "
+                    "WHERE system=? AND code=? AND term=?",
                     (r["system"], r["code"], r["term"])).fetchone()
             c = Concept(r["system"], r["code"], r["term"], r["kind"],
-                        meta["version"] if meta else None, meta["unit"] if meta else None)
+                        meta["version"] if meta else None,
+                        meta["unit"] if meta else None,
+                        (meta["rank"] if meta else 0) or 0)
             out.append(_score(phrase, c, -float(r["bm"])))
         out.sort(key=lambda c: -c.score)
         return _dedupe_candidates(out)[:k]
@@ -339,6 +349,10 @@ def _score(phrase: str, c: Concept, lexical: float) -> Candidate:
         score -= 1.0; why.append("term_much_longer")
     if NOT_AN_OBSERVATION.search(c.term):
         score -= 4.0; why.append("not_an_observation")
+    if c.rank:
+        # Common tests first. Rank 1 is the single most-ordered LOINC test;
+        # anything past a few thousand is vanishingly rare in practice.
+        score += min(3.0, 3.0 / (1.0 + c.rank / 400.0)); why.append(f"rank={c.rank}")
     return Candidate(c, round(score, 3), tuple(why))
 
 # Guideline prose uses abbreviations; terminology indexes them badly or not at
@@ -419,6 +433,83 @@ def search_all(index: TerminologyIndex, mention: Mention, k: int) -> list[Candid
     found.sort(key=lambda c: -c.score)
     return _dedupe_candidates(found)[:k]
 
+# Minimal UCUM comparison. String equality is wrong here and the failure is
+# silent: LOINC records 9318-7 (albumin/creatinine MASS ratio) as
+# `ug/mg{creat}`, which is dimensionally identical to the `mg/g` a guideline
+# writes -- so a textual comparison rejects the correct code and, worse, has no
+# way to tell it apart from `mg/mmol`, which is a MOLAR ratio and a genuinely
+# different quantity. Dimension first, then scale.
+_SI = {"y": 1e-24, "z": 1e-21, "a": 1e-18, "f": 1e-15, "p": 1e-12, "n": 1e-9,
+       "u": 1e-6, "m": 1e-3, "c": 1e-2, "d": 1e-1, "": 1.0,
+       "k": 1e3, "M": 1e6, "G": 1e9}
+_BASE = {"g": "mass", "mol": "amount", "L": "volume", "l": "volume",
+         "m": "length", "s": "time", "min": "time", "h": "time", "d": "time",
+         "U": "activity", "IU": "activity", "%": "fraction", "1": "fraction"}
+
+def _parse_ucum_atom(atom: str) -> tuple[str, float] | None:
+    atom = re.sub(r"\{[^}]*\}", "", atom).strip()
+    if not atom:
+        return None
+    if atom in _BASE:
+        return (_BASE[atom], 1.0)
+    for plen in (1,):
+        p, rest = atom[:plen], atom[plen:]
+        if p in _SI and rest in _BASE:
+            return (_BASE[rest], _SI[p])
+    return (atom.lower(), 1.0)          # unknown: compare literally
+
+def ucum_key(unit: str | None) -> tuple | None:
+    """(dimension, scale) for a unit or ratio of units, or None if unparseable."""
+    if not unit:
+        return None
+    u = re.sub(r"\{[^}]*\}", "", unit).strip()
+    if not u:
+        return None
+    parts = u.split("/")
+    atoms = [_parse_ucum_atom(p) for p in parts]
+    if any(a is None for a in atoms):
+        return None
+    dims = "/".join(a[0] for a in atoms)
+    scale = atoms[0][1]
+    for a in atoms[1:]:
+        scale /= a[1]
+    return (dims, round(scale, 12))
+
+def units_match(a: str | None, b: str | None) -> bool:
+    ka, kb = ucum_key(a), ucum_key(b)
+    if ka is None or kb is None:
+        return False
+    return ka == kb
+
+def units_comparable(a: str | None, b: str | None) -> bool:
+    """Same dimension, possibly different scale -- mg/g vs g/kg."""
+    ka, kb = ucum_key(a), ucum_key(b)
+    return ka is not None and kb is not None and ka[0] == kb[0]
+
+def rerank_stewards(cands: list[Candidate]) -> list[Candidate]:
+    """Break ties between value sets that different stewards publish under the
+    same name.
+
+    Measured (R6b): VSAC carries 40 value sets titled exactly "Diabetes", from
+    at least two steward roots, spanning 2017-2026. Name alone does not choose
+    between them, and the selector correctly refused -- but refusing every
+    common concept is not a usable pipeline either.
+
+    The policy, which is deterministic and reportable rather than a guess:
+    prefer an exact title match, then the most recently versioned set. The
+    alternatives stay in `Binding.candidates`, so the choice is auditable and a
+    clinician can see what was passed over. This is a POLICY, not a clinical
+    judgement, and the paper should say so."""
+    def rank(c: Candidate):
+        exact = "exact_term" in c.why
+        version = c.concept.version or ""
+        return (-c.score, not exact, -_version_key(version))
+    return sorted(cands, key=rank)
+
+def _version_key(v: str) -> int:
+    digits = re.sub(r"[^0-9]", "", v or "")[:8]
+    return int(digits) if digits else 0
+
 def rerank_by_unit(cands: list[Candidate], mention: Mention) -> list[Candidate]:
     """Deterministic disambiguation before the model is asked anything.
 
@@ -428,11 +519,16 @@ def rerank_by_unit(cands: list[Candidate], mention: Mention) -> list[Candidate]:
     it -- no judgement required, and the reason is recorded either way."""
     if not mention.unit:
         return cands
-    want, out = _unit_slug(mention.unit), []
+    want, out = mention.unit, []
     for c in cands:
         cu = c.concept.unit
-        if cu and _unit_slug(cu) == want:
+        if cu and units_match(cu, want):
             out.append(replace(c, score=c.score + 4.0, why=c.why + ("unit_match",)))
+        elif cu and units_comparable(cu, want):
+            # Same dimension, different scale (mg/g vs g/kg): a conversion, not
+            # a different quantity. Mildly preferred, never rejected.
+            out.append(replace(c, score=c.score + 1.0,
+                               why=c.why + ("unit_convertible",)))
         elif cu:
             out.append(replace(c, score=c.score - 2.0, why=c.why + ("unit_mismatch",)))
         else:
@@ -570,7 +666,10 @@ way the sentence does not settle.
 
 Do NOT abstain merely because two candidates are REDUNDANT -- the same concept
 published by different stewards, or a value set and the single concept it
-expands. That is not under-determination. Prefer a curated value set over a
+expands. That is not under-determination. When several curated value sets carry
+the same name from different stewards, take the FIRST -- the list is already
+ordered by exact-title match and then by most recent version -- and say in
+`reason` which one you took and that others existed. Prefer a curated value set over a
 single code when the phrase denotes a category of patients or drugs, prefer the
 more specific steward, and say which you took. Abstaining sends the statement to the
 refusal report, which is a correct and expected outcome -- a wrong binding is
@@ -656,9 +755,11 @@ def variable_name(mention: Mention) -> str:
 
 def bind(mention: Mention, sentence: str, index: TerminologyIndex,
          llm: Callable[[str], dict] | None = None, k: int = 8,
-         ref_id: str = "") -> Binding | dsl.Refusal:
+         ref_id: str = "", _exclude: tuple = ()) -> Binding | dsl.Refusal:
     """One phrase -> a verified Binding, or a refusal. Never a guessed code."""
-    cands = rerank_by_unit(search_all(index, mention, k), mention)
+    cands = rerank_stewards(rerank_by_unit(search_all(index, mention, k), mention))
+    if _exclude:
+        cands = [c for c in cands if c.concept.code not in _exclude]
     shown = tuple(f"{c.concept.term} ({c.concept.curie})" for c in cands)
     verdict, selector = select(mention, sentence, cands, llm)
     choice, reason = verdict.get("choice", -1), verdict.get("reason", "")
@@ -671,6 +772,21 @@ def bind(mention: Mention, sentence: str, index: TerminologyIndex,
             source_span=mention.text, confidence=None)
 
     c = cands[choice].concept
+    # A value set that expands to NOTHING is not a usable binding: every
+    # retrieve against it matches no resource, so the rule silently never
+    # fires. Measured on a live run -- a steward's "Diabetes" set expanded to 0
+    # codes and the whole library evaluated to null, which is indistinguishable
+    # from a patient who simply does not qualify.
+    if mention.kind in SET_VALUED_KINDS and c.system == VSAC:
+        if not index.expand(c.system, c.code):
+            if len(cands) > 1:
+                return bind(mention, sentence, index, llm, k, ref_id,
+                            _exclude=tuple(_exclude) + (c.code,))
+            return dsl.Refusal(
+                ref_id or mention.text, "unbound_concept",
+                f"the only candidate value set for {mention.text!r} "
+                f"({c.curie}) expands to no codes", source_span=mention.text)
+
     # The gate. Structurally the selector cannot invent a code, but a stale
     # cache or a mis-wired index still can, so the code is re-checked.
     if not index.validate(c.system, c.code):
@@ -811,14 +927,26 @@ class RemoteIndex:
         return out
 
     def _loinc_search(self, phrase: str, k: int) -> list[Candidate]:
+        """LOINC PROPERTY is the structural test for "is this a measurable
+        quantity": VRat, ArVRat, MCnc and friends are quantities, while panels,
+        groupers and value-set entries have NO property at all.
+
+        Measured: "estimated glomerular filtration rate" returns
+        `HEDIS MY 2020 Value Set - Estimated Glomerular Filtration Rate`, and an
+        earlier binder threshold-compared it. You cannot threshold a grouper --
+        the CQL compiles and every patient evaluates to null."""
         d = _get_json(f"{self.tables}/loinc_items/v3/search",
-                      {"terms": phrase, "maxList": k,
-                       "df": "LOINC_NUM,LONG_COMMON_NAME,EXAMPLE_UCUM_UNITS"})
+                      {"terms": phrase, "maxList": max(k * 3, 20),
+                       "df": "LOINC_NUM,LONG_COMMON_NAME,PROPERTY"})
         out = []
         for row in d[3]:
             code, name = row[0], row[1]
-            unit = row[2] if len(row) > 2 and row[2] else None
-            out.append(_score(phrase, Concept(LOINC, code, name, "lab", None, unit), 0.0))
+            prop = (row[2] if len(row) > 2 else "") or ""
+            c = _score(phrase, Concept(LOINC, code, name, "lab", None, None), 0.0)
+            if not prop:
+                c = replace(c, score=c.score - 6.0,
+                            why=c.why + ("no_loinc_property",))
+            out.append(c)
         return out
 
     def _rx_search(self, phrase: str, kind: Kind, k: int) -> list[Candidate]:
@@ -974,14 +1102,19 @@ class VsacIndex:
         return _dedupe_candidates(out)[:k]
 
     def expand(self, system: str, code: str, limit: int = 500) -> tuple[str, ...]:
-        if system != VSAC:
-            return ()
+        return tuple(c for _s, c in self.expand_coded(code, limit))
+
+    def expand_coded(self, oid: str, limit: int = 2000) -> tuple[tuple[str, str], ...]:
+        """(system, code) pairs. An execution engine matches on BOTH -- a bare
+        code list silently fails to match a resource coded in the right system,
+        which looks like a patient not meeting the criterion."""
         try:
-            d = self._get(f"ValueSet/{code}/$expand", {"count": limit})
+            d = self._get(f"ValueSet/{oid}/$expand", {"count": limit})
         except Exception:
             return ()
-        return tuple(c["code"] for c in
-                     d.get("expansion", {}).get("contains", []) if "code" in c)
+        return tuple((c.get("system", ""), c["code"])
+                     for c in d.get("expansion", {}).get("contains", [])
+                     if "code" in c)
 
     def validate(self, system: str, code: str) -> bool:
         if system != VSAC:
@@ -1005,9 +1138,26 @@ class CachedIndex:
     def __init__(self, local: SqliteIndex, remote: RemoteIndex | None = None):
         self.local, self.remote = local, remote
 
+    def authoritative_for(self, kind: Kind) -> bool:
+        """True when the local index holds a full licensed release for every
+        system this kind uses. Then the remote adds nothing and can only do
+        harm: it was the free endpoint that put a DISCOURAGED HEDIS grouper
+        into a LOINC-seeded index, via the write-through cache."""
+        systems = KIND_SYSTEMS.get(kind, ())
+        return bool(systems) and all(self.local.version(s) for s in systems
+                                     if s in {LOINC})
+
     def search(self, phrase: str, kind: Kind, k: int = 8) -> list[Candidate]:
         hits = self.local.search(phrase, kind, k)
-        if hits or self.remote is None:
+        if kind == "lab" and self.authoritative_for(kind):
+            return hits
+        # A cache that holds only WEAK candidates must not shadow the remote.
+        # Measured: demo.db held three eGFR entries -- two deprecated panels and
+        # a HEDIS grouper -- and because the cache was non-empty the binder
+        # never asked the terminology server for the real result code. "Any hit
+        # at all" is the wrong test; "a hit with positive evidence" is right.
+        good = [c for c in hits if set(c.why) & POSITIVE_EVIDENCE]
+        if good or self.remote is None:
             return hits
         fresh = self.remote.search(phrase, kind, k)
         if fresh:
@@ -1034,6 +1184,87 @@ class CachedIndex:
     def version(self, system: str) -> str | None:
         return self.local.version(system) or (self.remote.version(system)
                                               if self.remote else None)
+
+# ---------------------------------------------------------------- LOINC load
+
+LOINC_DIR_ENV = "LOINC_DIR"
+
+def find_loinc_table(path: str | None = None) -> str | None:
+    """Locate `Loinc.csv` from an unpacked LOINC release."""
+    roots = [path] if path else []
+    roots.append(os.environ.get(LOINC_DIR_ENV))
+    here = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    roots.append(here)
+    for root in [r for r in roots if r]:
+        if os.path.isfile(root):
+            return root
+        for base, _dirs, files in os.walk(root):
+            if "Loinc.csv" in files and os.path.basename(base) == "LoincTable":
+                return os.path.join(base, "Loinc.csv")
+        if os.path.basename(root).lower().startswith("loinc"):
+            cand = os.path.join(root, "LoincTable", "Loinc.csv")
+            if os.path.exists(cand):
+                return cand
+    return None
+
+# A guideline thresholds a MEASURED QUANTITY. `Qn` is LOINC's own scale type for
+# that, and it excludes ordinal presence tests, nominal panels and grouper
+# entries structurally -- rather than by regex on the display name, which is
+# what the free keyword endpoints forced.
+QUANTITATIVE_SCALES = {"Qn"}
+BOOLEANISH_SCALES = {"Ord", "Nom"}
+
+def load_loinc(index: SqliteIndex, path: str | None = None, *,
+               active_only: bool = True, max_rank: int | None = None) -> int:
+    """Load a licensed LOINC release into the local index.
+
+    Why this beats the free endpoints, measured: querying NLM Clinical Tables
+    for "eGFR" returns gene assays and a HEDIS grouper; tx.fhir.org returns
+    LOINC *Part* codes alphabetically. Neither surfaces 48642-3. The licensed
+    table carries SCALE_TYP, PROPERTY, STATUS and COMMON_TEST_RANK, so the
+    right code can be selected structurally instead of hoped for.
+
+    LOINC is licensed: the table must not be redistributed. Load it locally,
+    keep the release out of version control, and ship the loader."""
+    import csv
+    src = find_loinc_table(path)
+    if not src:
+        raise FileNotFoundError(
+            "Loinc.csv not found. Unpack a LOINC release into the repo, or set "
+            f"{LOINC_DIR_ENV}. Download: https://loinc.org/downloads/ (free account)")
+    concepts, n = [], 0
+    version = os.path.basename(os.path.dirname(os.path.dirname(src))).replace("Loinc_", "")
+    with open(src, newline="", encoding="utf-8-sig") as fh:
+        for row in csv.DictReader(fh):
+            if active_only and row.get("STATUS") != "ACTIVE":
+                continue
+            scale = row.get("SCALE_TYP") or ""
+            if scale not in QUANTITATIVE_SCALES:
+                # Ordinal and nominal codes are ANSWERS ("Estimated or measured
+                # glomerular filtration rate less than 60"), not measurements.
+                # They share every token with the real code and win on overlap,
+                # and you cannot threshold them.
+                continue
+            rank = row.get("COMMON_TEST_RANK") or "0"
+            if max_rank and rank.isdigit() and int(rank) > max_rank:
+                continue
+            code = row["LOINC_NUM"]
+            unit = (row.get("EXAMPLE_UCUM_UNITS") or "").strip() or None
+            name = (row.get("LONG_COMMON_NAME") or "").strip()
+            if not name:
+                continue
+            rank_i = int(rank) if rank.isdigit() else 0
+            concepts.append(Concept(LOINC, code, name, "lab", version, unit, rank_i))
+            short = (row.get("SHORTNAME") or "").strip()
+            if short and short.lower() != name.lower():
+                concepts.append(Concept(LOINC, code, short, "lab", version, unit, rank_i))
+            n += 1
+            if len(concepts) >= 5000:
+                index.add(concepts); concepts = []
+    if concepts:
+        index.add(concepts)
+    index.set_version(LOINC, version)
+    return n
 
 # ---------------------------------------------------------------- fixture
 
