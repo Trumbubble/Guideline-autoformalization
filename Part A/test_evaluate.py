@@ -99,7 +99,7 @@ def test_the_real_expert_artifact_parses():
          "CMS165FHIRControllingHighBloodPressure-0.5.000.cql")
     if not os.path.exists(p):
         return                                  # corpus not fetched; skip
-    cs = extract_clauses(open(p).read())
+    cs = extract_clauses(open(p, encoding="utf-8").read())
     assert any(c.value == "140" and c.unit == "mmhg" for c in cs)
     assert any(c.value == "90" and c.unit == "mmhg" for c in cs)
 

@@ -323,3 +323,94 @@ if __name__ == "__main__":
             print(f"FAIL {name}: {type(exc).__name__}: {exc}")
     print(f"\n{len(tests) - len(failed)}/{len(tests)} passed")
     raise SystemExit(1 if failed else 0)
+
+
+# ------------------------------------- semantic fallback (R32)
+
+class _StubSemantic:
+    """Stands in for the vector index. The real one is 974 MB and loading it
+    made the suite four times slower for no signal about the LOGIC, which is
+    what these tests are about: when it is consulted, and how its results are
+    combined."""
+    model_name = "stub"
+    def __init__(self, hits=None):
+        self.hits = hits or {}
+        self.queries = []
+    def available(self, kind):
+        return True
+    def search(self, phrase, kind, k=8, min_similarity=0.0):
+        self.queries.append((phrase, kind))
+        return self.hits.get((phrase.lower(), kind), [])
+
+def _with_stub(stub, fn):
+    saved = dict(b._SEMANTIC)
+    b._SEMANTIC.update({"index": [stub], "tried": True, "why": ""})
+    try:
+        return fn()
+    finally:
+        b._SEMANTIC.clear(); b._SEMANTIC.update(saved)
+
+def test_an_exact_lexical_match_skips_the_semantic_index():
+    """It is a FALLBACK. A semantic near-miss must never displace a lexical
+    exact match, and the cost belongs off the common path."""
+    stub = _StubSemantic()
+    def run():
+        m = b.Mention("diabetes", "condition", 0, 8)
+        return b.search_all(IX, m, 8)
+    _with_stub(stub, run)
+    assert stub.queries == []          # never consulted
+
+def test_a_lexical_miss_consults_the_semantic_index():
+    """"kidney function" retrieves *Decreased kidney function* -- something,
+    but not the concept -- so "returned nothing" is the wrong trigger. The
+    absence of an EXACT term match is the right one."""
+    stub = _StubSemantic({("kidney function", "lab"): [
+        ("11953005", b.SNOMED, "Renal function", 0.954)]})
+    ix = b.fixture_index(); ix.semantic = True
+    def run():
+        m = b.Mention("kidney function", "lab", 0, 15)
+        return b.search_all(ix, m, 8)
+    out = _with_stub(stub, run)
+    assert stub.queries, "semantic index was never consulted"
+    assert any(c.concept.code == "11953005" for c in out)
+
+def test_semantic_candidates_are_marked_as_such():
+    """A reviewer must be able to tell a meaning-match from a term-match."""
+    stub = _StubSemantic({("kidney function", "lab"): [
+        ("11953005", b.SNOMED, "Renal function", 0.954)]})
+    ix = b.fixture_index(); ix.semantic = True
+    out = _with_stub(stub, lambda: b.search_all(
+        ix, b.Mention("kidney function", "lab", 0, 15), 8))
+    hit = next(c for c in out if c.concept.code == "11953005")
+    assert any("semantic" in w for w in hit.why), hit.why
+
+def test_a_broadening_query_matching_is_not_an_exact_match():
+    """The head-noun backoff adds "analgesia" for "epidural analgesia", and the
+    generic concept `Analgesia` matched THAT -- which read as "found it" and
+    suppressed the semantic search. The trigger tests the mention, not the
+    expansions."""
+    stub = _StubSemantic({("epidural analgesia", "procedure"): [
+        ("18946005", b.SNOMED, "Epidural anaesthesia", 0.857)]})
+    ix = b.fixture_index()
+    ix.add([b.Concept(b.SNOMED, "38433004", "Analgesia", "procedure")])
+    ix.semantic = True
+    out = _with_stub(stub, lambda: b.search_all(
+        ix, b.Mention("epidural analgesia", "procedure", 0, 18), 8))
+    assert any(c.concept.code == "18946005" for c in out)
+
+def test_the_fixture_index_never_reaches_for_meaning():
+    """A fixture is a closed world: "not in it" is the answer, not a failure."""
+    assert b.fixture_index().semantic is False
+
+def test_an_unavailable_index_is_not_an_absent_concept():
+    """`SemanticUnavailable` is raised rather than returning [] so a caller
+    cannot mistake "not installed" for "no such concept" -- the failure class
+    this project keeps rediscovering (R27)."""
+    import semantic
+    ix = semantic.SemanticIndex("/nonexistent.db", "stub-model")
+    try:
+        ix.search("anything", "lab")
+    except semantic.SemanticUnavailable as exc:
+        assert "semantic index" in str(exc) or "no " in str(exc)
+    else:
+        raise AssertionError("returned instead of raising")

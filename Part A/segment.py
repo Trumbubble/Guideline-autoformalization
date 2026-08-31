@@ -204,6 +204,33 @@ def split_sentences(s: str) -> list[tuple[int, int]]:
         spans.append((start, len(s)))
     return [(a, b) for a, b in spans if s[a:b].strip()]
 
+# One sentence can carry two recommendations, joined by a semicolon. Measured on
+# PMC12355350: "...weak recommendation in favour of SGLT-2 inhibitors or GLP-1
+# receptor agonists; AND a weak recommendation against finerenone in adults with
+# CKD" was formalized as ONE rule -- the first clause encoded, the second
+# silently discarded, with `on_finerenone` bound and sitting unused in the
+# registry.
+#
+# Splitting is deliberately narrow. Only seams where the guideline restarts its
+# own recommendation grammar count; a semicolon between two conditions
+# ("...without established CVD or CKD; or established CVD...") is part of ONE
+# rule and splitting it would destroy the population.
+_CLAUSE_SEAM = re.compile(
+    r";\s+(?=and\s+(a|an)\s+(weak|strong|conditional|ungraded|good\s+practice)\b)"
+    r"|;\s+(?=(and\s+)?we\s+(also\s+)?(recommend|suggest|advise)\b)"
+    r"|;\s+(?=(and\s+)?(a|an)\s+(weak|strong|conditional)\s+recommendation\b)",
+    re.I)
+
+MIN_CLAUSE_CHARS = 25
+
+def split_clauses(s: str, start: int, end: int) -> list[tuple[int, int]]:
+    """Subdivide one sentence at recommendation seams. Offsets stay absolute so
+    provenance survives -- the character span still points at the source."""
+    frag = s[start:end]
+    cuts = [start] + [start + m.end() for m in _CLAUSE_SEAM.finditer(frag)] + [end]
+    spans = [(a, b) for a, b in zip(cuts, cuts[1:]) if b - a >= MIN_CLAUSE_CHARS]
+    return spans or [(start, end)]
+
 # ---------------------------------------------------------------- prefilter
 
 def _rx(p): return re.compile(p, re.I)
@@ -298,6 +325,16 @@ _EVIDENCE_PATTERNS = [
 
 _LABEL_ONLY_MAX_WORDS = 12
 
+# Words that survive stripping a grading label but carry no clinical content.
+_LABEL_FILLER = {
+    "and", "for", "the", "with", "without", "against", "favour", "favor", "this",
+    "that", "these", "those", "all", "adults", "adult", "patients", "patient",
+    "group", "risk", "evidence", "certainty", "quality", "grade", "level",
+    "strength", "based", "use", "using", "recommendation", "recommendations",
+    "statement", "consensus", "ungraded", "practice", "good", "very", "low",
+    "moderate", "high", "strong", "weak", "conditional",
+}
+
 def is_label_only(text: str) -> bool:
     """True for a span that is ONLY a grading label. Guidelines print these on
     their own line inside the box ("Strong recommendation, moderate certainty
@@ -308,7 +345,20 @@ def is_label_only(text: str) -> bool:
         return False
     if not (_first_match(_LABEL_PATTERNS, t) or _first_match(_EVIDENCE_PATTERNS, t)):
         return False
-    return not any(p.search(t) for n, _w, p in PREFILTER_PATTERNS if n.startswith("deontic"))
+    if any(p.search(t) for n, _w, p in PREFILTER_PATTERNS if n.startswith("deontic")):
+        return False
+    # A label grades a recommendation; it does not CONTAIN one. Measured on
+    # PMC12355350: "and a weak recommendation against finerenone in adults with
+    # CKD" was absorbed as a label and vanished, taking a whole recommendation
+    # with it -- the drug bound, reached the registry, and was never used.
+    # Strip the grading vocabulary and see whether clinical content is left.
+    residue = t
+    for pats in (_LABEL_PATTERNS, _EVIDENCE_PATTERNS):
+        for p in pats:
+            residue = p.sub(" ", residue)
+    words = [w for w in re.findall(r"[a-z][a-z-]{2,}", residue.lower())
+             if w not in _LABEL_FILLER]
+    return len(words) <= 1
 
 def _first_match(pats, *texts) -> str | None:
     for t in texts:
@@ -465,14 +515,14 @@ def expand_abbreviations(text: str, abbrevs: dict[str, str]) -> str:
 
 _DIRECTIVE = re.compile(
     r"\b(we recommend|we suggest|is recommended|are recommended|is not recommended|"
-    r"recommends?|should|must|shall|is indicated|are indicated|"
+    r"recommends?|suggests?|advises?|should|must|shall|is indicated|are indicated|"
     r"may be considered|should be considered|avoid|do not use|contraindicated)\b", re.I)
 
 # Statistics and evidence-grading vocabulary. An effect estimate is a finding,
 # not an instruction.
 _EVIDENCE_MARKERS = re.compile(
     r"\b(odds ratio|hazard ratio|risk ratio|confidence interval|"
-    r"certainty (of|in) (the )?evidence|"
+    r"certainty (of |in )?(the )?evidence|"
     r"(OR|HR|RR|aOR)\s*[,=]?\s*\d|95%\s*CI|"
     r"n\s*=\s*\d|p\s*[<=]\s*0?\.\d|\d+\s+studies)\b")
 
@@ -491,7 +541,31 @@ _EVIDENCE_MARKERS = re.compile(
 # understates the residue, so the rule gives up yield for safety.
 _RECOMMENDATION_NOUN = re.compile(
     r"\brecommendations?\s+that\b|\brecommendation\s+\d", re.I)
-_RECOMMENDATION_LABEL = re.compile(r"^\s*recommendations?\s*\d*\s*[:.\u2013-]", re.I)
+# "Recommendation 12:" but also "Recommendation 12\nIn pediatric patients ..."
+# -- a heading on its own line, which is how ASH/ISTH prints them and how the
+# extractor delivers them. Requiring punctuation after the number vetoed the
+# actual numbered recommendations of an entire guideline.
+_RECOMMENDATION_LABEL = re.compile(
+    r"^\s*recommendations?\s*\d*\s*([:.\u2013-]|$|\n|\s+[A-Z])", re.I | re.M)
+
+# A sentence that OPENS by reporting research is describing evidence, not
+# issuing a recommendation. Kept to sentence-initial position and to a closed
+# set of research verbs, because that is what makes it decisive rather than a
+# guess about the middle of a clause.
+_REPORTING_FRAME = re.compile(
+    r"^\s*(results?|findings?|data|evidence|studies|trials?|analys[ei]s|"
+    r"observational stud\w+|in randomi[sz]ed|a (survey|systematic review|"
+    r"meta-analysis)|the (evidence|data|trial|review))\b[^.]{0,40}?\b"
+    r"(indicat\w+|show\w+|suggest\w+|report\w+|found|demonstrat\w+|"
+    r"reveal\w+|were|was|is|are|includ\w+)\b", re.I)
+
+# The guideline speaking in its own voice. A sentence that reports research AND
+# then issues a recommendation keeps one of these, so the frame veto below can
+# be decisive without swallowing "Studies show X; we therefore recommend Y".
+_GUIDELINE_VOICE = re.compile(
+    r"\b(we (recommend|suggest|advise|do not recommend)|is recommended|"
+    r"are recommended|is not recommended|is indicated|are indicated|"
+    r"should be (offered|given|used|started|considered))\b", re.I)
 
 def not_a_statement(text: str) -> str | None:
     """A reason this span cannot be a recommendation, or None.
@@ -502,6 +576,11 @@ def not_a_statement(text: str) -> str | None:
     t = text.strip()
     if not t:
         return "empty"
+    # Checked BEFORE the directive guard, because a reported preference can
+    # contain a directive word without being one: "patients ... preferred ... to
+    # AVOID combination therapy" is a survey result, and `avoid` rescued it.
+    if _REPORTING_FRAME.search(t) and not _GUIDELINE_VOICE.search(t):
+        return "reports_research"
     if _DIRECTIVE.search(t) and not t.endswith(":"):
         return None
     if t.endswith(":"):
@@ -664,7 +743,8 @@ def blocks_to_units(blocks: Iterable[Block]) -> list[Block]:
             units.append(replace(b, context=b.text, context_start=b.prov.char_start))
             continue
         t = Text(b.text)
-        for start, end in split_sentences(t.s):
+        for s0, e0 in split_sentences(t.s):
+          for start, end in split_clauses(t.s, s0, e0):
             rs, re_ = t.raw_span(start, end)
             units.append(replace(
                 b, text=b.text[rs:re_],
@@ -677,7 +757,8 @@ def blocks_to_units(blocks: Iterable[Block]) -> list[Block]:
 def segment(blocks: list[Block], doc_id: str,
             llm: Callable[[Block], dict] | None = None,
             threshold: float = PREFILTER_THRESHOLD,
-            measure_prefilter: bool = False) -> tuple[list[Statement], dict]:
+            measure_prefilter: bool = False,
+            limit: int | None = None) -> tuple[list[Statement], dict]:
     """blocks -> (statements, manifest). The manifest is the extraction-error
     report: it is published alongside the formalizability number so the
     extractor's error is never conflated with the formalizer's.
@@ -701,21 +782,49 @@ def segment(blocks: list[Block], doc_id: str,
         if sc < threshold:
             rejected.append((u, sc, f))
             continue
-        veto = not_a_statement(u.text)
-        if veto:
-            vetoed.append((u, veto))
-            continue
+        # Label absorption comes FIRST. "Strong recommendation, moderate
+        # certainty evidence" is a GRADE label belonging to a sibling
+        # recommendation, and it carries the strength the rule needs -- but it
+        # also matches the evidence-summary veto, so checking the veto first
+        # threw the label away instead of attaching it.
         if is_label_only(u.text):
             slot = labels.setdefault(u.box_id or u.prov.locator, [None, None])
             slot[0] = slot[0] or _first_match(_LABEL_PATTERNS, u.text)
             slot[1] = slot[1] or _first_match(_EVIDENCE_PATTERNS, u.text)
             continue
+        veto = not_a_statement(u.text)
+        if veto:
+            vetoed.append((u, veto))
+            continue
         candidates.append((u, sc, f))
 
+    # A model classifier costs one call per candidate, and a guideline has
+    # hundreds: PMC13270348 has 286. A caller that wants five recommendations
+    # should not pay to judge 281 it will discard. With `limit` set, candidates
+    # are judged in descending prefilter order and judging stops once enough
+    # have been found -- which yields the SAME top-N, because that is the order
+    # the caller selects in anyway.
+    #
+    # A margin over `limit` covers what dedupe and the classifier's own
+    # rejections remove. Statement ids stay keyed to the candidate's position
+    # in the DOCUMENT, so they are stable whether or not a limit was used.
     stmts: list[Statement] = []
-    for n, (block, score, feats) in enumerate(candidates):
+    order = list(range(len(candidates)))
+    budget = None
+    if limit and llm:
+        order.sort(key=lambda i: -candidates[i][1])
+        budget = limit * 2 + 5
+    found = unclassified = 0
+
+    for n in order:
+        block, score, feats = candidates[n]
+        if budget is not None and found >= budget:
+            unclassified += 1
+            continue
         sibling_labels = labels.get(block.box_id or block.prov.locator, (None, None))
         verdict, judge = classify(block, score, feats, llm)
+        if verdict.get("is_recommendation", True):
+            found += 1
         quote = (verdict.get("quote") or block.text).strip()
         off = block.source_text.find(quote)
         prov = block.prov if off < 0 else replace(
@@ -732,6 +841,10 @@ def segment(blocks: list[Block], doc_id: str,
             is_recommendation=bool(verdict.get("is_recommendation", True)),
             is_patient_level=verdict.get("is_patient_level"),
             classifier_reason=verdict.get("reason", ""), classifier=judge))
+
+    # Back into document order: cross-reference resolution and the ids both
+    # read as positional, and a score-ordered list would silently reorder them.
+    stmts.sort(key=lambda x: x.statement_id)
 
     disagreements = None
     if measure_prefilter:
@@ -763,6 +876,10 @@ def segment(blocks: list[Block], doc_id: str,
         "duplicates": sum(1 for s in stmts if s.duplicate_of),
         "prefilter_threshold": threshold,
         "prefilter_rejected": len(rejected),
+        # A partial pass is not a whole-document measurement. Said plainly so
+        # `recommendations` is never read as a document property when it is not.
+        "limit": limit,
+        "unclassified": unclassified,
         # Spans the deterministic vetoes removed before any judge saw them.
         # Reported by reason and never silently: a veto that fires wrongly
         # deletes a recommendation, so it has to be auditable.
@@ -819,12 +936,12 @@ def statement_from_dict(d: dict) -> Statement:
         duplicate_of=d.get("duplicate_of"), also_at=tuple(d.get("also_at", ())))
 
 def write_jsonl(stmts: Iterable[Statement], path: str) -> None:
-    with open(path, "w") as fh:
+    with open(path, "w", encoding="utf-8") as fh:
         for s in stmts:
             fh.write(json.dumps(statement_to_dict(s)) + "\n")
 
 def read_jsonl(path: str) -> list[Statement]:
-    with open(path) as fh:
+    with open(path, encoding="utf-8") as fh:
         return [statement_from_dict(json.loads(line)) for line in fh if line.strip()]
 
 # ---------------------------------------------------------------- JATS loader
@@ -1161,7 +1278,7 @@ def fetch_pmc(pmcid: str, cache_dir: str = "corpus") -> str:
         req = urllib.request.Request(
             EUROPE_PMC.format(pmcid),
             headers={"User-Agent": "GuidelineForge/0.1 (research; segmenter)"})
-        with urllib.request.urlopen(req, timeout=60) as r:
+        with urllib.request.urlopen(req, timeout=60, encoding="utf-8") as r:
             data = r.read()
         # Parse rather than sniff: real PMC JATS may open with <?xml, with a
         # <!DOCTYPE article ...> declaration, or with <article> directly.
@@ -1188,7 +1305,7 @@ def search_pmc(query: str, limit: int = 25) -> list[tuple[str, str]]:
     url = ("https://www.ebi.ac.uk/europepmc/webservices/rest/search?"
            + urllib.parse.urlencode({"query": q, "format": "json",
                                      "pageSize": limit, "resultType": "lite"}))
-    with urllib.request.urlopen(url, timeout=60) as r:
+    with urllib.request.urlopen(url, timeout=60, encoding="utf-8") as r:
         data = json.loads(r.read())
     return [(x.get("pmcid", ""), x.get("title", ""))
             for x in data["resultList"]["result"] if x.get("pmcid")]

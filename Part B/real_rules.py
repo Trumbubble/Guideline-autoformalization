@@ -8,6 +8,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "Part A"))
 
+import sys as _sys
+
 import dsl  # noqa: E402
 from dsl import And, Between, Cmp, EventDef, Or, Registry, Rule, Since, VarDef  # noqa: E402
 
@@ -215,11 +217,20 @@ RULES = [
 # Fail loudly at import time rather than shipping an unvalidated rule.
 for _rule in RULES:
     _issues = dsl.validate_rule(_rule, REGISTRY) + dsl.check_nondegenerate(_rule, REGISTRY)
-    if _issues:
+    # ERRORS only. Warnings are advisory by design -- OPEN_HOLE and
+    # TAUTOLOGICAL_ANTECEDENT have always been among them, and DROPPED_THRESHOLD
+    # is a faithfulness judgement that may report but must never block (R19b).
+    # Treating every issue as fatal made a new advisory check break import.
+    _errors = [i for i in _issues if i.severity == "error"]
+    if _errors:
         raise AssertionError(
             f"{_rule.rule_id} failed DSL validation: "
-            + "; ".join(f"{i.code}: {i.message}" for i in _issues)
+            + "; ".join(f"{i.code}: {i.message}" for i in _errors)
         )
+    for _w in _issues:
+        if _w.severity != "error":
+            print(f"[real_rules] {_rule.rule_id}: {_w.code}: {_w.message}",
+                  file=_sys.stderr)
 
 RULES_BY_ID = {rule.rule_id: rule for rule in RULES}
 

@@ -636,6 +636,236 @@ def test_the_mismatch_is_a_warning_not_an_error():
     assert bad and all(i.severity == "warn" for i in bad)
 
 
+# ------------------------------------- (N+4) dropped quantities (R25)
+
+def _q_reg():
+    return Registry([VarDef("mt", "bool", binding="s|1|x"),
+                     VarDef("sbp", "real", unit="mm[Hg]", binding="s|2|x",
+                            plausible=(40.0, 260.0)),
+                     VarDef("lowering", "bool", binding="s|3|x", role="action")])
+
+def _q_rule(when, span):
+    return Rule("r", when, Cmp("lowering", "==", False), "avoid", "lowering",
+                source_span=span)
+
+SPAN = ("We recommend against intensively lowering systolic BP < 140 mmHg in the "
+        "first 24 h after successful mechanical thrombectomy.")
+
+def test_a_dropped_threshold_is_flagged():
+    """The real PMC13151662:0002. The rule typechecks, is non-vacuous, names the
+    right action and compiles -- and forbids BP lowering after thrombectomy
+    outright, because 140 mmHg and the 24 h window are both gone. Nothing else
+    in the validator can see a deletion."""
+    r = _q_rule(Cmp("mt", "==", True), SPAN)
+    iss = [i for i in validate_rule(r, _q_reg()) if i.code == "DROPPED_THRESHOLD"]
+    assert iss and "140" in iss[0].message and "24" in iss[0].message
+
+def test_keeping_the_threshold_is_not_flagged():
+    r = Rule("r", And([Cmp("mt", "==", True), Cmp("sbp", "<", 140)]),
+             Cmp("lowering", "==", False), "avoid", "lowering", source_span=SPAN)
+    got = [q for q in dsl.dropped_quantities(r)]
+    assert [u for _, u in got] == ["h"], got      # only the window is still gone
+
+def test_a_duration_counts_as_kept_in_any_unit():
+    """"the first 24 h" and Since(event, days=1) are the same window."""
+    reg = Registry([VarDef("lowering", "bool", binding="s|1|x", role="action")],
+                   [EventDef("mt")])
+    r = Rule("r", Since("mt", 1), Cmp("lowering", "==", False), "avoid", "x",
+             source_span="avoid lowering BP in the first 24 h after thrombectomy")
+    assert dsl.dropped_quantities(r) == []
+
+def test_a_range_is_kept_by_either_endpoint():
+    """"a minimum of 150-240 min" encoded as `>= 150` has kept the quantity.
+    Flagging the missing 240 would be a false alarm on a correct rule."""
+    reg = Registry([VarDef("mins", "real", binding="s|1|x"),
+                    VarDef("act", "bool", binding="s|2|x", role="action")])
+    r = Rule("r", Cmp("mins", ">=", 150), Cmp("act", "==", True), "recommend", "x",
+             source_span="engaging in a minimum of 150-240 min per week")
+    assert dsl.dropped_quantities(r) == []
+
+def test_a_blood_pressure_pair_needs_both_numbers():
+    """185/110 is systolic AND diastolic -- two measurements, not a range."""
+    reg = Registry([VarDef("sbp", "real", binding="s|1|x"),
+                    VarDef("act", "bool", binding="s|2|x", role="action")])
+    r = Rule("r", Cmp("sbp", "<", 185), Cmp("act", "==", True), "recommend", "x",
+             source_span="maintaining BP <185/110 mmHg before thrombolysis")
+    assert dsl.dropped_quantities(r) == [(110.0, "mmhg")]
+
+def test_statistics_are_not_thresholds():
+    """"25 studies; n = 15,374; 95% CI 0.87-1.08" is evidence. Flagging it would
+    bury the signal under every graded recommendation in the corpus."""
+    r = _q_rule(Cmp("mt", "==", True),
+                "deprescribing had no effect on mortality (odds ratio [OR], 0.97; "
+                "95% CI, 0.87-1.08; 25 studies; n = 15,374; low certainty).")
+    assert dsl.dropped_quantities(r) == []
+
+def test_the_check_is_a_warning():
+    """Guideline sentences carry numbers that should NOT be in the rule. This
+    reports for review; it never rejects."""
+    r = _q_rule(Cmp("mt", "==", True), SPAN)
+    iss = [i for i in validate_rule(r, _q_reg()) if i.code == "DROPPED_THRESHOLD"]
+    assert iss and all(i.severity == "warn" for i in iss)
+
+def test_a_source_with_no_quantities_is_never_flagged():
+    r = _q_rule(Cmp("mt", "==", True),
+                "We advise against routine pre-hospital BP lowering in suspected stroke.")
+    assert dsl.dropped_quantities(r) == []
+
+
+def test_a_dose_recorded_in_the_target_is_not_dropped():
+    """"Reduce the apixaban dose to 2.5 mg twice daily if at least two of ..."
+    correctly encodes the three criteria as numeric comparisons and the ACTION
+    as a boolean, recording the dose in `target`. The 2.5 is not lost, and
+    flagging it broke the import of a hand-written fixture rule."""
+    reg = Registry([VarDef("age", "int", binding="s|1|x"),
+                    VarDef("reduced", "bool", binding="s|2|x", role="action")])
+    r = Rule("r", Cmp("age", ">=", 80), Cmp("reduced", "==", True),
+             "recommend", "reduced apixaban dose (2.5 mg twice daily)",
+             source_span="Reduce the apixaban dose to 2.5 mg twice daily if age "
+                         "80 years or older.")
+    assert dsl.dropped_quantities(r) == []
+
+def test_a_dose_in_neither_the_rule_nor_the_target_is_still_flagged():
+    """The target exemption must not become a way to launder a dropped
+    quantity: it counts only when the number is actually recorded there."""
+    reg = Registry([VarDef("age", "int", binding="s|1|x"),
+                    VarDef("reduced", "bool", binding="s|2|x", role="action")])
+    r = Rule("r", Cmp("age", ">=", 80), Cmp("reduced", "==", True),
+             "recommend", "reduced apixaban dose",
+             source_span="Reduce the apixaban dose to 2.5 mg twice daily if age "
+                         "80 years or older.")
+    assert dsl.dropped_quantities(r) == [(2.5, "mg")]
+
+
+def test_a_target_restating_the_sentence_cannot_launder_a_threshold():
+    """The first version of the target exemption accepted ANY quantity found
+    there, and a real rule defeated it immediately: the model wrote
+    `target="intensive lowering of systolic BP < 140 mmHg in the first 24 h
+    after successful mechanical thrombectomy"` -- the sentence restated -- so
+    the check passed on the very rule it exists to catch. Only DOSE units are
+    discharged by the target."""
+    reg = Registry([VarDef("mt", "bool", binding="s|1|x"),
+                    VarDef("lowering", "bool", binding="s|2|x", role="action")])
+    r = Rule("r", Cmp("mt", "==", True), Cmp("lowering", "==", False),
+             "avoid",
+             "intensive lowering of systolic BP < 140 mmHg in the first 24 h "
+             "after successful mechanical thrombectomy",
+             source_span=SPAN)
+    assert dsl.dropped_quantities(r) == [(140.0, "mmhg"), (24.0, "h")]
+
+def test_body_weight_in_a_target_is_not_a_dose():
+    """kg is a body-weight CONDITION, not a dose, so naming it in the target
+    does not discharge it."""
+    reg = Registry([VarDef("on", "bool", binding="s|1|x"),
+                    VarDef("act", "bool", binding="s|2|x", role="action")])
+    r = Rule("r", Cmp("on", "==", True), Cmp("act", "==", True), "recommend",
+             "dose reduction in patients 60 kg or less",
+             source_span="Reduce the dose if body weight is 60 kg or less.")
+    assert dsl.dropped_quantities(r) == [(60.0, "kg")]
+
+
+def test_a_modal_verb_anywhere_in_a_name_condemns_it():
+    """"may be sufficient" produced the hole `has_may_sufficient`, which passed
+    the all-tokens-modal test because "sufficient" is not itself a modal. A
+    modal VERB is a function word: a patient predicate never contains one."""
+    assert dsl.modal_only("has_may_sufficient")
+    assert dsl.modal_only("has_can_be_given")
+    assert not dsl.modal_only("has_mild_moderate_pain")
+    assert not dsl.modal_only("has_appropriate_acupoints")
+
+
+# ------------------------------------- (N+5) relative change / titration (R30)
+
+def _titration():
+    reg = Registry([VarDef("basal_insulin_dose", "real", unit="[iU]",
+                           binding="s|1|x", plausible=(0.0, 200.0)),
+                    VarDef("on_lrd", "bool", binding="s|2|x", role="action")],
+                   [EventDef("lrd_start")])
+    rule = Rule("t", Cmp("on_lrd", "==", True),
+                dsl.Delta("basal_insulin_dose", "lrd_start", "reduce", 0.5),
+                "recommend", "reduced basal insulin dose",
+                source_span="Reduce basal insulin by 50% at the start of the diet.")
+    return reg, rule
+
+def test_a_relative_change_encodes_what_cmp_cannot():
+    """"Reduce basal insulin by 50%" has no number to compare against -- 50% of
+    whatever this patient was already on. Three of five statements in
+    PMC13074134 were this, and the document scored zero without it."""
+    reg, rule = _titration()
+    assert [i for i in validate_rule(rule, reg) if i.severity == "error"] == []
+    assert check_nondegenerate(rule, reg) == []
+
+def test_a_titration_rule_is_violable():
+    """It must be breakable, or it is the vacuity class arriving sideways."""
+    reg, rule = _titration()
+    env = make_env(reg)
+    s = z3.Solver(); s.add(*domain_axioms(reg, env))
+    s.add(dsl.violation_condition(rule, env))
+    assert s.check() == z3.sat
+
+def test_a_zero_baseline_cannot_make_it_unfalsifiable():
+    """With baseline 0 every value is half of it and the rule can never fail.
+    The domain axiom that a prior dose is positive is what stops that."""
+    reg, rule = _titration()
+    env = make_env(reg)
+    base = env[dsl.baseline_var("basal_insulin_dose", "lrd_start")]
+    s = z3.Solver(); s.add(*domain_axioms(reg, env)); s.add(base == 0)
+    assert s.check() == z3.unsat
+
+def test_the_baseline_is_reported_as_a_hole():
+    """The prior dose is free unless supplied. Naming it is the point: the
+    statement is EXPRESSED and one datum is missing, rather than the whole
+    sentence being refused."""
+    reg, rule = _titration()
+    assert dsl.open_holes(rule, reg) == ("basal_insulin_dose_at_lrd_start",)
+
+def test_a_range_reduction_bounds_both_ends():
+    """"reduce by 35%-50%" leaves between 50% and 65% of the baseline."""
+    reg, _ = _titration()
+    env = make_env(reg)
+    d = dsl.Delta("basal_insulin_dose", "lrd_start", "reduce", 0.35, 0.50)
+    base = env[dsl.baseline_var("basal_insulin_dose", "lrd_start")]
+    cur = env["basal_insulin_dose"]
+    for value, ok in ((0.60, True), (0.70, False), (0.45, False)):
+        s = z3.Solver(); s.add(base == 100, cur == 100 * value, to_z3(d, env))
+        assert (s.check() == z3.sat) is ok, value
+
+def test_a_percentage_written_as_50_is_rejected():
+    """lo_pct=50 asks for a 5000% reduction and would otherwise typecheck."""
+    reg, _ = _titration()
+    bad = Rule("t", Cmp("on_lrd", "==", True),
+               dsl.Delta("basal_insulin_dose", "lrd_start", "reduce", 50),
+               "recommend", "x", source_span="x")
+    assert "TYPE_ERROR" in codes(validate_rule(bad, reg))
+
+def test_an_undeclared_baseline_event_is_rejected():
+    reg, _ = _titration()
+    bad = Rule("t", Cmp("on_lrd", "==", True),
+               dsl.Delta("basal_insulin_dose", "surgery", "reduce", 0.5),
+               "recommend", "x", source_span="x")
+    assert "UNKNOWN_EVENT" in codes(validate_rule(bad, reg))
+
+def test_a_relative_change_counts_as_the_action():
+    """"Reduce the dose" IS the instruction. Requiring role == "action" on the
+    dose variable would reject every titration rule, since a dose is also an
+    observation of the patient."""
+    reg, rule = _titration()
+    assert "NO_ACTION_ATOM" not in codes(validate_rule(rule, reg))
+
+def test_a_relative_change_round_trips():
+    reg, rule = _titration()
+    back = from_dict(to_dict(rule))
+    assert isinstance(back.then, dsl.Delta)
+    assert (back.then.var, back.then.baseline, back.then.lo_pct) == \
+           ("basal_insulin_dose", "lrd_start", 0.5)
+
+def test_the_decoder_can_emit_a_relative_change():
+    reg, _ = _titration()
+    sch = dsl.decoding_schema(reg, 1)
+    assert '"delta"' in json.dumps(sch)
+    assert dsl.check_decoding_schema(sch) == []
+
+
 if __name__ == "__main__":
     tests = [(n, f) for n, f in sorted(globals().items())
              if n.startswith("test_") and callable(f)]

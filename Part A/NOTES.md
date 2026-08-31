@@ -527,6 +527,20 @@ set over a single code for category phrases.
 - **Report vetoes in the manifest by reason, with sample texts.** Same rule as
   `[judge: ...]`: a filter nobody can see is a filter nobody can audit.
 
+## Checking for what is NOT there
+
+- **Every other validator inspects the rule alone.** A deletion is invisible to
+  all of them, which is why a rule missing its threshold typechecked, was
+  non-vacuous, named the right action and compiled. Only a comparison against
+  `source_span` can see it.
+- **Dash vs slash is a real semantic distinction.** `150-240 min` is one
+  quantity with two endpoints; `185/110 mmHg` is two measurements. The naive
+  version got one of the two wrong whichever way it was written.
+- **Convert durations before comparing.** "24 h" and `Since(event, days=1)` are
+  the same window; without it the check fires on a correct encoding.
+- **Exclude bare integers and percentages.** Only numbers carrying a clinical
+  unit. Otherwise every graded recommendation flags on its study count.
+
 ## Known gaps
 
 - **The Docling path is written but untested here** — docling is not installed,

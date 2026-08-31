@@ -233,3 +233,8 @@ Part B/engine/*.json
 SnomedCT_*/
 RxNorm_*/
 Part A/terms.db
+
+# Semantic index: ~1 GB of float32 vectors, rebuildable in minutes from
+# terms.db. Derived data, never source.
+Part A/semantic/
+*.npy

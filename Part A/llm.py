@@ -43,7 +43,7 @@ def load_env(path: str | None = None) -> None:
         path = os.path.join(os.path.dirname(here), ".env")
     if not os.path.exists(path):
         return
-    with open(path) as fh:
+    with open(path, encoding="utf-8") as fh:
         for line in fh:
             line = line.strip()
             if not line or line.startswith("#") or "=" not in line:
@@ -82,16 +82,24 @@ class Usage:
     def __init__(self):
         self.calls = self.input = self.output = self.cached = 0
         self.errors: list[str] = []
+        # `self.calls += 1` is load-add-store, and the binder and the K-sample
+        # formalizer both run in thread pools -- so concurrent calls lose
+        # updates and the tally UNDER-reports. That tally is the cost figure a
+        # paper quotes, which makes a silently-low number worse than a missing
+        # one.
+        self._lock = threading.RLock()
     def add(self, u) -> None:
-        self.calls += 1
-        self.input += u.input_tokens
-        self.output += u.output_tokens
-        self.cached += getattr(u, "cache_read_input_tokens", 0) or 0
+        with self._lock:
+            self.calls += 1
+            self.input += u.input_tokens
+            self.output += u.output_tokens
+            self.cached += getattr(u, "cache_read_input_tokens", 0) or 0
     def cost(self, m: str) -> float:
         pin, pout = self.PRICES.get(m, self.PRICES[DEFAULT_MODEL])
         return (self.input * pin + self.output * pout) / 1e6
     def fail(self, exc: Exception) -> None:
-        self.errors.append(f"{type(exc).__name__}: {str(exc)[:200]}")
+        with self._lock:
+            self.errors.append(f"{type(exc).__name__}: {str(exc)[:200]}")
 
     def __str__(self):
         m = model()
@@ -191,6 +199,16 @@ weaker, not that the action is optional. "We suggest that X may be considered"
 is a PERMISSION: the permissive wording governs. Getting this wrong in the
 permissive direction accuses a clinician of a violation for declining an
 option, so when the wording genuinely offers rather than requires, say so.
+
+A recommendation to CHANGE a dose relative to what the patient was already on
+is a `delta`, not a `cmp`. "Reduce basal insulin by 50% at the start of the
+liver reduction diet" has no number to compare against -- 50% of whatever this
+patient was on -- so it is
+    {"kind": "delta", "var": "basal_insulin_dose", "baseline": "lrd_start",
+     "direction": "reduce", "lo_pct": 0.5, "hi_pct": null}
+A stated range, "reduce by 35%-50%", is lo_pct 0.35 and hi_pct 0.5. Percentages
+are FRACTIONS: 50% is 0.5, never 50. `baseline` must be one of the declared
+events -- the point in time the change is measured from.
 
 Never encode the modality as a variable. "may", "should", "consider" describe
 the recommendation, not the patient, and no data source can populate them.

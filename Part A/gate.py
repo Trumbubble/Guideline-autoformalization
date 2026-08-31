@@ -213,9 +213,16 @@ def triage(statement: str, index, *, statement_id: str = "s",
     ev: list[Evidence] = []
 
     # -- stage 2 evidence: what would not bind ---------------------------
+    _failed_before = len(getattr(index, "failures", ()))
     bindings, refusals = bind.bind_statement(
         statement, index, mention_llm, select_llm, ref_id=statement_id,
         doc_abbrevs=doc_abbrevs)
+    # A terminology lookup that failed for a TRANSPORT reason is not evidence
+    # about the guideline. Without this the two are indistinguishable: the
+    # endpoint returns nothing, the binder refuses, and the residue report
+    # attributes it to the document. Tagged so `spectrum` and `residue_report`
+    # both count it as OURS.
+    _failed = len(getattr(index, "failures", ())) - _failed_before
     for r in refusals:
         # Attribute the failure. An `unbound_concept` that is really an INDEX
         # GAP is a bug in our retrieval; one where no candidate exists at all
@@ -224,6 +231,19 @@ def triage(statement: str, index, *, statement_id: str = "s",
         # guideline, 8 of 14 refusals were index gaps for concepts (CVAD,
         # solid tumors, noncardiac surgery) that DO exist in SNOMED and VSAC.
         ev.append(Evidence("binder", classify_unbound(r, index), r.reason_text))
+
+    # Appended AFTER the per-concept evidence on purpose. `as_refusal` builds
+    # the refusal's reason_text by joining evidence in order, so putting this
+    # first made a transport warning displace the actual reason -- a real
+    # regression: "no terminology binding for 'oral feeding'" became
+    # "4 terminology lookup(s) failed...". A meta-warning must trail the finding
+    # it qualifies.
+    if _failed > 0:
+        ev.append(Evidence("binder", "TERMINOLOGY_UNAVAILABLE",
+                           f"{_failed} terminology lookup(s) failed (transport or "
+                           f"server error, not an absent concept), so a refusal "
+                           f"here may not be a property of the guideline: "
+                           + "; ".join(index.failures.summary()[-_failed:])[:200]))
 
     reg = bind.registry_from_bindings(bindings)
     holes = holes_from(statement, refusals, [])
@@ -341,6 +361,20 @@ def triage(statement: str, index, *, statement_id: str = "s",
             blocked_codes |= {i.code for i in iss if i.severity == "error"}
             if not [i for i in iss if i.severity == "error"]:
                 open_ = dsl.open_holes(rule, wide)
+                # Also on this path. It only ran on the strict-encode branch,
+                # so the dropped clause in "...in favour of SGLT-2i or GLP-1 RA;
+                # AND a weak recommendation against finerenone in adults with
+                # CKD" went unreported -- `on_finerenone` bound, reached the
+                # registry, and was simply never used.
+                _used = dsl._vars_in(rule.when) | dsl._vars_in(rule.then)
+                _unused = sorted(n for n in wide.names()
+                                 if n not in _used and not wide[n].unbound)
+                if _unused:
+                    ev.append(Evidence("gate", "UNUSED_BOUND_CONCEPT",
+                                       f"bound but not used in the rule: "
+                                       f"{', '.join(_unused)} -- an outcome may "
+                                       f"legitimately be unused, a dropped clause "
+                                       f"or population restriction may not"))
                 if open_:
                     ev.append(Evidence("model", "PARTIAL_ENCODING",
                                        f"encoded with {len(open_)} free variable(s): "
@@ -442,9 +476,17 @@ def spectrum(triages: Iterable[Triage]) -> dict:
         # Statements lost to OUR retrieval rather than to the guideline. A
         # formalizability fraction reported without this number is not
         # interpretable.
+        # Only an `unbound_concept` refusal can be attributable to retrieval.
+        # This counted ANY statement carrying a binder miss, so a statement
+        # refused for `beyond_dsl` -- dose titration, which no retrieval fix
+        # could ever encode -- was reported as our bug because some incidental
+        # concept in it also failed to bind. Measured on PMC13074134: 5 of 5
+        # refusals attributed to retrieval when only 2 were.
         "retrieval_attributable": sum(
             1 for x in t if not x.encodable
-            and any(e.code in {"unbound_index_gap", "unbound_unselected"}
+            and x.reason_code == "unbound_concept"
+            and any(e.code in {"unbound_index_gap", "unbound_unselected",
+                               "TERMINOLOGY_UNAVAILABLE"}
                     for e in x.evidence)),
         "mean_confidence": round(statistics.mean([x.confidence for x in t]), 3) if t else 0.0,
     }

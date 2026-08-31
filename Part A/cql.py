@@ -243,6 +243,16 @@ def expr_to_cql(e: dsl.Expr, reg: dsl.Registry, indent: int = 1) -> str:
         return (f"exists ([Observation: {label}] O\n"
                 f"{pad}  where O.effective during "
                 f"Interval[Today() - {e.days} days, {end}])")
+    if isinstance(e, dsl.Delta):
+        term = cql_name(e.var, reg)
+        base = '"' + _label(dsl.baseline_var(e.var, e.baseline), reg) + '"'
+        sign = -1.0 if e.direction == "reduce" else 1.0
+        lo = round(1.0 + sign * float(e.lo_pct), 6)
+        parts = [f"{term} {'<=' if sign < 0 else '>='} {base} * {lo}"]
+        if e.hi_pct is not None:
+            hi = round(1.0 + sign * float(e.hi_pct), 6)
+            parts.append(f"{term} {'>=' if sign < 0 else '<='} {base} * {hi}")
+        return "(" + ("\n" + pad + "and ").join(parts) + ")"
     if isinstance(e, dsl.Not):
         return f"not ({expr_to_cql(e.operand, reg, indent)})"
     if isinstance(e, (dsl.And, dsl.Or)):
@@ -252,6 +262,21 @@ def expr_to_cql(e: dsl.Expr, reg: dsl.Registry, indent: int = 1) -> str:
     raise TypeError(f"cannot lower {e!r} to CQL")
 
 # ---------------------------------------------------------------- library
+
+def _delta_baselines(rule: dsl.Rule) -> set[tuple[str, str]]:
+    """(variable, event) pairs the rule's relative-change nodes measure from."""
+    out: set[tuple[str, str]] = set()
+
+    def walk(e):
+        if isinstance(e, dsl.Delta):
+            out.add((e.var, e.baseline))
+        elif isinstance(e, dsl.Not):
+            walk(e.operand)
+        elif isinstance(e, (dsl.And, dsl.Or)):
+            for o in e.operands:
+                walk(o)
+    walk(rule.when); walk(rule.then)
+    return out
 
 def rule_to_cql(rule: dsl.Rule, reg: dsl.Registry, *,
                 library_name: str | None = None) -> CqlLibrary:
@@ -288,6 +313,21 @@ def rule_to_cql(rule: dsl.Rule, reg: dsl.Registry, *,
     lines += ["*/", ""]
 
     lines += variable_defines(reg) + [""]
+
+    # A relative change needs the variable's value at the baseline event, which
+    # no standard FHIR retrieve expresses: "the basal insulin dose the patient
+    # was on before the diet started" is an institution-specific query over
+    # prior MedicationRequests. Emitted as a NAMED null, so the missing datum is
+    # declared rather than guessed -- Arden Syntax made the same call with its
+    # curly braces, and it is the same discipline as an unbound predicate here.
+    for var, event in sorted(_delta_baselines(rule)):
+        b = dsl.baseline_var(var, event)
+        vd = reg[var] if var in reg else None
+        unit = f" -- in {vd.unit}" if vd and vd.unit else ""
+        lines += [f"// BASELINE: {var!r} as it stood at {event!r}{unit}.",
+                  f"// No portable retrieve expresses a prior value; bind this to "
+                  f"your site's query.",
+                  f'define "{_label(b, reg)}":\n  null as Decimal', ""]
     lines += [f"define \"Applicable\":\n  {expr_to_cql(rule.when, reg)}", ""]
     lines += [f"define \"Satisfied\":\n  {expr_to_cql(rule.then, reg)}", ""]
     # `not Applicable or Satisfied` is the material implication the DSL means.

@@ -247,6 +247,29 @@ def test_an_obligation_still_lowers_to_a_real_violation_define():
     assert 'define "Violated":\n  "Applicable" and not "Satisfied"' in text
 
 
+def test_a_relative_change_lowers_to_cql_with_a_named_baseline():
+    """No portable FHIR retrieve expresses "the dose before the diet started",
+    so the baseline is emitted as a NAMED null for a site to bind -- the same
+    call Arden Syntax made with its curly braces, and the same discipline as an
+    unbound predicate."""
+    reg = dsl.Registry([dsl.VarDef("basal_insulin_dose", "real", unit="[iU]",
+                                   description="Basal insulin dose",
+                                   binding="http://snomed.info/sct|1|x",
+                                   plausible=(0.0, 200.0)),
+                        dsl.VarDef("on_lrd", "bool", description="On liver reduction diet",
+                                   binding="http://snomed.info/sct|2|x", role="action")],
+                       [dsl.EventDef("lrd_start", "start of liver reduction diet")])
+    r = dsl.Rule("t", dsl.Cmp("on_lrd", "==", True),
+                 dsl.Delta("basal_insulin_dose", "lrd_start", "reduce", 0.35, 0.50),
+                 "recommend", "reduced basal insulin dose",
+                 source_span="Reduce basal insulin dose by 35%-50% of pre-LRD dose.")
+    text = cql.rule_to_cql(r, reg).text
+    assert 'define "basal_insulin_dose_at_lrd_start":\n  null as Decimal' in text
+    assert "BASELINE:" in text
+    assert '* 0.65' in text and '* 0.5' in text     # 35% and 50% reductions
+    assert check_cql(text) == []
+
+
 if __name__ == "__main__":
     tests = [(n, f) for n, f in sorted(globals().items())
              if n.startswith("test_") and callable(f)]

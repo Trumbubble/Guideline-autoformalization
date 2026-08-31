@@ -100,6 +100,12 @@ def main(argv=None):
             print(f"            reason: {t.reason_code}")
         if t.open_holes:
             print(f"            holes : {', '.join(t.open_holes)}  (left FREE, not stubbed)")
+    if len(getattr(index, "failures", ())):
+        print(f"\n  [warn] {len(index.failures)} terminology lookup(s) FAILED "
+              f"(transport or server error, not an absent concept). Refusals "
+              f"above may be ours, not the guideline's:")
+        for line in index.failures.summary()[:5]:
+            print(f"         {line[:100]}")
     sp = gate.spectrum(triages)
     print(f"\n  spectrum: {json.dumps(sp['buckets'])}")
     print(f"  in-fragment {sp['in_fragment_rate']:.0%}"
@@ -116,8 +122,18 @@ def main(argv=None):
             if t.as_refusal():
                 refusals.append(t.as_refusal())
             continue
-        bs, _ = bind.bind_statement(t.text, index, mention_llm, select_llm)
-        reg = bind.registry_from_bindings(bs)
+        # The registry the rule was WRITTEN AGAINST -- never a fresh binding.
+        # This was the second site of the R17a bug: re-binding here produced a
+        # different vocabulary than triage had used, so the rule referenced a
+        # variable the registry did not contain and cql-to-elm reported
+        # "Could not resolve identifier on_bp_lowering". `bind_statement` is not
+        # idempotent (it consults a model selector), so any re-derivation of a
+        # registry is a bug waiting to surface three stages downstream.
+        reg = t.registry
+        if reg is None:
+            bs, _ = bind.bind_statement(t.text, index, mention_llm, select_llm,
+                                        doc_abbrevs=abbrevs)
+            reg = bind.registry_from_bindings(bs)
         for h in t.open_holes:
             if h not in reg:
                 reg = dsl.Registry([reg[n] for n in reg.names()]
@@ -149,6 +165,12 @@ def main(argv=None):
 
     # ---- 6. verify: three-valued verdict over Z3 -------------------------
     hdr(4, "VERIFY  -- three-valued verdict, with the assumptions named")
+    if not rules:
+        # Say so. An empty section under a printed header reads as a crash,
+        # and on a 0-encoded run stage 5 vanished entirely with no explanation.
+        print("  nothing to verify: 0 statements encoded. Every one was refused,"
+              "\n  with the reasons listed above -- that is an outcome, not a"
+              " failure.\n")
     from from_dsl import load_bundle
     loaded, loaded_refusals, _, loaded_rejected = load_bundle(a.out)
     if loaded_rejected:
@@ -168,6 +190,9 @@ def main(argv=None):
                 print(f"        requires assuming: {res['counterexample_core']}")
 
     # ---- 7. execute the CQL itself ---------------------------------------
+    if a.live and compiler and not libraries:
+        hdr(5, "EXECUTE  -- the same library, run against a FHIR patient")
+        print("  nothing to execute: no library was produced.\n")
     if a.live and compiler and libraries:
         hdr(5, "EXECUTE  -- the same library, run against a FHIR patient")
         import toolchain, tempfile
@@ -197,6 +222,13 @@ def main(argv=None):
                 # library carries instead (RESULTS.md R18).
                 for label, path in _demo_patients(elm, vs, d):
                     out = toolchain.execute(elm, path, vs)["results"]
+                    if not out:
+                        # An empty result set is the engine finding no patient,
+                        # not a compliant one. Bare `next(iter(...))` turned
+                        # that into an opaque StopIteration traceback.
+                        print(f"  {label:34s} no patient evaluated -- "
+                              f"check the FHIR bundle")
+                        continue
                     vals = next(iter(out.values()))
                     v, applicable = vals.get("Violated"), vals.get("Applicable")
                     if vals.get("Deontic") == "permission":
@@ -220,7 +252,7 @@ def _demo_patients(elm_path, vs_path, tmpdir):
     compiles cleanly. This is the small honest version of Track B's
     coverage-directed test synthesis; the real one walks every branch."""
     import toolchain, json as _json
-    with open(elm_path) as fh:
+    with open(elm_path, encoding="utf-8") as fh:
         lib = _json.load(fh)["library"]
     terms = [n for _t, n in toolchain._retrieves(lib)]
     ths = toolchain.thresholds(elm_path)
@@ -277,13 +309,20 @@ def _statements_from(doc, limit, classify=None):
         blocks = sg.load_html(open(path, "rb").read(), doc_id)
     else:
         blocks = sg.load_jats(path, doc_id)
-    stmts, manifest = sg.segment(blocks, doc_id, llm=classify)
+    # Only judge as many candidates as `--max` needs. Without this a --max 5 run
+    # on a 517-block guideline spent 286 model calls before the first statement
+    # was formalized, most of them on statements the caller had asked to skip.
+    stmts, manifest = sg.segment(blocks, doc_id, llm=classify, limit=limit)
     keep = [x for x in stmts if x.is_recommendation and not x.duplicate_of]
     keep.sort(key=lambda x: -x.prefilter_score)
     abbrevs = manifest.get("abbreviations", {})
     print(f"  segmenter: {manifest['blocks']} blocks -> {len(keep)} recommendations"
           f"  ({manifest['figures_uncovered']} figures/image-tables uncovered)"
           f"  [judge: {manifest['classifier']}]")
+    if manifest.get("unclassified"):
+        print(f"  partial pass: {manifest['candidates'] - manifest['unclassified']} of "
+              f"{manifest['candidates']} candidates judged (--max {limit}); "
+              f"drop --max for the whole document")
     if abbrevs:
         shown = ", ".join(f"{k}={v}" for k, v in sorted(abbrevs.items())[:4])
         print(f"  glossary : {len(abbrevs)} abbreviations defined by this document"

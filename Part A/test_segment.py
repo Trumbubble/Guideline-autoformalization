@@ -540,6 +540,175 @@ def test_the_manifest_reports_what_was_vetoed():
     assert man["vetoed_by_reason"] == {"evidence_summary": 1}
 
 
+# ------------------------------------------- lazy classification (R26)
+
+def _counting_judge(counter):
+    def judge(block):
+        counter.append(1)
+        sc, f = sg.prefilter(block)
+        return sg._heuristic_verdict(block, sc, f)
+    return judge
+
+DRUGS = ["ramipril", "lisinopril", "enalapril", "perindopril", "captopril",
+         "losartan", "valsartan", "candesartan", "irbesartan", "olmesartan",
+         "metformin", "empagliflozin", "dapagliflozin", "canagliflozin",
+         "sitagliptin", "linagliptin", "pioglitazone", "gliclazide",
+         "insulin glargine", "semaglutide", "dulaglutide", "liraglutide",
+         "atorvastatin", "rosuvastatin", "simvastatin", "ezetimibe",
+         "bisoprolol", "carvedilol", "amlodipine", "indapamide"]
+
+def _many_blocks(n=60):
+    """Distinct texts on purpose: repeated sentences are collapsed by dedupe,
+    which would leave the limit nothing to skip and the test vacuous."""
+    out = []
+    for i in range(n):
+        drug = DRUGS[i % len(DRUGS)]
+        out.append(_blk(f"We recommend {drug} in adults with diabetes and a "
+                        f"urine albumin-to-creatinine ratio above {30 + i} mg/g."
+                        if i % 2 == 0 else
+                        f"Some patients treated with {drug} were followed in "
+                        f"clinic during cohort {i}."))
+    return out
+
+def test_a_limit_judges_far_fewer_candidates():
+    """One model call per candidate, and a guideline has hundreds: a --max 5 run
+    on PMC13270348 spent 286 calls before the first statement was formalized."""
+    full, lazy = [], []
+    blocks = _many_blocks()
+    run_segment(blocks, "d", llm=_counting_judge(full))
+    run_segment(blocks, "d", llm=_counting_judge(lazy), limit=5)
+    # The contract is an ABSOLUTE budget, not a ratio: judging stops after
+    # limit*2+5 candidates however long the document is. That is why the saving
+    # grows with document size -- 286 calls to 15 on PMC13270348 (95%), but only
+    # 30 to 15 on this fixture.
+    assert len(lazy) <= 5 * 2 + 5, len(lazy)
+    assert len(lazy) < len(full), (len(lazy), len(full))
+
+def test_a_limit_returns_the_same_top_statements():
+    """The saving is only legitimate if the answer is unchanged: candidates are
+    judged in the same descending-score order the caller selects in."""
+    blocks = _many_blocks()
+    def top(limit):
+        st, _ = run_segment(blocks, "d", llm=_counting_judge([]), limit=limit)
+        keep = [x for x in st if x.is_recommendation and not x.duplicate_of]
+        keep.sort(key=lambda x: -x.prefilter_score)
+        return [x.statement_id for x in keep[:5]]
+    assert top(5) == top(None)
+
+def test_statement_ids_are_positional_whether_or_not_a_limit_was_used():
+    """Ids key to the candidate's place in the DOCUMENT, so a bundle built with
+    --max is comparable to one built without."""
+    blocks = _many_blocks()
+    a, _ = run_segment(blocks, "d", llm=_counting_judge([]), limit=5)
+    b, _ = run_segment(blocks, "d", llm=_counting_judge([]))
+    ids = {x.statement_id for x in a} & {x.statement_id for x in b}
+    for i in ids:
+        xa = next(x for x in a if x.statement_id == i)
+        xb = next(x for x in b if x.statement_id == i)
+        assert xa.text == xb.text
+
+def test_the_manifest_says_the_pass_was_partial():
+    """`recommendations` must never be read as a document property when only
+    part of the document was judged."""
+    _, man = run_segment(_many_blocks(), "d", llm=_counting_judge([]), limit=5)
+    assert man["limit"] == 5 and man["unclassified"] > 0
+
+def test_no_limit_means_no_unclassified_candidates():
+    _, man = run_segment(_many_blocks(), "d", llm=_counting_judge([]))
+    assert man["unclassified"] == 0 and man["limit"] is None
+
+def test_a_limit_without_a_model_changes_nothing():
+    """The heuristic is free, so there is nothing to save and nothing to skip."""
+    _, man = run_segment(_many_blocks(), "d", limit=5)
+    assert man["unclassified"] == 0
+
+
+def test_a_sentence_reporting_research_is_vetoed_even_when_it_says_avoid():
+    """The directive guard rescued this: "patients ... preferred ... to AVOID
+    combination therapy" is a survey result, and `avoid` made it look like a
+    recommendation. The reporting frame is checked first."""
+    assert sg.not_a_statement(
+        "Results indicated that patients generally preferred SGLT-2 inhibitors "
+        "over other therapies; and that they preferred to avoid combination "
+        "therapy.") == "reports_research"
+
+def test_research_followed_by_a_recommendation_survives():
+    """The frame veto must not swallow "Studies show X; we recommend Y" -- the
+    guideline speaking in its own voice overrides the frame."""
+    assert sg.not_a_statement(
+        "Studies show a clear benefit; we therefore recommend an ACE inhibitor "
+        "in adults with diabetes.") is None
+
+def test_certainty_of_evidence_is_matched_without_the_preposition():
+    """"high certainty evidence" and "moderate certainty evidence" are how
+    GRADE rationale prose actually reads; requiring "certainty OF evidence" let
+    a whole rationale paragraph through as a recommendation."""
+    assert sg.not_a_statement(
+        "Understanding the recommendation—Given the benefit on overall survival "
+        "(high certainty evidence), this justified a strong recommendation in "
+        "favour.") == "evidence_summary"
+
+def test_a_grade_label_is_absorbed_before_the_veto_can_discard_it():
+    """"Strong recommendation, moderate certainty evidence" matches the
+    evidence-summary veto, but it is a LABEL carrying the strength its sibling
+    recommendation needs. Absorption runs first."""
+    blocks = [_blk("Strong recommendation, moderate certainty evidence."),
+              _blk("We recommend an ACE inhibitor in adults with diabetes.")]
+    _, man = run_segment(blocks, "d")
+    assert man["labels_absorbed"] == 1 and man["vetoed"] == 0
+
+
+# ------------------------------------- clause loss and label absorption (R30)
+
+def test_a_label_may_not_contain_a_recommendation():
+    """"and a weak recommendation against finerenone in adults with CKD" was
+    absorbed as a GRADE label and vanished -- a whole recommendation lost, with
+    the drug bound and sitting unused in the registry. A label GRADES a
+    recommendation; it does not contain one."""
+    assert not sg.is_label_only(
+        "and a weak recommendation against finerenone in adults with CKD.")
+    assert not sg.is_label_only(
+        "and a weak recommendation in favour of finerenone in adults with CKD.")
+
+def test_a_bare_grading_label_is_still_absorbed():
+    assert sg.is_label_only("Strong recommendation, moderate certainty evidence.")
+    assert sg.is_label_only("Weak recommendation, low certainty evidence")
+    assert sg.is_label_only("Conditional recommendation based on very low certainty evidence")
+
+def test_a_numbered_recommendation_heading_survives_the_veto():
+    """ASH/ISTH prints "Recommendation 1" on its own line above the statement.
+    Requiring punctuation after the number vetoed the actual numbered
+    recommendations of an entire guideline -- 24 of them."""
+    assert sg.not_a_statement(
+        "Recommendation 1\nIn pediatric patients with leukemia/lymphoblastic "
+        "lymphoma, the ASH/ISTH guideline panel suggests not using anticoagulant "
+        "prophylaxis.") is None
+
+def test_a_pointer_to_a_numbered_recommendation_is_still_vetoed():
+    """The exemption must not swallow the rule it exempts from."""
+    assert sg.not_a_statement(
+        "The EP and EtD framework are available online for recommendation 1.") \
+        == "about_a_recommendation"
+
+def test_a_panel_that_suggests_is_speaking_directively():
+    """"the guideline panel suggests" is the guideline recommending. Only
+    "we suggest" was recognised, so a third-person panel voice read as prose."""
+    assert sg._DIRECTIVE.search("the ASH/ISTH guideline panel suggests not using "
+                                "anticoagulant prophylaxis")
+
+def test_a_recommendation_seam_splits_but_a_population_semicolon_does_not():
+    """"...without established CVD or CKD; or established CVD..." is ONE rule's
+    population. "...GLP-1 receptor agonists; and a weak recommendation against
+    finerenone..." is two rules."""
+    one = ("Moderate risk (more than three risk factors without established CVD "
+           "or CKD; or established CVD at lower risk): weak recommendation in "
+           "favour of SGLT-2 inhibitors.")
+    assert len(sg.split_clauses(one, 0, len(one))) == 1
+    two = ("weak recommendation in favour of SGLT-2 inhibitors or GLP-1 receptor "
+           "agonists; and a weak recommendation against finerenone in adults with CKD.")
+    assert len(sg.split_clauses(two, 0, len(two))) == 2
+
+
 if __name__ == "__main__":
     tests = [(n, f) for n, f in sorted(globals().items())
              if n.startswith("test_") and callable(f)]

@@ -1325,3 +1325,856 @@ vocabulary a graded recommendation uses. The trap is structural, not incidental.
 | + model classifier | ~1 |
 
 Test coverage: 223 (9 added).
+
+# R23 · Terminology binding benchmark: 77% now, 90% reachable
+
+97 distinct clinical phrases, extracted by `propose_mentions` from the 33 real
+recommendations in the gold set (the 12 `NOT_A_RECOMMENDATION` rows are
+excluded — binding a heading measures nothing). Reproducible:
+`python3 bindbench.py --build` / `--score`.
+
+**This replaces an earlier "79/97" figure that was quoted from a session
+transcript, computed over 4 documents, recorded in no file and reproducible by
+no script.** It should not have been repeated, and it is not the same 97.
+
+```
+binding: 75/97 = 77%
+  attributable to OUR retrieval : 12   (a code exists and we missed it)
+  real residue                  : 10   (no faithful code in any vocabulary)
+```
+
+**Reachable ceiling: 87/97 = 90%.** Real terminology residue is 10%.
+
+## The 12 failures are five patterns, not twelve problems
+
+| pattern | phrases | fix |
+|---|---|---|
+| **over-specific descendants** — the generic parent is never offered | `blind` (only *word/snow/music blindness*), `epidural analgesia` (only `Analgesia`) | head-noun backoff, as for `mechanical thrombectomy` |
+| **verb-phrase mentions** — prose names an action as a gerund, SNOMED as a noun | `BP lowering`, `volume optimisation`, `early mobilisation`, `glucose lowering therapies` | nominalise the query, or search the object noun |
+| **in the index, simply unretrieved** | `albuminuria` (274769005), `kidney function` (`Renal function` 11953005) | ranking / kind-filter bug — these should already work |
+| **abbreviation never expanded** | `APLA` → retrieval returned *nothing*; `Antiphospholipid antibody measurement` (82886000) is in the index | pass the document glossary (already built — see below) |
+| **compound "A or B"** | `masked or nocturnal hypertension` | `split_compound` handles slashes only |
+
+## The 10 that are real residue split three ways
+
+- **Umbrella terms with no single referent** — `local complications` (of AP),
+  `local therapy` (oncology). Correctly unbindable; they name a set.
+- **Concepts SNOMED International lacks** — `Deprescribing`, `ADWEs`,
+  `disease progression`, `Haematoma expansion`. Note `Medication review`
+  (314529007) exists and is a *different act*; binding to it would be wrong.
+- **Thin vocabulary in exercise medicine** — `weightlifting`, `moderate
+  overtraining`. A specialty-coverage finding, not a pipeline finding.
+
+Plus one that is neither: **`replaces >50% of the globe`** was proposed as a
+*concept*. It is a numeric predicate over tumour extent and belongs in the
+logic, not the vocabulary — a `propose_mentions` error counted here as residue,
+which slightly overstates the residue figure.
+
+## Two caveats that make 77% a FLOOR
+
+1. **The harness does not pass the document abbreviation glossary.** `bind()`
+   is called directly, so `doc_abbrevs` is empty — while the real pipeline
+   threads it through `bind_statement`. `APLA` failed for exactly this reason
+   and would likely bind in a live run. The benchmark under-measures.
+2. **The run included the head-noun backoff** added while diagnosing
+   PMC13151662. There is no before-number to compare against, so the delta from
+   that change is unmeasured.
+
+## Why this exists
+
+Binding failures were being found one document at a time — each run surfaced
+one or two, they were fixed, the next surfaced two more. Twelve failures seen
+together are five patterns; seen one per document they are twelve separate
+bugs and an apparently endless loop. The benchmark also makes a retrieval
+change checkable against the 75 phrases that already work, which no previous
+change was.
+
+# R24 · Retrieval fixed, and the failure moves to dropped quantities
+
+## R24a · What the benchmark bought
+
+Three changes, each justified by a measurement rather than by the example that
+motivated it:
+
+| change | evidence |
+|---|---|
+| **`lab` gains a kind fallback** (`condition`, `procedure`) | `lab` had none, so a whole class was unreachable: SNOMED files `Albuminuria` (274769005) as a FINDING and `Antiphospholipid antibody measurement` (82886000) as a PROCEDURE. Retrieval recall on the fixable failures **1/12 → 3/10**. |
+| **head-noun backoff** | +1 on the 75 phrases that already bind (57 vs 56), 0 regressions, and it fixed `mechanical thrombectomy` end to end. **No measurable gain on the fixable-failure set** — justified by one case, not by the benchmark. Recorded as such. |
+| **`canonical` asks for the terminology's word**, not just an abbreviation expansion | The residual misses are clinical synonymy a keyword index cannot bridge: `kidney function`/`Renal function`, `volume optimisation`/`Fluid management`, `BP lowering`/`Antihypertensive therapy`. The model proposes a QUERY; the index still supplies the code. |
+
+Benchmark buckets, after correcting two codes I had guessed from memory
+(`182832007` is *Drug administration*, not antihypertensive therapy;
+`706882009` is *Hypertensive crisis*, not masked hypertension — both caught by
+verifying every claimed code against the index):
+
+```
+binding: 75/97 = 77%
+  OUR RETRIEVAL   : 10   the code is in our index and the query missed it
+  VOCABULARY GAP  :  2   the code is not in the releases we load
+  REAL RESIDUE    : 10   no faithful code in any standard vocabulary
+  reachable ceiling: 85/97 = 88% by fixing retrieval alone
+```
+
+`VOCABULARY GAP` is a third bucket added on evidence: "absent from our loaded
+release" and "absent from every vocabulary" have different fixes, and merging
+them would make an incomplete ATC seed look like a property of the guideline.
+
+## R24b · The same bug had a second call site
+
+`demo.py` stage 2 re-bound each statement from scratch to build the registry
+for CQL generation — the identical mistake fixed in `_merge_registries` at
+R17a, missed in the CQL path. The rule referenced `on_bp_lowering` while the
+freshly-bound registry had `on_lowering_systolic_bp`, and cql-to-elm reported
+*"Could not resolve identifier"*. Both libraries compile once the registry
+travels with the rule.
+
+**A non-idempotent step needs its output carried everywhere, not re-derived in
+some places.** Fixing one call site did not fix the class.
+
+## R24c · PMC13151662, before and after
+
+| | before | after |
+|---|---|---|
+| encoded | 0/5 | **2/5** |
+| refusals attributable to our retrieval | 4 | 3 |
+| CQL compiles | — | 2/2 |
+| `mechanical thrombectomy` | unbound | SNOMED 21710002 `Intracranial thrombectomy` |
+
+## R24d · Both encoded rules are unfaithful, and nothing caught it
+
+```
+"We recommend against intensively lowering systolic BP < 140 mmHg in the
+ first 24 h after successful mechanical thrombectomy"
+   ->  mechanical_thrombectomy  ->  NOT lowering_systolic_bp
+```
+
+The **140 mmHg threshold** and the **24 h window** are both gone. The rule now
+says *never lower systolic BP after thrombectomy*, which is not what the
+guideline says and is clinically wrong — targets in the 140–180 range are
+standard care.
+
+```
+"We advise against routine pre-hospital BP lowering in suspected stroke"
+   ->  has_stroke  ->  NOT on_bp_lowering
+```
+
+"routine" and "pre-hospital" are gone, and `has_stroke` binds to
+*Cerebrovascular accident* (230690007) though the source says **suspected**
+stroke. The rule forbids BP lowering in stroke generally.
+
+**No check fires.** `UNUSED_BOUND_CONCEPT` cannot see it, because a threshold
+is a literal rather than a bound concept. `ACTION_TARGET_MISMATCH` passes — the
+action is right. The rule typechecks, is non-vacuous, contains an action atom,
+and compiles.
+
+This is the fourth distinct failure class, and the pattern across all four is
+now clear: **each fix removes a failure mode and reveals the next, and every
+one of them is a form of the model silently dropping content that the checks
+cannot see is missing.** The countermeasure that generalises is not another
+special-case check but a comparison against the source: a source span with a
+number and a unit whose rule contains no numeric comparison has dropped a
+threshold, and that is deterministic and cheap to detect (`DROPPED_THRESHOLD`).
+The same applies to a stated duration with no `Since` in the rule.
+
+# R25 · `DROPPED_THRESHOLD`: comparing the rule against its source
+
+Every other check inspects the rule in isolation and asks whether what is there
+is correct. None can see what is **missing**, which is why the PMC13151662
+rules passed all of them while forbidding BP lowering after thrombectomy
+outright — the 140 mmHg threshold and the 24 h window were simply gone.
+
+The only thing that can catch a deletion is a comparison against the source,
+which the rule already carries in `source_span`. Lives in `validate_rule`, so
+it runs at the gate, in the CQL repair loop, and again at Track B's load-time
+re-verification.
+
+## Behaviour
+
+| source | rule | verdict |
+|---|---|---|
+| `< 140 mmHg … first 24 h` | `mt → NOT lowering` | **flagged**: 140 mmhg, 24 h |
+| `< 140 mmHg … first 24 h` | `mt ∧ sbp < 140 → NOT lowering` | flagged: 24 h only |
+| `the first 24 h` | `Since(mt, days=1)` | not flagged — same window, different unit |
+| `a minimum of 150–240 min` | `mins >= 150` | not flagged — a dash is one quantity with two endpoints |
+| `BP <185/110 mmHg` | `sbp < 185` | **flagged**: 110 mmhg — a slash is two measurements |
+| `OR 0.97; 95% CI 0.87–1.08; 25 studies; n = 15,374` | anything | not flagged — evidence, not thresholds |
+
+Three decisions worth recording, each made because the naive version was wrong:
+
+- **Bare integers and percentages are excluded.** Only numbers with a clinical
+  unit count. "25 studies", "30% of patients" and "(2A)" are evidence, and
+  flagging them would bury the signal under every graded recommendation.
+- **A dash and a slash mean different things.** `150–240 min` is one quantity
+  with two endpoints, kept by either; `185/110 mmHg` is systolic AND diastolic,
+  and dropping either is a real loss. Treating both as ranges would have missed
+  a dropped diastolic; treating both as pairs would have false-alarmed on a
+  correct `>= 150`.
+- **Durations convert.** "the first 24 h" and `Since(event, days=1)` are the
+  same window; without conversion the check fires on a correct encoding.
+
+Measured over the 45 gold statements: 5 carry clinical quantities, and **no
+statistical quantity is extracted from any of them** — including the
+deprescribing evidence sentence with an odds ratio, a confidence interval, a
+study count and an n.
+
+## Why this one closes a class
+
+The four failure modes found so far — the tautology, the modal predicate, the
+re-derived registry, and now the dropped threshold — are all the same thing:
+**content silently absent, invisible to checks that only look at what is
+present.** `DROPPED_THRESHOLD` is the first check that asks the other question,
+and it generalises: any dropped quantity, in any guideline, whatever the number.
+
+It is a **warning**, per the rule established at R19b — soundness properties may
+block, faithfulness judgements may only report. A guideline sentence can carry a
+number that legitimately does not belong in the rule.
+
+Test coverage: 231 (8 added).
+
+# R26 · Lazy classification: 286 model calls to 15, same answer
+
+Wiring the model classifier on (R21) made segmentation cost one call per
+candidate, and a guideline has hundreds. PMC13270348 has **286 candidates**, so
+`demo.py --live --max 5` spent 286 calls — several minutes and most of the run's
+cost — before the first statement was formalized, 281 of them on statements the
+caller had asked to skip. `--max` bounded formalization and not segmentation.
+
+Candidates are now judged in descending prefilter order, stopping after
+`limit * 2 + 5`. Measured on PMC13270348 with a judge that mirrors the offline
+heuristic so the two passes are comparable:
+
+| | classifier calls | top 5 |
+|---|---|---|
+| full pass | 286 | `0110, 0142, 0159, 0205, 0087` |
+| `--max 5` | **15** | `0110, 0142, 0159, 0205, 0087` |
+
+**Identical, and 95% cheaper.** The saving is legitimate only because the answer
+is unchanged, and it is unchanged because candidates are judged in the same
+descending-score order the caller selects in — `demo.py` already sorted by
+prefilter score and took the top N.
+
+Three properties, each pinned by a test:
+
+- **The budget is absolute, not proportional.** Judging stops after
+  `limit*2 + 5` however long the document is, so the saving grows with document
+  size: 95% on a 286-candidate guideline, 50% on a 30-candidate fixture. The
+  margin over `limit` covers what dedupe and the classifier's own rejections
+  remove.
+- **Statement ids stay positional.** They key to the candidate's place in the
+  DOCUMENT, not to the order it was judged in, so a bundle built with `--max` is
+  comparable to one built without.
+- **The manifest says the pass was partial** (`limit`, `unclassified`), and the
+  demo prints it. `recommendations` must never be read as a document property
+  when only part of the document was judged — the same discipline as
+  `[judge: llm]` and `vetoed_by_reason`.
+
+Note the cost of the R21 fix was invisible until someone ran it: the heuristic
+classifier was free, so nobody had ever paid per candidate. **A correctness fix
+can be a performance regression, and neither the tests nor the manifest would
+have said so.**
+
+Test coverage: 237 (6 added).
+
+## R25a · The new check broke a hand-written fixture, twice
+
+Two bugs surfaced on the first real run after `DROPPED_THRESHOLD` landed.
+
+**1. `real_rules.py` treated warnings as fatal.** Its import-time guard was
+`if _issues:` — every issue, not every error. `OPEN_HOLE` and
+`TAUTOLOGICAL_ANTECEDENT` had always been warnings, so the assertion was
+over-strict before this check existed; adding an advisory check turned it into
+an import crash that took down `api.py` and the demo's verify stage. Now blocks
+on errors and prints warnings to stderr.
+
+**2. The check itself was wrong about doses.** The fixture rule
+
+```
+when:   apixaban_on AND (>=2 of age>=80, weight<=60kg, creatinine>=1.5)
+then:   apixaban_dose_reduced == true
+target: "reduced apixaban dose (2.5 mg twice daily)"
+```
+
+is correct: the criteria are numeric comparisons, the action is a boolean, and
+the dose is recorded in `target`. A **dose belongs to the action**, so flagging
+2.5 mg was a false alarm on a hand-validated rule.
+
+**And the first fix for that was immediately defeated by real output.** Allowing
+any quantity found in `target` to discharge the check let
+`PMC13151662:0002` pass — the model had written
+`target="intensive lowering of systolic BP < 140 mmHg in the first 24 h after
+successful mechanical thrombectomy"`, the whole sentence restated, so the
+threshold and the window both appeared there. The check went green on the very
+rule it was written to catch.
+
+Narrowed to **dose units only** (`mg`, `mcg`, `ug`, `g`, `iu`, `unit`, `ml`),
+excluding `kg` (body weight), `mmHg` and `mmol/L` (thresholds), `mg/dL` and
+`mg/g` (lab values), and every duration. A threshold and a window are
+*conditions* and must be in the logic; only a dose is discharged by naming it.
+
+Both behaviours are now pinned by tests, including one that asserts a
+sentence-restating target cannot launder a threshold.
+
+**The general lesson**: an exemption written to fix a false positive is an
+attack surface. The model writes `target`, so anything keyed on `target` is
+keyed on model output — and the first version was defeated within one run.
+
+# R27 · Audit for the `real_rules.py` bug class, and what it found
+
+The bug at R25a — an advisory result consumed as a fatal one — prompted a sweep
+of every site that consumes a mixed-severity or partial result.
+
+## Severity handling: one offender, already fixed
+
+Every other production consumer filters correctly:
+
+| site | |
+|---|---|
+| `from_dsl.load_bundle` | `[i for i in ... if i.severity == "error"]` ✓ |
+| `cql.synthesize` | filters before repairing, and again before compiling ✓ |
+| `gate._best` | returns early on errors; caller re-filters ✓ |
+| `demo.py` compile gate | `if i.severity == "error"` ✓ |
+| `real_rules.py` import guard | **`if _issues:`** — fixed at R25a |
+
+Twelve *tests* assert `validate_rule(...) == []`, which does break on any new
+advisory check. Left as they are, and the distinction is worth stating: **a test
+may assert total cleanliness; a production guard must not.** A test that breaks
+when behaviour changes is doing its job at development time. `real_rules.py`
+broke at *import* time, in a shipped module, taking `api.py` and the demo's
+verify stage down with it.
+
+## The same shape, in a worse place: swallowed transport failures
+
+Three sites in `bind.py` wrapped a remote terminology lookup in
+`except Exception: pass` / `return []`:
+
+- `RemoteIndex.search` — SNOMED, LOINC and RxNav lookups
+- `VsacIndex.search` — value-set lookups
+- `CachedIndex` — the VSAC merge
+
+**A dead endpoint returning nothing is indistinguishable from a vocabulary that
+does not contain the concept.** The binder refuses, the refusal is labelled
+`unbound_concept`, and `residue_report` attributes it to the GUIDELINE — so a
+timeout, a 503, or an expired UMLS key is published as a finding about clinical
+prose. Every "real residue" number in this document could have been inflated by
+a network blip and nothing would have said so.
+
+This is strictly worse than the `real_rules.py` bug: that one *crashed*, which
+is loud. This one produces a plausible number.
+
+**Fixed by recording rather than raising.** Every index now carries a
+`TransportFailures` record (`SqliteIndex` too, so callers never type-test).
+`gate.triage` compares the count before and after binding a statement and tags
+any growth as `TERMINOLOGY_UNAVAILABLE`, which both `spectrum`'s
+`retrieval_attributable` and `residue_report`'s `_OUR_FAULT` now recognise. The
+demo prints a warning naming the failed lookups. One failed lookup does not
+abort a run — the failure is recoverable — but it can no longer be invisible.
+
+Pinned by a test that binds a statement against an index whose every lookup
+raises `ConnectionError`, and asserts the resulting refusal is attributed to
+retrieval rather than to the guideline.
+
+## The pattern across R21, R24b, R25a and R27
+
+Four bugs, one shape: **a failure that returns a usable value.**
+
+| | swallowed | looked like |
+|---|---|---|
+| `MENTION_SCHEMA` (R7) | a 400 from the decoder | the model finding nothing |
+| classifier off (R21) | `llm=None` | the heuristic working |
+| re-derived registry (R17a/R24b) | a differing second binding | a valid registry |
+| transport failures (R27) | `except Exception: pass` | an empty vocabulary |
+
+None raised. None failed a test. Each produced plausible output for weeks.
+
+The countermeasure is the same every time and is now applied in all four
+places: **make the artifact state which path produced it, and print it** —
+`[judge: llm]`, `vetoed_by_reason`, `merged_concepts`, `TERMINOLOGY_UNAVAILABLE`.
+A silent fallback is a design decision to hide a failure; if a fallback is
+correct to have, it is correct to announce.
+
+Test coverage: 244 (3 added).
+
+# R28 · Two reporting failures found by hand-auditing a good run
+
+PMC12355350 produced the best output so far — three faithful rules, correct
+De Morgan on "against A **or** B" (`¬A ∧ ¬B`, the R11 bug class), disjunctive
+populations preserved, real VSAC expansions, zero retrieval-attributable
+refusals. Auditing it by hand still found two defects, both in *reporting*
+rather than soundness: nothing unsound shipped, but the residue was understated.
+
+## R28a · `UNUSED_BOUND_CONCEPT` never ran on the PARTIAL path
+
+```
+"...weak recommendation in favour of SGLT-2 inhibitors or GLP-1 receptor
+ agonists; AND a weak recommendation against finerenone in adults with CKD"
+```
+
+`on_finerenone` bound, reached the registry, and was never used — the second
+clause was dropped in both `:0048` and `:0049`. The check written for exactly
+this (R19b) only ran on the strict-encode branch, and both rules were PARTIAL.
+
+**A check placed on one of two success paths covers half the cases.** The
+partial path is where a rule is most likely to lose content, because it is
+reached precisely when the first attempt already failed.
+
+## R28b · Two non-recommendations reached the pipeline
+
+Both were refused downstream, so nothing unsound shipped — but they inflate the
+denominator, and one minted four junk holes
+(`has_adequate_funding_resources`, `has_outcomes_critical_importance`), which
+were half the run's reported "8 open holes".
+
+| statement | why it escaped |
+|---|---|
+| *"Understanding the recommendation—Given the benefit … (high certainty evidence) …"* | `_EVIDENCE_MARKERS` required `certainty **of** evidence`; GRADE rationale prose writes "high certainty evidence" with no preposition. |
+| *"Results indicated that patients generally preferred … to **avoid** combination therapy"* | The word `avoid` satisfied the directive guard. A reported preference contains directive vocabulary without being a directive. |
+
+Both are now vetoed deterministically: the certainty pattern makes the
+preposition optional, and a new `reports_research` veto fires on a
+**sentence-initial** research frame ("Results indicated", "Studies show",
+"In randomised trials") — checked *before* the directive guard, so `avoid`
+cannot rescue it, and suppressed when the guideline speaks in its own voice
+("we recommend", "is indicated"), so *"Studies show X; we therefore recommend
+Y"* survives.
+
+Deterministic vetoes on the gold set: **7 → 9 of 12, still 0 real
+recommendations deleted.**
+
+## R28c · Ordering bug the fix introduced
+
+Widening the certainty pattern made it match *"Strong recommendation, moderate
+certainty evidence"* — a **GRADE label**, which the segmenter absorbs and
+attaches to its sibling recommendation as the strength. The veto ran first and
+discarded it, losing the strength label.
+
+Label absorption now runs before the veto. **A filter and an extractor competing
+for the same text is an ordering question, and the extractor wins**: absorbing
+carries information forward, vetoing destroys it.
+
+Test coverage: 250 (5 added).
+
+# R29 · PMC13074134: 0/5, an expressiveness limit, and a starvation bug
+
+Perioperative diabetes (JBDS). **0 of 5 encoded** — and unlike the earlier 0/5,
+most of it is correct.
+
+## R29a · Dose titration is genuinely outside the fragment
+
+Three of the five statements are relative dose adjustments:
+
+```
+"Reduce basal insulin by 50% at start of LRD"
+"Reduce basal insulin dose by 35%-50% of pre-LRD dose"
+"Reduce the total daily insulin dose by 50% at start LRD"
+```
+
+`Cmp(var, op, value)` can say `insulin_dose <= X`. It cannot say *reduce by 50%
+of the pre-LRD dose*, which relates two states of the same variable across
+time. The refusal `beyond_dsl` with reason "the recommendation's core action is
+a quantitative dose adjustment" is exactly right.
+
+This is the **first time `beyond_dsl` has been the operative reason on real
+data** — the gold set had 1 of 21 refusals in that bucket, and R20 concluded
+that expressiveness is almost never the binding constraint. This document is
+the counterexample: perioperative medication guidance is largely titration, and
+titration needs a before/after relation the fragment does not have. Worth
+reporting as a specialty-dependent finding rather than a general one.
+
+## R29b · Retrieval attribution was over-counting
+
+The run reported **5 of 5** refusals attributable to our retrieval. Only 2 were.
+`retrieval_attributable` counted any non-encodable statement carrying a binder
+miss, without checking that the refusal REASON was retrieval-related — so a
+`beyond_dsl` refusal that happened to contain one unbindable concept was
+reported as our bug. Now requires `reason_code == "unbound_concept"`.
+
+This one matters more than it looks: that number is the paper's claim about
+whether residue belongs to the guideline or to us, and it was inflated.
+
+## R29c · The FTS filter was applied AFTER the limit
+
+`SqliteIndex.search` fetched the top 40 BM25 rows across **every kind and
+system**, then filtered by kind in Python. For a common word the forty slots
+fill with the wrong kind and nothing survives:
+
+```
+"insulin" (drug)  ->  1 candidate,  out of 171,231 drug rows
+```
+
+with `Insulin` (SNOMED 67866001) in the table under exactly that term. The
+filters are now inside the SQL, so the LIMIT applies to matching rows: the same
+query returns 6, and `epidural analgesia` returns epidural procedures rather
+than bare `Analgesia`.
+
+**Measured honestly: no change to recall on the benchmark** — 49/86 local
+recall@8 before and after, and 3/10 on the fixable-failure set both ways. Those
+failures are clinical *synonymy* (`kidney function`/`Renal function`), which
+starvation was never the cause of. The fix is justified as correctness —
+returning 1 of 171,231 matching rows is wrong however it scores — not as a
+retrieval improvement. Recorded that way.
+
+## R29d · Head-noun backoff caught injecting noise
+
+`"premixed insulin regimen"` backed off to `"regimen"` and retrieved
+*Transfeminine Regimens*. A head that names the FORM of a treatment rather than
+the treatment discriminates nothing; `regimen`, `dose`, `protocol`, `schedule`,
+`plan`, `strategy` and friends joined `_GENERIC_HEADS`.
+
+## R29e · Empty stages printed nothing
+
+With 0 rules encoded, stage 4 printed a header and no body and stage 5 vanished
+entirely, which reads as a crash. Both now say why they are empty — and say
+that a fully-refused document is an outcome rather than a failure.
+
+# R30 · Relative change (`Delta`): the titration category becomes encodable
+
+PMC13074134 scored 0/5 because three of five statements were dose adjustments:
+
+```
+"Reduce basal insulin by 50% at the start of the liver reduction diet"
+"Reduce basal insulin dose by 35%-50% of the pre-LRD dose"
+```
+
+`Cmp(var, op, value)` compares a patient to a fixed number. These compare a
+patient to their **own earlier state**, and the language had no way to name
+"before". Every such statement was correctly but unavoidably `beyond_dsl`.
+
+`Delta(var, baseline, direction, lo_pct, hi_pct)` closes that. `baseline` is an
+EventDef -- the point in time measured from -- and lowers to a named variable
+`<var>_at_<baseline>`.
+
+| | |
+|---|---|
+| z3 | `dose <= baseline * 0.5`, plus a lower bound when a range is stated |
+| CQL | the comparison, with the baseline emitted as a **named null** for a site to bind |
+| verdicts | 40 → 30 = MUST-violate; 40 → 20 = CERTIFIED-compliant; baseline unknown = MAY-violate |
+| fragment | LIA -- a ratio against a free baseline is linear arithmetic, not temporal logic |
+
+Both CQL variants compile through the real HL7 translator.
+
+Four decisions worth recording:
+
+- **A zero baseline is excluded by a domain axiom.** With `baseline = 0` every
+  value is half of it and the rule can never fail -- the vacuity class arriving
+  through the back door. A prior dose is a real measurement: strictly positive.
+- **The baseline is reported as an open hole.** It is free unless supplied, and
+  naming it is the point: the statement is now EXPRESSED and one datum is
+  missing, rather than the sentence being refused whole. Track B exposes it as
+  a pinnable variable, so supplying the prior dose yields a real verdict.
+- **CQL gets a named null, not a guess.** No portable FHIR retrieve expresses
+  "the dose before the diet started" -- that is an institution-specific query
+  over prior MedicationRequests. Arden Syntax made the same call with its curly
+  braces; this is the same discipline as an unbound predicate.
+- **A `Delta` counts as the action atom.** Requiring `role == "action"` on the
+  dose variable would reject every titration rule, because a dose is also an
+  observation of the patient.
+
+Percentages are validated as fractions in (0, 1): `lo_pct=50` asks for a 5000%
+reduction and would otherwise typecheck.
+
+# R31 · Two ways a whole recommendation was being deleted
+
+## R31a · A label absorbed a recommendation
+
+`is_label_only` exists to absorb GRADE labels ("Strong recommendation, moderate
+certainty evidence") into the recommendation they grade. It also swallowed
+
+> *"and a weak recommendation against finerenone in adults with CKD."*
+
+which is a **recommendation**, not a label -- and it vanished, with
+`on_finerenone` bound, in the registry, and unused. That was the dropped clause
+found by hand in R28a.
+
+A label grades a recommendation; it does not contain one. Stripping the grading
+vocabulary and requiring that no clinical content survives fixes it, and the
+bare labels are still absorbed.
+
+## R31b · Numbered recommendation headings were vetoed
+
+ASH/ISTH prints `Recommendation 1` on its own line above the statement. The
+label exemption required punctuation after the number, so
+`\\brecommendation\\s+\\d` matched and the veto fired on **the actual numbered
+recommendations of an entire guideline**. PMC13276589 went from 88 statements
+to 37 before this was caught, and would have shipped that way.
+
+Also: `_DIRECTIVE` recognised "we suggest" but not a bare "suggests", so *"the
+ASH/ISTH guideline panel suggests"* -- a third-person panel voice -- read as
+prose. PMC13276589 recovered 37 -> **61**.
+
+**The lesson is about where the risk sits.** Both bugs were introduced by
+filters added to improve precision, and both deleted true positives silently.
+A veto destroys; an extractor carries forward. When they compete for the same
+text, the extractor must win, and every veto needs a false-positive check
+against a labelled set before it ships.
+
+## R31c · Clause splitting
+
+`split_clauses` divides a sentence at seams where the guideline restarts its
+recommendation grammar (`"; and a weak recommendation ..."`), and deliberately
+NOT at a semicolon inside a population (`"... without established CVD or CKD;
+or established CVD ..."`), which is one rule and would be destroyed by
+splitting.
+
+# R32 · Semantic retrieval: matching on meaning
+
+Ten of 22 binding failures were pairs with no shared words -- `kidney
+function`/`Renal function`, `epidural analgesia`/`Epidural anaesthesia`. No
+query rewriting reaches those, and the token-overlap filter that protects
+against retrieval noise is precisely what makes them unreachable.
+
+`semantic.py` embeds every term into a vector of its meaning and returns the
+nearest. Separate module so `torch` never enters `bind.py`'s import path -- the
+same reason Docling is lazy-imported in `segment.py`.
+
+**Measured: retrieval recall on the fixable failures 3/10 -> 5/10.** The two
+new hits are `kidney function -> Renal function` (0.954) and `epidural
+analgesia -> Epidural anaesthesia` (0.857) -- exactly the synonymy class.
+
+Four design decisions, each forced by a measurement:
+
+- **Fallback, never replacement.** Lexical and semantic catch *different*
+  failures: lexical alone catches `APLA` (an abbreviation the glossary
+  expands), semantic alone catches the synonym pairs. The union is the result.
+- **The trigger is "no EXACT term match", not "no results".** Lexical search
+  rarely returns nothing; it returns the wrong thing. And the exactness test
+  runs against the MENTION, not the expanded queries -- the head-noun backoff
+  adds "analgesia", the generic concept `Analgesia` matched *that*, and the
+  semantic search was suppressed on the very case it was built for.
+- **Reserved slots, not merged scores.** A cosine similarity (0..1) and a
+  lexical score (0..12) are not comparable. Sorting them together buried
+  `Renal function` (0.954) below eight wrong lexical matches. Faking a score to
+  interleave them would invent a comparison that does not exist.
+- **`SemanticUnavailable` is raised, never returned as `[]`.** An unbuilt index
+  and an absent concept must not look the same -- R27's failure class.
+
+Model choice is measured rather than assumed. A general model (all-MiniLM-L6-v2)
+handles morphology well and domain synonymy badly; a biomedical one
+(PubMedBERT) is materially better on the domain pairs and 8x slower to index:
+
+| pair | MiniLM | PubMedBERT |
+|---|---|---|
+| kidney function / Renal function | 0.954 | 0.934 |
+| BP lowering / Antihypertensive therapy | 0.360 | **0.527** |
+| CGM readings / Glucose measurement | 0.320 | **0.517** |
+| weight regain / Weight gain | 0.629 | **0.768** |
+| *unrelated baseline* | 0.111 | 0.086 |
+
+Index build: 2.3 min (MiniLM) or 18 min (PubMedBERT) for 365k terms on MPS,
+cached to disk, ~1 GB. Gitignored -- derived data, rebuildable from `terms.db`.
+The five remaining misses are the domain pairs above, which the biomedical
+model scores high enough to reach; that rebuild is the next measurement.
+
+Test coverage: 273 (22 added across R30-R32).
+
+# Appendix A · Semantic terminology retrieval: justification and ablation
+
+## A.1 Why lexical retrieval cannot close this gap
+
+Binding a guideline phrase to a terminology code is a retrieval problem with an
+adversarial property: **the two vocabularies were written by different
+communities for different purposes, and they do not share words.** A guideline
+is written to be read by clinicians; SNOMED is written to be unambiguous under
+composition. The result is systematic, not incidental:
+
+| the guideline writes | the terminology calls it | shared tokens |
+|---|---|---|
+| kidney function | Renal function | 0 |
+| epidural analgesia | Epidural anaesthesia | 1 of 2 |
+| volume optimisation | Fluid management | 0 |
+| BP lowering | Antihypertensive therapy | 0 |
+| CGM readings | Glucose measurement | 0 |
+
+An inverted index over terms cannot retrieve a document that shares no term
+with the query -- this is a property of the index, not a tuning problem. Query
+expansion does not help either: the expansions available (abbreviation
+glossary, head-noun backoff, slash-splitting) are all *syntactic*, and none
+turns "kidney" into "renal".
+
+Worse, the defence against retrieval noise makes it strictly harder. R5
+established that free-text terminology endpoints return arbitrary concepts on a
+miss (`"central venous access device"` -> *Spine board*), so `search_all`
+discards candidates sharing no stem with the query. That filter is correct and
+it is exactly what makes a zero-overlap synonym unreachable even on the
+occasions it is retrieved.
+
+**Measured cost**: 10 of 22 binding failures on the benchmark (R23), each one a
+refused statement, each one attributed to the guideline in the residue report
+when it is in fact ours.
+
+The standard remedy in clinical NLP is concept normalisation through UMLS
+(MetaMap, cTAKES, QuickUMLS): map both sides to a CUI and compare identifiers.
+It is the right tool and it needs the UMLS Metathesaurus release. Dense
+retrieval reaches the same failures without that dependency, runs locally, and
+is what is evaluated below.
+
+## A.2 Method
+
+Each terminology term is encoded into a unit-norm vector by a transformer, so
+cosine similarity is a dot product against a preloaded matrix. The query is
+encoded the same way; the nearest terms are returned. Terms are indexed per
+`kind` (lab, condition, procedure, drug, drug_class) and cached to disk.
+
+Three properties are load-bearing and were each fixed after a measurement:
+
+1. **Fallback, not replacement.** Consulted only when no candidate's term is an
+   exact match for the mention. Lexical and semantic catch disjoint failures --
+   lexical alone catches `APLA` (an abbreviation the document glossary
+   expands), semantic alone catches the zero-overlap synonyms.
+2. **Exactness is tested against the MENTION, not the expanded queries.** The
+   head-noun backoff issues "analgesia" for "epidural analgesia"; the generic
+   concept `Analgesia` matched that query exactly, which read as success and
+   suppressed the semantic search on the very case it was built for.
+3. **Append, never evict.** A cosine similarity (0..1) and a lexical score
+   (0..12) are not comparable, so they are not merged into one ranking. The
+   first implementation reserved slots by truncating the lexical list, which
+   dropped a correct candidate at position 7 -- `anticoagulant prophylaxis`
+   regressed from hit to miss. Caught by the ablation below, which is the
+   argument for running one.
+
+## A.3 Ablation
+
+**Task.** Given a phrase as a guideline writes it, does the correct terminology
+code appear in the top-8 candidates? Recall@k is the appropriate metric:
+retrieval's job is to OFFER the concept, and a concept never offered can never
+be selected.
+
+**Data.** All 85 phrases from the binding benchmark with a known target -- the
+code the binder actually selected (73) plus the hand-adjudicated expected code
+for the failures (12). The successes are included deliberately: an ablation
+that measures only the cases a change was built for cannot show what it broke.
+
+**Reproduce.** `python3 bindbench.py --ablate`
+
+| condition | recall@8 | latency |
+|---|---|---|
+| lexical only | 63/85 = **74.1%** | 31 ms/lookup |
+| lexical + semantic | 68/85 = **80.0%** | 226 ms/lookup |
+
+**5 gained, 0 regressed**: `kidney function`, `epidural analgesia`,
+`preoperative MRI`, `painful eye`, `renal cysts`.
+
+The fallback fires on 59% of lookups and costs roughly 400 ms when it does;
+lookups with an exact lexical match skip it entirely. Latency is dominated by
+one 365k x 384 matrix product per query and is not optimised -- an approximate
+index (FAISS, HNSW) would remove it, and is unnecessary at this scale.
+
+## A.4 Model choice
+
+Measured on the pairs the method exists to solve, higher is better except the
+last row:
+
+| pair | all-MiniLM-L6-v2 | PubMedBERT |
+|---|---|---|
+| kidney function / Renal function | 0.954 | 0.934 |
+| weight regain / Weight gain | 0.629 | **0.768** |
+| BP lowering / Antihypertensive therapy | 0.360 | **0.527** |
+| CGM readings / Glucose measurement | 0.320 | **0.517** |
+| *kidney function / acute pancreatitis* | 0.111 | **0.086** |
+
+The general model handles **morphology** (kidney/renal, regain/gain); the
+biomedical model additionally handles **domain synonymy**, and separates
+unrelated pairs slightly better. It costs 8x more to index (18 min vs 2.3 min
+for 365k terms on an M-series GPU). The ablation above uses MiniLM; the five
+remaining misses are precisely the domain pairs PubMedBERT scores highest on,
+so that rebuild is the obvious next measurement rather than a claim.
+
+## A.5 Threats to validity
+
+- **The targets for the 12 failures were adjudicated by hand, by us.** Two of
+  the codes in the first pass were wrong (`182832007` is *Drug administration*,
+  not antihypertensive therapy) and were caught only by verifying each against
+  the index. The remaining ten are verified present but their *clinical*
+  correctness is one annotator's judgement.
+- **85 phrases from 9 guidelines** is a small sample, and the failure modes are
+  specialty-dependent (R29).
+- **Recall@8 is not binding accuracy.** It measures whether the concept was
+  offered; whether the selector then picks it is a separate question, measured
+  end to end by `bindbench --build`.
+- **The index is built from our loaded releases**, so a concept absent from
+  them is unreachable by either method -- the `vocab_gap` bucket, which this
+  experiment does not address.
+
+# R33 · Codebase sweep for the recurring failure classes
+
+A file-by-file pass for the shapes this project keeps rediscovering: a failure
+that returns a usable value, an advisory result read as fatal, a filter applied
+after a limit, and type confusion around `bool`. Fourteen defects; the four
+worst are below.
+
+## R33a · A failed compile read as a clean one
+
+`toolchain.cql_to_elm` parsed the translator's stderr for CQL errors and
+returned the list. **An empty list means "compiles"** -- and it was reachable
+by a JVM that never ran: `ClassNotFoundException`, an OOM, any stderr the CQL
+error grammar does not match produces zero parsed errors and a printed
+`cql-to-elm: COMPILES`. Exit 0 with no ELM written did the same.
+
+The compile-pass claim in this document rests on that line. Now: a non-zero
+exit with no parseable error raises, and so does success with no ELM on disk.
+
+## R33b · `bool("false")` pinned a variable TRUE
+
+`api._coerce` did `bool(value)` for boolean variables. Every non-empty string
+is truthy in Python, so a form field or JSON string of `"false"` pinned the
+variable to **True** -- capable of flipping a clinical verdict from compliant
+to violating. Strings are now read explicitly, booleans are refused where a
+number is expected, and an unreadable value is declined rather than guessed.
+
+## R33c · `choice: true` selected candidate 1
+
+`bind.select` guarded the model's candidate index with
+`isinstance(choice, int)`. `isinstance(True, int)` is True and
+`-1 <= True < len(cands)` is True, so a model returning `true` silently bound
+the **second candidate** -- a wrong code chosen by type confusion, with a
+plausible reason string attached.
+
+**Third appearance of this exact trap** (VarDef typechecking, a probe mock,
+here), which is why `dsl._is_number` exists. The lesson has to be a codebase
+rule rather than a fix: in Python, `bool` is never a number.
+
+## R33d · An empty value set reported as a lowering bug
+
+VSAC answered successfully with a **zero-code expansion** for a live OID.
+`expand_valuesets` wrote the empty set, every action looked absent, and
+`crosscheck` reported `NO <-- LOWERING BUG` -- sending a reader to debug the
+two lowerings when the fault was a terminology fetch. The crosscheck's own
+value is that it needs no ground truth; misattributing its disagreements
+destroys that.
+
+Empty expansions now warn loudly, and the crosscheck separates **INCONCLUSIVE**
+from a genuine disagreement: `2/3 agree, 1 inconclusive` rather than a false
+accusation. Note this also qualifies the earlier 6/6 result -- that figure
+depends on live VSAC availability, which is a reproducibility threat worth
+stating.
+
+## R33e · The rest
+
+| defect | consequence |
+|---|---|
+| `semantic_index()` init unlocked | a race where the second thread reads `tried=True, index=None` and silently skips semantic retrieval for the whole run |
+| `SemanticIndex.embed` hardcoded width 384 | correct for MiniLM, wrong for PubMedBERT (768); an empty batch produced a matrix that cannot multiply against the index |
+| `_ensure_model` unlocked | two threads loading a 400 MB model, and a half-assigned `self._model` visible to the other |
+| slot reservation in `search_all` | evicted a correct lexical candidate at position 7 -- `anticoagulant prophylaxis` regressed, caught by the A.3 ablation |
+| `Usage.add` unlocked | `+=` is load-add-store; the binder and the K-sample formalizer both run in pools, so the **cost figure this paper quotes** was under-reported |
+| ~30 `open()` calls with no `encoding=` | `gold.csv` and SNOMED terms carry non-ASCII; correct on macOS, broken on any non-UTF-8 locale -- "works on my machine" fragility |
+| `next(iter(out.values()))` in demo stage 5 | an engine finding no patient produced an opaque `StopIteration` traceback rather than a message |
+
+## R33f · Checked and NOT defects
+
+Recorded so the next sweep does not re-litigate them: the two `len(a & b) /
+len(a | b)` divisions are both guarded by non-empty checks; there are no bare
+`except: pass` swallows left in the data path; no mutable default arguments;
+`SqliteIndex` deliberately holds one long-lived connection with an `RLock`
+(documented, and load-bearing under the thread pool).
+
+## R33g · What the sweep says about the project
+
+Nine of the fourteen are the **same shape**: something failed and returned a
+value the caller could not distinguish from success. A JVM crash returning
+`[]`. VSAC returning an empty expansion. A race returning `None`. `bool("false")`
+returning `True`.
+
+Every one of them was found by asking one question of each call site: *if this
+fails, what does the caller see?* That question, not a linter, is what this
+codebase needs applied routinely -- none of these produced a traceback, and the
+test suite passed with all fourteen present.

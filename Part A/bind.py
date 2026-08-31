@@ -49,7 +49,7 @@ def load_env(path: str | None = None) -> None:
         path = os.path.join(os.path.dirname(here), ".env")
     if not os.path.exists(path):
         return
-    with open(path) as fh:
+    with open(path, encoding="utf-8") as fh:
         for line in fh:
             line = line.strip()
             if line and not line.startswith("#") and "=" in line:
@@ -208,6 +208,36 @@ def _stem(t: str) -> str:
 def _stems(s: str) -> list[str]:
     return [_stem(t) for t in _tokens(s)]
 
+class TransportFailures:
+    """Terminology lookups that failed for a TRANSPORT reason rather than
+    because the concept is absent.
+
+    Silently swallowing them was the most dangerous instance of the
+    "advisory output used as a result" class: `except Exception: pass` around a
+    remote search makes a timed-out server indistinguishable from an empty
+    vocabulary. The binder then refuses, the refusal is labelled
+    `unbound_concept`, and the residue report attributes it to the GUIDELINE --
+    so a network blip is published as a finding about clinical prose.
+
+    Recorded on the index rather than raised, because one failed lookup should
+    not abort a run: the failure is real but recoverable. What must not happen
+    is it being invisible."""
+
+    def __init__(self):
+        self._items: list[tuple[str, str, str]] = []
+        self._lock = threading.RLock()
+
+    def note(self, phrase: str, kind: str, exc: BaseException) -> None:
+        with self._lock:
+            self._items.append((phrase, kind, f"{type(exc).__name__}: {exc}"[:160]))
+
+    def __len__(self) -> int:
+        return len(self._items)
+
+    def summary(self) -> list[str]:
+        with self._lock:
+            return [f"{p!r} ({k}): {e}" for p, k, e in self._items]
+
 class SqliteIndex:
     """Local terminology cache. Three jobs, and the third is the point:
 
@@ -217,8 +247,16 @@ class SqliteIndex:
        your pipeline gets the same codes, which a live terminology server
        cannot promise."""
 
+    # Consult the semantic index when a lexical lookup finds no exact term.
+    # An attribute rather than a global so a caller -- a fixture, an offline
+    # run, a benchmark isolating lexical recall -- can turn it off explicitly.
+    semantic = True
+
     def __init__(self, path: str = ":memory:"):
         self.path = path
+        # No transport, so never any transport failures -- present so every
+        # index answers `len(index.failures)` without the caller type-testing.
+        self.failures = TransportFailures()
         # A sqlite3 connection is bound to its creating thread unless told
         # otherwise, and the binder IS used from a thread pool (K samples, or
         # one worker per statement). So the connection is shared explicitly and
@@ -291,17 +329,28 @@ class SqliteIndex:
         # phrase rarely matches a terminology term token-for-token, so requiring
         # every token (AND) loses far more than the noise it removes.
         q = " OR ".join(f'"{t}"*' for t in toks)
+        # The kind and system filters MUST be inside the query. They used to be
+        # applied in Python after `LIMIT 40`, so the limit was spent on rows of
+        # the wrong kind: "insulin" filled all forty slots with LOINC assays and
+        # SNOMED findings, and a drug search returned ONE candidate out of
+        # 171,231 drug rows -- with `Insulin` (SNOMED 67866001) sitting in the
+        # table under exactly that term. The same starvation explains
+        # `albuminuria` finding nothing as a lab and `blind` returning only
+        # "Blind staggers": in each case the matching rows existed and never
+        # reached the ranker.
+        clauses = ["concept_fts MATCH ?", "kind = ?"]
+        params: list = [q, kind]
+        if systems:
+            clauses.append("system IN (%s)" % ",".join("?" * len(systems)))
+            params += list(systems)
+        params.append(max(k * 8, 40))
         with self._lock:
             rows = self.db.execute(
                 "SELECT term, system, code, kind, bm25(concept_fts) AS bm "
-                "FROM concept_fts WHERE concept_fts MATCH ? ORDER BY bm LIMIT ?",
-                (q, max(k * 8, 40))).fetchall()
+                "FROM concept_fts WHERE " + " AND ".join(clauses)
+                + " ORDER BY bm LIMIT ?", params).fetchall()
         out = []
         for r in rows:
-            if systems and r["system"] not in systems:
-                continue
-            if r["kind"] != kind:
-                continue
             with self._lock:
                 meta = self.db.execute(
                     "SELECT version, unit, rank FROM concept "
@@ -435,7 +484,57 @@ def expand_query(phrase: str, doc_abbrevs: dict[str, str] | None = None) -> list
     for k in (key, bare):
         if k in ABBREVIATIONS and ABBREVIATIONS[k] not in out:
             out.append(ABBREVIATIONS[k])
+    head = head_noun(phrase)
+    if head and head not in out:
+        out.append(head)
     return out
+
+# A multi-word phrase can retrieve ONLY over-specific descendants, leaving the
+# generic concept -- the one the guideline actually means -- unreachable.
+# Measured: "mechanical thrombectomy" returns eight fluoroscopy-guided variants
+# of the wrong vessel (dialysis fistula, pulmonary artery, hepatic vein), every
+# one of which the selector correctly rejects, while `Thrombectomy` (SNOMED
+# 43810009) and `Intracranial thrombectomy` (21710002) sit in the same index
+# and are never offered. The selector was right and the retrieval was wrong,
+# which reads downstream as `unbound_unselected` residue attributable to the
+# guideline. It is not; it is ours.
+#
+# Searching the head noun alone returns both at ranks 1 and 2. This is a union
+# like every other expansion, so it can only ADD candidates -- the reranker and
+# the selector still decide.
+
+# Heads too generic to discriminate. Hand-written, and defensibly so: unlike
+# clinical vocabulary these are a small closed set of English nouns that name a
+# category rather than a thing. Searching them returns an arbitrary eight of
+# hundreds, which is noise in the selector's prompt rather than a candidate.
+_GENERIC_HEADS = {
+    "device", "agent", "agents", "therapy", "therapies", "treatment",
+    "management", "care", "procedure", "test", "tests", "level", "levels",
+    "value", "values", "status", "disease", "disorder", "syndrome", "system",
+    "factor", "factors", "measure", "measures", "score", "scores", "index",
+    "rate", "function", "assessment", "monitoring", "intervention", "drug",
+    "drugs", "medication", "medications", "condition", "state", "study",
+    # Measured: "premixed insulin regimen" backed off to "regimen" and
+    # retrieved *Transfeminine Regimens* -- the backoff actively injecting
+    # noise. A head that names a FORM of treatment rather than the treatment
+    # discriminates nothing.
+    "regimen", "regimens", "dose", "doses", "dosing", "schedule", "protocol",
+    "programme", "program", "plan", "approach", "strategy",
+}
+
+def head_noun(phrase: str) -> str | None:
+    """The last content word of a multi-word phrase -- English medical noun
+    phrases put the head last ("mechanical THROMBECTOMY", "intravenous
+    THROMBOLYSIS", "low-molecular-weight HEPARIN"). Returns None when the
+    phrase is already one word, or when the head names a category rather than
+    a thing."""
+    toks = _tokens(phrase)
+    if len(toks) < 2:
+        return None
+    head = toks[-1]
+    if len(head) < 5 or head in _GENERIC_HEADS:
+        return None
+    return head
 
 # The kind is the MODEL's guess, and terminology hierarchies do not line up
 # with it. "CVAD" is a physical object to SNOMED, a procedure to a model, and a
@@ -446,7 +545,96 @@ KIND_FALLBACK: dict[Kind, tuple[Kind, ...]] = {
     "condition": ("procedure",),
     "drug": ("drug_class",),
     "drug_class": ("drug",),
+    # `lab` had no fallback at all, which made an entire class of concept
+    # unreachable: a guideline says "monitoring for albuminuria" and the model
+    # calls it a lab, but SNOMED files `Albuminuria` (274769005) as a FINDING
+    # and `Antiphospholipid antibody measurement` (82886000) as a PROCEDURE.
+    # Measured: the expected code for `albuminuria` sits in the index and is
+    # reachable only under `condition`. Two extra local queries.
+    "lab": ("condition", "procedure"),
 }
+
+# Semantic retrieval is a FALLBACK, never a replacement. Measured on the
+# benchmark's fixable failures, lexical finds 3 of 10 and semantic finds 4 --
+# but they are different threes and fours. Lexical alone catches `APLA` (an
+# abbreviation the glossary expands); semantic alone catches `kidney function`
+# -> `Renal function` (0.95) and `epidural analgesia` -> `Epidural anaesthesia`
+# (0.86), which share no useful tokens with their targets. The union is 5.
+#
+# Running it only when lexical has produced nothing worth selecting keeps the
+# cost off the common path and means a semantic near-miss can never displace a
+# lexical exact match.
+_SEMANTIC: dict = {"index": None, "tried": False, "why": ""}
+_SEMANTIC_LOCK = threading.RLock()
+
+def semantic_index(db_path: str | None = None):
+    """The shared semantic index, or None with the reason recorded.
+
+    Built once per process. `None` here means "unavailable", and the reason is
+    kept rather than discarded -- an absent index and an absent concept must
+    never look the same (R27)."""
+    # Under the thread pool the binder runs in, an unlocked `tried` flag is a
+    # race with a SILENT consequence: thread A sets it and starts loading,
+    # thread B sees tried=True with index still None, concludes "unavailable"
+    # and skips semantic retrieval for the rest of the run. No error, no log,
+    # just quietly worse retrieval -- the exact failure shape this project
+    # keeps finding. The lock makes the first caller do the work and the rest
+    # wait for its answer.
+    with _SEMANTIC_LOCK:
+        if _SEMANTIC["tried"]:
+            return _SEMANTIC["index"]
+        _SEMANTIC["tried"] = True
+        return _semantic_index_locked(db_path)
+
+def _semantic_index_locked(db_path: str | None):
+    try:
+        import semantic
+        path = db_path or os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                       "terms.db")
+        if not os.path.exists(path):
+            _SEMANTIC["why"] = f"no local terminology db at {path}"
+            return None
+        # BOTH models, chosen per kind at search time. Picking one globally
+        # meant a half-finished biomedical build shadowed a complete general
+        # one and every lookup returned nothing -- an absent index reading as
+        # an absent concept, the same failure class again. Biomedical first
+        # where it exists, because it scores materially higher on domain
+        # synonymy (BP-lowering/antihypertensive 0.53 vs 0.36).
+        cands = [semantic.SemanticIndex(path),
+                 semantic.SemanticIndex(path, semantic.FAST_MODEL)]
+        usable = [c for c in cands if any(c.available(kd) for kd in KIND_SYSTEMS)]
+        if not usable:
+            _SEMANTIC["why"] = ("no semantic index built; run "
+                                "`python3 semantic.py --build --fast`")
+            return None
+        _SEMANTIC["index"] = usable
+    except Exception as exc:
+        _SEMANTIC["why"] = f"{type(exc).__name__}: {exc}"
+    return _SEMANTIC["index"]
+
+def semantic_candidates(mention: Mention, k: int) -> list[Candidate]:
+    """Nearest-meaning terms for a mention the lexical index could not match."""
+    indices = semantic_index()
+    if not indices:
+        return []
+    import semantic as _sem
+    out: list[Candidate] = []
+    kinds = [mention.kind] + list(KIND_FALLBACK.get(mention.kind, ()))
+    queries = [mention.text] + ([mention.canonical] if mention.canonical else [])
+    for kind in kinds:
+        ix = next((c for c in indices if c.available(kind)), None)
+        if ix is None:
+            continue
+        for q in queries:
+            try:
+                hits = ix.search(q, kind, k)
+            except _sem.SemanticUnavailable:
+                continue
+            for code, system, term, sim in hits:
+                out.append(Candidate(
+                    Concept(system=system, code=code, term=term, kind=kind),
+                    round(float(sim), 3), (f"semantic({sim:.2f})",)))
+    return _dedupe_candidates(sorted(out, key=lambda c: -c.score))[:k]
 
 def search_all(index: TerminologyIndex, mention: Mention, k: int,
                doc_abbrevs: dict[str, str] | None = None) -> list[Candidate]:
@@ -485,8 +673,55 @@ def search_all(index: TerminologyIndex, mention: Mention, k: int,
     if qtokens:
         found = [c for c in found if set(_stems(c.concept.term)) & qtokens]
 
+    # The token-overlap filter above is exactly what makes clinical synonymy
+    # unreachable: "kidney function" and "Renal function" share no stem, so the
+    # right concept is discarded even on the rare occasion it was retrieved.
+    # When that leaves nothing, ask for the nearest MEANING instead. Only then,
+    # so a semantic near-miss can never outrank a lexical exact match.
+    # "Returned nothing" is too strict a trigger. Lexical search rarely returns
+    # nothing -- it returns the WRONG thing: "kidney function" retrieves
+    # *Decreased kidney function* and *Kidney function monitoring*, neither of
+    # which is the observable the guideline means, while *Renal function* sits
+    # unreachable. So the trigger is the absence of an EXACT term match, which
+    # is cheap to test and precisely separates "we found it" from "we found
+    # something". `albuminuria` and `acute pancreatitis` match exactly and skip
+    # the model entirely; `kidney function` and `epidural analgesia` do not.
     found.sort(key=lambda c: -c.score)
-    return _dedupe_candidates(found)[:k]
+    found = _dedupe_candidates(found)
+
+    # Against the MENTION, not against every expanded query. The head-noun
+    # backoff adds "analgesia" for "epidural analgesia", and the generic
+    # concept `Analgesia` then matched that query exactly -- which read as
+    # "we found it" and suppressed the semantic search that would have offered
+    # `Epidural anaesthesia`. A broadening query matching is not a hit.
+    qnorm = {" ".join(_tokens(mention.text))}
+    if mention.canonical:
+        qnorm.add(" ".join(_tokens(mention.canonical)))
+    if getattr(index, "semantic", True) and not any(
+            " ".join(_tokens(c.concept.term)) in qnorm for c in found):
+        # RESERVE slots rather than merge by score. A cosine similarity (0..1)
+        # and a lexical score (0..12) are not comparable, and sorting them
+        # together buried every semantic hit below the lexical noise it was
+        # meant to rescue -- `Renal function` came back at 0.954 and fell off
+        # the end of a list of eight wrong `kidney function` matches. Faking a
+        # score to interleave them would be inventing a comparison that does
+        # not exist; taking a fixed share of the list is honest about there
+        # being two rankings.
+        share = max(2, k // 3)
+        sem = semantic_candidates(mention, share)
+        if sem:
+            # APPEND -- never evict. Reserving slots by truncating the lexical
+            # list to `k - len(sem)` dropped a correct candidate sitting at
+            # position 7: `anticoagulant prophylaxis` regressed from hit to
+            # miss, caught by the ablation that was measuring the feature. The
+            # list is allowed to exceed k by the semantic share; a slightly
+            # longer selector prompt is a much smaller cost than evicting the
+            # right answer to make room for a guess.
+            seen = {(c.concept.system, c.concept.code) for c in found[:k]}
+            extra = [c for c in sem
+                     if (c.concept.system, c.concept.code) not in seen]
+            return found[:k] + extra
+    return found[:k]
 
 # Minimal UCUM comparison. String equality is wrong here and the failure is
 # silent: LOINC records 9318-7 (albumin/creatinine MASS ratio) as
@@ -630,11 +865,25 @@ bindable concepts and are handled elsewhere.
 
 kind is one of: lab, condition, drug, drug_class, procedure.
 
-Also give `canonical`: the unabbreviated, standard clinical name for the same
-concept -- "CVAD" -> "central venous access device", "APS" -> "antiphospholipid
-syndrome", "TPN" -> "total parenteral nutrition". This is used only to SEARCH a
-terminology index; the code itself still comes from that index, never from you.
-Use null when the phrase is already the standard name."""
+Also give `canonical`: the name a clinical TERMINOLOGY would use for the same
+concept. Two jobs, and the second matters more:
+
+  Expand abbreviations -- "CVAD" -> "central venous access device",
+  "APS" -> "antiphospholipid syndrome", "TPN" -> "total parenteral nutrition".
+
+  Give the terminology's WORD for it when the guideline uses a different one.
+  Guidelines and SNOMED name the same thing differently, and a keyword index
+  cannot bridge that on its own:
+      "kidney function"      -> "renal function"
+      "BP lowering"          -> "antihypertensive therapy"
+      "volume optimisation"  -> "fluid management"
+      "CGM readings"         -> "blood glucose measurement"
+      "epidural analgesia"   -> "epidural anaesthesia"
+  Prefer the noun form of a procedure ("mobilisation", not "mobilising").
+
+This is used only to SEARCH a terminology index; the code itself still comes
+from that index, never from you -- so a wrong guess here costs a wasted query,
+never a wrong code. Use null when the phrase is already the standard name."""
 
 def build_mention_prompt(text: str) -> str:
     return f'{MENTION_INSTRUCTIONS}\n\nSentence:\n"""\n{text}\n"""'
@@ -784,7 +1033,14 @@ def select(mention: Mention, sentence: str, cands: list[Candidate],
         v["reason"] = f"llm error, fell back to heuristic: {exc}"
         return v, "heuristic:llm_error"
     choice = v.get("choice")
-    if not isinstance(choice, int) or not (-1 <= choice < len(cands)):
+    # `isinstance(True, int)` is True and `-1 <= True < len(cands)` is True, so
+    # a model returning `true` for `choice` silently selected candidate 1 --
+    # a wrong CODE, chosen by a type confusion, with a plausible reason string
+    # attached. Third appearance of this trap in the codebase (VarDef
+    # typechecking, the probe mock, here), hence the shared `dsl._is_number`
+    # discipline: bool is never a number.
+    if isinstance(choice, bool) or not isinstance(choice, int) \
+            or not (-1 <= choice < len(cands)):
         v = _heuristic_select(mention, cands)
         v["reason"] = f"selector returned an out-of-range choice; fell back to heuristic"
         return v, "heuristic:bad_choice"
@@ -972,6 +1228,7 @@ class RemoteIndex:
         self.tx, self.tables, self.rxnav = tx, tables, rxnav
         self.vsac = vsac if vsac is not None else VsacIndex()
         self._versions: dict[str, str | None] = {}
+        self.failures = TransportFailures()
 
     # -- SNOMED, via a FHIR terminology server --------------------------
     def _snomed_search(self, phrase: str, kind: Kind, k: int) -> list[Candidate]:
@@ -1039,8 +1296,11 @@ class RemoteIndex:
                 cands += self._rx_search(phrase, kind, k)
             else:
                 cands += self._snomed_search(phrase, kind, k)
-        except Exception:
-            pass
+        except Exception as exc:
+            # NOT `pass`. A dead endpoint returning nothing is indistinguishable
+            # from a vocabulary that does not contain the concept, and the
+            # second is reported as the guideline's residue.
+            self.failures.note(phrase, kind, exc)
         cands.sort(key=lambda c: -c.score)
         return _dedupe_candidates(cands)[:k]
 
@@ -1121,6 +1381,7 @@ class VsacIndex:
             load_env()
             api_key = os.environ.get("UMLS_API_KEY")
         self.api_key, self.base = api_key, base
+        self.failures = TransportFailures()
 
     @property
     def available(self) -> bool:
@@ -1135,7 +1396,7 @@ class VsacIndex:
         req = urllib.request.Request(url, headers={
             "Accept": "application/fhir+json", "Authorization": f"Basic {token}",
             "User-Agent": "GuidelineForge/0.1 (research; terminology binder)"})
-        with urllib.request.urlopen(req, timeout=timeout) as r:
+        with urllib.request.urlopen(req, timeout=timeout, encoding="utf-8") as r:
             return json.loads(r.read())
 
     def search(self, phrase: str, kind: Kind, k: int = 8) -> list[Candidate]:
@@ -1146,7 +1407,8 @@ class VsacIndex:
         try:
             d = self._get("ValueSet", {"title:contains": phrase,
                                        "_count": max(k * 6, 50)})
-        except Exception:
+        except Exception as exc:
+            self.failures.note(phrase, kind, exc)
             return []
         out = []
         for e in d.get("entry", []) or []:
@@ -1196,6 +1458,20 @@ class CachedIndex:
 
     def __init__(self, local: SqliteIndex, remote: RemoteIndex | None = None):
         self.local, self.remote = local, remote
+        # Its own record, plus whatever the remote and VSAC accumulate --
+        # `len(index.failures)` must mean the same thing whichever index the
+        # caller was handed.
+        self._failures = TransportFailures()
+
+    @property
+    def failures(self) -> TransportFailures:
+        out = TransportFailures()
+        out._items = list(self._failures._items)
+        if self.remote is not None:
+            out._items += self.remote.failures._items
+            if self.remote.vsac is not None:
+                out._items += self.remote.vsac.failures._items
+        return out
 
     # Systems for which a licensed local release is strictly better than the
     # free keyword endpoints -- which do prefix matching, carry no synonyms and
@@ -1224,8 +1500,8 @@ class CachedIndex:
                         hits = _dedupe_candidates(
                             sorted(hits + vsac.search(phrase, kind, k),
                                    key=lambda c: -c.score))[:k]
-                except Exception:
-                    pass
+                except Exception as exc:
+                    self._failures.note(phrase, kind, exc)
             return hits
         # A cache that holds only WEAK candidates must not shadow the remote.
         # Measured: demo.db held three eGFR entries -- two deprecated panels and
@@ -1570,7 +1846,12 @@ FIXTURE_PLAUSIBLE = {
 }
 
 def fixture_index(path: str = ":memory:") -> SqliteIndex:
+    """The offline test vocabulary. Semantic fallback is OFF: a fixture is a
+    closed world, so "not in it" is the answer rather than a retrieval failure
+    -- and loading a 974 MB vector index made the test suite four times slower
+    for no signal."""
     ix = SqliteIndex(path)
+    ix.semantic = False
     ix.add(FIXTURE_CONCEPTS)
     for (system, code), members in FIXTURE_EXPANSIONS.items():
         ix.add_expansion(system, code, [(system, m) for m in members])

@@ -42,12 +42,27 @@ def _python_value(ref, model):
     return float(value.as_fraction())
 
 
+_FALSEY = {"false", "no", "0", "", "none", "null", "off", "absent"}
+
 def _coerce(ref, value):
+    """A supplied value, in the sort its z3 symbol expects.
+
+    Strings are handled explicitly. `bool("false")` is True in Python, so a
+    form field or a JSON string of "false" pinned a variable to TRUE and could
+    flip a clinical verdict -- the same bool-shaped trap as `isinstance(True,
+    int)`. A value that cannot be read is refused rather than guessed: pinning
+    a patient to a number nobody supplied is worse than declining."""
     if is_bool(ref):
+        if isinstance(value, str):
+            return value.strip().lower() not in _FALSEY
         return bool(value)
-    if is_int(ref):
-        return int(value)
-    return float(value)
+    if isinstance(value, bool):
+        # True + a numeric variable is a category error, not the number 1.
+        raise ValueError(f"expected a number, got the boolean {value!r}")
+    try:
+        return int(value) if is_int(ref) else float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"cannot read {value!r} as a number") from exc
 
 
 def _pin(rule, known: dict) -> tuple:

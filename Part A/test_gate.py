@@ -454,6 +454,61 @@ def test_a_rule_using_everything_bound_reports_nothing_unused():
     assert not [e for e in t.evidence if e.code == "UNUSED_BOUND_CONCEPT"]
 
 
+# ------------------------------------- transport failures are ours (R27)
+
+class _DeadIndex:
+    """A terminology server that is down. Every lookup raises, exactly as a
+    timeout or a 503 does."""
+    def __init__(self):
+        self.failures = bind.TransportFailures()
+    def search(self, phrase, kind, k=8):
+        exc = ConnectionError("connection refused")
+        self.failures.note(phrase, kind, exc)
+        return []
+    def expand(self, system, code, limit=200):
+        return ()
+    def validate(self, system, code):
+        return False
+    def version(self, system):
+        return None
+
+def test_a_dead_terminology_server_is_not_the_guidelines_fault():
+    """The most dangerous form of "advisory output used as a result": an
+    endpoint returning nothing is indistinguishable from a vocabulary that
+    lacks the concept, and the second is published as the guideline's residue.
+    A network blip must never become a finding about clinical prose."""
+    t = triage(S_OK, _DeadIndex(), statement_id="s", source_span=S_OK)
+    assert t.decision == "refuse"
+    assert "TERMINOLOGY_UNAVAILABLE" in codes(t)
+
+def test_a_transport_failure_counts_as_retrieval_attributable():
+    t = triage(S_OK, _DeadIndex(), statement_id="s", source_span=S_OK)
+    assert spectrum([t])["retrieval_attributable"] == 1
+
+def test_a_healthy_index_records_no_transport_failure():
+    t = triage(S_OK, IX, statement_id="s", source_span=S_OK)
+    assert "TERMINOLOGY_UNAVAILABLE" not in codes(t)
+    assert len(IX.failures) == 0
+
+
+def test_a_dropped_clause_is_reported_on_the_partial_path_too():
+    """The real PMC12355350:0048: "...in favour of SGLT-2 inhibitors or GLP-1
+    receptor agonists; AND a weak recommendation against finerenone in adults
+    with CKD". `on_finerenone` bound and reached the registry and was never
+    used. The check existed but only ran on the strict-encode branch, so a
+    PARTIAL rule dropped a whole clause silently."""
+    def f(text, reg):
+        if "has_high_risk" not in reg.names():
+            return _refusal("vague_predicate", "undefined", preds=("at high risk",))
+        return _rule({"kind": "cmp", "var": "has_high_risk", "op": "==", "value": True},
+                     {"kind": "cmp", "var": "on_ace_inhibitor", "op": "==", "value": True})
+    t = triage(S_HOLE, IX, statement_id="s", formalize=f, source_span="s")
+    assert t.decision == "partial"
+    ev = [e for e in t.evidence if e.code == "UNUSED_BOUND_CONCEPT"]
+    assert ev, [e.code for e in t.evidence]
+    assert "egfr" in ev[0].detail        # bound from the sentence, never used
+
+
 if __name__ == "__main__":
     tests = [(n, f) for n, f in sorted(globals().items())
              if n.startswith("test_") and callable(f)]

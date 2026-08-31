@@ -20,6 +20,7 @@ import json
 import os
 import re
 import subprocess
+import sys
 import tempfile
 
 ENGINE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
@@ -73,6 +74,20 @@ def cql_to_elm(text: str, *, out_path: str | None = None) -> list[str]:
                 # The driver itself broke. That is NOT a clean compile, and it
                 # is not a CQL error the model can repair either.
                 raise ToolchainMissing(line)
+        # An empty error list means "compiles", so it must be reachable ONLY by
+        # a translator that actually succeeded. A JVM that dies with
+        # ClassNotFoundException, an OOM, or any stderr the CQL error grammar
+        # does not match produces no parsed errors -- and the pipeline would
+        # print "cql-to-elm: COMPILES" over a build that never ran. The
+        # compile-pass claim rests on this line.
+        if p.returncode != 0 and not errors:
+            raise ToolchainMissing(
+                f"translator exited {p.returncode} with no parseable CQL error; "
+                f"stderr: {(p.stderr or '').strip()[:300] or '(empty)'}")
+        if not errors and not (os.path.exists(dst) and os.path.getsize(dst) > 0):
+            # Exit 0 and no ELM written is not a compile either.
+            raise ToolchainMissing(
+                f"translator reported success but wrote no ELM to {dst}")
         return errors
     except subprocess.TimeoutExpired:
         raise ToolchainMissing(f"translator timed out after {TIMEOUT}s")
@@ -96,7 +111,7 @@ def expand_valuesets(elm_path: str, out_path: str) -> dict:
     Expanded ONCE and written to disk, so execution is deterministic and makes
     no terminology call."""
     import bind
-    with open(elm_path) as fh:
+    with open(elm_path, encoding="utf-8") as fh:
         elm = json.load(fh)
     defs = elm.get("library", {}).get("valueSets", {}).get("def", [])
     vsac = bind.VsacIndex()
@@ -105,13 +120,27 @@ def expand_valuesets(elm_path: str, out_path: str) -> dict:
             "UMLS_API_KEY is not set; cannot expand the value sets this library "
             "references, and executing without them silently reports no matches")
     out: dict = {}
+    empty: list[str] = []
     for v in defs:
         oid = v["id"].replace("urn:oid:", "")
         ver = v.get("version") or "1"
         members = vsac.expand_coded(oid)
+        if not members:
+            # VSAC answered, and answered with nothing -- a retired OID, a
+            # version that does not exist, or an entitlement the key lacks. The
+            # library then executes against a value set no code can match, every
+            # patient looks non-compliant, and the disagreement is reported
+            # against the LOWERING. Measured: the crosscheck called a VSAC
+            # miss a "LOWERING BUG" for exactly this reason. An empty expansion
+            # is a fetch failure until proven otherwise.
+            empty.append(v["id"])
         out.setdefault(v["id"], {})[ver] = [
             {"code": c, "system": s, "version": ver} for s, c in members]
-    with open(out_path, "w") as fh:
+    if empty:
+        print(f"[toolchain] WARNING: {len(empty)} value set(s) expanded to ZERO "
+              f"codes: {', '.join(empty[:3])}. Nothing can match them, so every "
+              f"patient will look non-compliant.", file=sys.stderr)
+    with open(out_path, "w", encoding="utf-8") as fh:
         json.dump(out, fh)
     return {v["id"]: len(out[v["id"]][v.get("version") or "1"]) for v in defs}
 
@@ -132,10 +161,10 @@ def synthetic_bundle(elm_path: str, valuesets_path: str, out_path: str, *,
     This is the small, honest version of Track B's coverage-directed test
     synthesis; the real one walks branch conditions and solves for boundary
     values."""
-    with open(elm_path) as fh:
+    with open(elm_path, encoding="utf-8") as fh:
         elm = json.load(fh)
     lib = elm["library"]
-    vs = json.load(open(valuesets_path)) if os.path.exists(valuesets_path) else {}
+    vs = json.load(open(valuesets_path, encoding="utf-8")) if os.path.exists(valuesets_path) else {}
 
     # name -> (oid or code, system) for both value sets and single codes
     terms: dict = {}
@@ -190,7 +219,7 @@ def synthetic_bundle(elm_path: str, valuesets_path: str, out_path: str, *,
         used[term] = code
 
     bundle = {"resourceType": "Bundle", "type": "collection", "entry": entries}
-    with open(out_path, "w") as fh:
+    with open(out_path, "w", encoding="utf-8") as fh:
         json.dump(bundle, fh)
     return used
 
@@ -226,7 +255,7 @@ def thresholds(elm_path: str) -> list[dict]:
     changed one. It is the small honest version of Track B's coverage-directed
     test synthesis: the branch conditions come from the artifact, so a test
     cannot drift from the rule it is testing."""
-    with open(elm_path) as fh:
+    with open(elm_path, encoding="utf-8") as fh:
         lib = json.load(fh)["library"]
     ops = {"Less": "<", "LessOrEqual": "<=", "Greater": ">",
            "GreaterOrEqual": ">=", "Equal": "==", "NotEqual": "!="}

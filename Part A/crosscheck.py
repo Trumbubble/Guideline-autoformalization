@@ -84,7 +84,7 @@ def crosscheck(rule: dsl.Rule, reg: dsl.Registry, *,
         vs = os.path.join(d, "vs.json")
         toolchain.expand_valuesets(elm, vs)
 
-        with open(elm) as fh:
+        with open(elm, encoding="utf-8") as fh:
             elm_lib = json.load(fh)["library"]
         terms = [n for _t, n in toolchain._retrieves(elm_lib)]
         ths = toolchain.thresholds(elm)
@@ -119,6 +119,11 @@ def crosscheck(rule: dsl.Rule, reg: dsl.Registry, *,
             pt = os.path.join(d, f"{len(out)}.json")
             toolchain.synthetic_bundle(elm, vs, pt, patient_id=f"p{len(out)}",
                                        quantities=quantities, include=include)
+            # A value set that expanded to nothing makes every action look
+            # absent, which reads as a lowering disagreement and is not one.
+            empty_vs = [k for k, versions in json.load(
+                open(vs, encoding="utf-8")).items()
+                if not any(versions.values())]
             res = toolchain.execute(elm, pt, vs)["results"]
             vals = next(iter(res.values()), {})
             cql_v = vals.get("Violated")
@@ -126,7 +131,11 @@ def crosscheck(rule: dsl.Rule, reg: dsl.Registry, *,
             zv = z3_verdict(rule, reg, assignment)
             expected = Z3_TO_CQL.get(zv, "?")
             agree = (cql_v is expected) if expected is not None else (cql_v is None)
-            out.append(Comparison(label, assignment, zv, cql_v, agree))
+            note = ""
+            if not agree and empty_vs:
+                note = (f"INCONCLUSIVE: {len(empty_vs)} value set(s) expanded to "
+                        f"zero codes, so no patient can carry the action")
+            out.append(Comparison(label, assignment, zv, cql_v, agree, note))
     return out
 
 
@@ -152,10 +161,22 @@ def _is_action_term(term: str, reg: dsl.Registry, actions: set) -> bool:
 def report(comparisons: list[Comparison]) -> str:
     lines = [f"{'patient':34s} {'Z3':22s} {'CQL Violated':14s} agree"]
     for c in comparisons:
+        # A disagreement caused by an empty value set is not evidence about the
+        # lowerings, and calling it a LOWERING BUG sends a reader to debug the
+        # wrong component -- the misattribution this whole project is about.
+        verdict = ("YES" if c.agree else
+                   "NO  <-- INCONCLUSIVE" if c.note else
+                   "NO  <-- LOWERING BUG")
         lines.append(f"{c.label:34s} {c.z3_verdict:22s} {str(c.cql_violated):14s} "
-                     f"{'YES' if c.agree else 'NO  <-- LOWERING BUG'}")
+                     f"{verdict}")
+        if c.note:
+            lines.append(f"{'':34s} {c.note}")
     n_ok = sum(1 for c in comparisons if c.agree)
-    lines.append(f"\n{n_ok}/{len(comparisons)} agree")
+    n_incon = sum(1 for c in comparisons if not c.agree and c.note)
+    n_bug = len(comparisons) - n_ok - n_incon
+    lines.append(f"\n{n_ok}/{len(comparisons)} agree"
+                 + (f", {n_incon} inconclusive" if n_incon else "")
+                 + (f", {n_bug} LOWERING BUG(S)" if n_bug else ""))
     return "\n".join(lines)
 
 

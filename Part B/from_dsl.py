@@ -163,6 +163,11 @@ def _mentioned(rule: "dsl.Rule", reg: "dsl.Registry") -> set:
         elif isinstance(e, dsl.Since):
             out.add(dsl.occurred_var(e.event))
             out.add(dsl.days_since_var(e.event))
+        elif isinstance(e, dsl.Delta):
+            # Both the current value and the baseline, so a caller can pin the
+            # prior dose and get a real verdict instead of MAY-violate.
+            out.add(e.var)
+            out.add(dsl.baseline_var(e.var, e.baseline))
         elif isinstance(e, dsl.Not):
             walk(e.operand)
         elif isinstance(e, (dsl.And, dsl.Or)):
@@ -176,7 +181,11 @@ def _mentioned(rule: "dsl.Rule", reg: "dsl.Registry") -> set:
 
 # Evidence lines are tagged by where the signal came from. Only the binder ones
 # are OUR failure; the rest are properties of the statement.
-_OUR_FAULT = ("unbound_index_gap", "unbound_unselected", "NO_BOUND_VOCABULARY")
+# Evidence tags that make a refusal OURS rather than the guideline's.
+# TERMINOLOGY_UNAVAILABLE is the strongest of them: the lookup never reached the
+# server, so the refusal carries no information about the document at all.
+_OUR_FAULT = ("unbound_index_gap", "unbound_unselected", "NO_BOUND_VOCABULARY",
+              "TERMINOLOGY_UNAVAILABLE")
 
 
 def residue_report(refusals) -> dict:

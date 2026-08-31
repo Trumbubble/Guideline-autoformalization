@@ -131,6 +131,39 @@ class Since:
     kind: Literal["since"] = "since"
 
 @dataclass
+class Delta:
+    """A RELATIVE change in `var` from its value at `baseline`.
+
+    `Cmp` compares a patient to a fixed number. Whole classes of medication
+    guidance compare a patient to their OWN EARLIER STATE:
+
+        "Reduce basal insulin by 50% at the start of the liver reduction diet"
+        "Reduce basal insulin dose by 35%-50% of the pre-LRD dose"
+
+    There is no number to compare against -- 50% of whatever this patient was
+    already on. Without this node every such statement is `beyond_dsl`, and
+    measured on PMC13074134 (perioperative diabetes) that was three of five
+    statements and the reason the document scored zero. Dose titration is a
+    large fraction of perioperative, oncology, anticoagulation and insulin
+    guidance, so the gap is a whole category rather than a few sentences.
+
+    `lo_pct` is the SMALLEST change the recommendation requires and `hi_pct` the
+    largest, both as fractions of the baseline. "reduce by 35%-50%" is
+    lo_pct=0.35, hi_pct=0.50; "reduce by 50%" is lo_pct=hi_pct=0.50.
+
+    The baseline is an EventDef -- the point in time the comparison is against
+    -- which lowers to a variable `<var>_at_<baseline>`. That variable is a free
+    one unless the caller supplies it, exactly like a hole: the statement is now
+    EXPRESSED, and what is missing is named rather than the whole sentence being
+    refused."""
+    var: str
+    baseline: str                                    # an EventDef name
+    direction: Literal["reduce", "increase"]
+    lo_pct: float
+    hi_pct: float | None = None
+    kind: Literal["delta"] = "delta"
+
+@dataclass
 class Not:
     operand: "Expr"
     kind: Literal["not"] = "not"
@@ -145,7 +178,12 @@ class Or:
     operands: list["Expr"]
     kind: Literal["or"] = "or"
 
-Expr = Union[Cmp, Between, Since, Not, And, Or]
+Expr = Union[Cmp, Between, Since, Delta, Not, And, Or]
+
+def baseline_var(var: str, event: str) -> str:
+    """The symbol holding `var`'s value at `event`. Named, not anonymous, so a
+    caller can pin it and a report can say which prior value it needs."""
+    return f"{var}_at_{event}"
 
 Action = Literal["recommend", "avoid", "hold", "monitor", "refer", "screen"]
 
@@ -219,6 +257,11 @@ def fragment_of(*exprs: Expr) -> str:
         nonlocal rank
         if isinstance(e, Since):
             rank = max(rank, 2)
+        elif isinstance(e, Delta):
+            # A ratio against a free baseline is linear arithmetic, same tier
+            # as a numeric threshold -- it is not temporal logic, even though
+            # the baseline is fixed by an event.
+            rank = max(rank, 1)
         elif isinstance(e, Between):
             rank = max(rank, 1)
         elif isinstance(e, Cmp):
@@ -351,6 +394,31 @@ def validate(expr: Expr, reg: Registry, path: str = "when") -> list[Issue]:
                                  f"({expr.lo_inclusive}, {expr.hi_inclusive}) is empty",
                                  "an unsatisfiable interval is almost always a "
                                  "transcription error"))
+    elif isinstance(expr, Delta):
+        if expr.var not in reg:
+            out.append(Issue(path, "UNKNOWN_VAR", f"{expr.var!r} is not in the registry"))
+        elif reg.type_of(expr.var) not in NUMERIC:
+            out.append(Issue(path, "TYPE_ERROR",
+                             "a relative change requires a numeric variable"))
+        if not reg.has_event(expr.baseline):
+            out.append(Issue(path, "UNKNOWN_EVENT",
+                             f"{expr.baseline!r} is not a declared event",
+                             "the baseline is the point in time the change is "
+                             "measured from; declare it as an event"))
+        if expr.direction not in {"reduce", "increase"}:
+            out.append(Issue(path, "TYPE_ERROR",
+                             f"direction must be reduce|increase, got "
+                             f"{expr.direction!r}"))
+        pcts = [expr.lo_pct] + ([expr.hi_pct] if expr.hi_pct is not None else [])
+        if not all(_is_number(x) and 0 < float(x) < 1 for x in pcts):
+            # A percentage written as 50 rather than 0.5 asks for a 5000%
+            # reduction and still typechecks, so the range is enforced.
+            out.append(Issue(path, "TYPE_ERROR",
+                             f"percentages must be fractions in (0, 1); got {pcts}",
+                             "\"reduce by 50%\" is lo_pct=0.5, not 50"))
+        elif expr.hi_pct is not None and float(expr.hi_pct) < float(expr.lo_pct):
+            out.append(Issue(path, "EMPTY_INTERVAL",
+                             f"hi_pct {expr.hi_pct} is below lo_pct {expr.lo_pct}"))
     elif isinstance(expr, Since):
         if not reg.has_event(expr.event):
             out.append(Issue(path, "UNKNOWN_EVENT",
@@ -382,6 +450,12 @@ def _action_atoms(expr: Expr, reg: Registry) -> set[str]:
         return {expr.var} if expr.var in reg and reg.role_of(expr.var) == "action" else set()
     if isinstance(expr, Since):
         return {expr.event} if reg.has_event(expr.event) else set()
+    if isinstance(expr, Delta):
+        # A relative change IS an action: "reduce the dose by 50%" is an
+        # instruction to the care plan, whatever role the underlying variable
+        # carries. Requiring role == "action" here would reject every titration
+        # rule, since the dose is also an observation of the patient.
+        return {expr.var} if expr.var in reg else set()
     if isinstance(expr, Not):
         return _action_atoms(expr.operand, reg)
     if isinstance(expr, (And, Or)):
@@ -394,9 +468,154 @@ _TARGET_STOP = {"patient", "patients", "adult", "adults", "with", "without",
                 "therapy", "treatment", "management", "care", "risk", "acute",
                 "chronic", "severe", "this", "that", "when", "from", "into"}
 
+# ------------------------------------------------------- dropped quantities
+# Every other check inspects the rule in ISOLATION and asks whether what is
+# there is correct. None can see what is MISSING. Measured on PMC13151662:
+#
+#   "against intensively lowering systolic BP < 140 mmHg in the first 24 h
+#    after successful mechanical thrombectomy"
+#      ->  mechanical_thrombectomy -> NOT lowering_systolic_bp
+#
+# The threshold and the window are both gone, so the rule forbids BP lowering
+# after thrombectomy outright -- not a weaker version of the recommendation but
+# a different and clinically wrong one. It typechecks, is non-vacuous, names
+# the right action, and compiles. Nothing fires.
+#
+# The only thing that can catch a deletion is a comparison against the source,
+# which the rule already carries in `source_span`. This is that comparison, and
+# it closes the CLASS rather than the instance: any dropped threshold, in any
+# guideline, whatever the number is.
+
+# Units that make a number a CLINICAL quantity rather than a statistic. Bare
+# integers and percentages are excluded: "25 studies", "95% CI", "30% of
+# patients" are evidence, and flagging them would bury the signal.
+_QUANTITY = re.compile(
+    r"(\d+(?:[.,]\d+)?)\s*"
+    r"(mmhg|mm hg|mg/dl|mg/g|mg/mmol|mmol/l|mmol/mol|mg|mcg|ug|g/dl|g/l|g|kg|"
+    r"ml/min|ml|l/min|iu|units?|"
+    r"hours?|hrs?|h|days?|weeks?|wks?|months?|years?|yrs?|min(?:utes?)?)"
+    r"(?![a-z])", re.I)
+
+# Evidence contexts in which a number is never a clinical threshold.
+_STATISTICAL = re.compile(
+    r"(95%\s*ci|confidence interval|odds ratio|hazard ratio|risk ratio|"
+    r"\b(?:or|hr|rr|aor)\s*[,=]|\bn\s*=|\bp\s*[<=]|\d+\s+(?:studies|trials|"
+    r"patients|participants))", re.I)
+
+# Units in which a number is a DOSE -- part of the action. Deliberately excludes
+# kg (body weight), mmHg and mmol/L (thresholds), mg/dL and mg/g (lab values),
+# and every duration.
+_DOSE_UNITS = {"mg", "mcg", "ug", "g", "iu", "unit", "ml"}
+
+_TO_DAYS = {"hour": 1 / 24, "hr": 1 / 24, "h": 1 / 24, "day": 1.0, "week": 7.0,
+            "wk": 7.0, "month": 30.0, "year": 365.0, "yr": 365.0,
+            "min": 1 / 1440, "minute": 1 / 1440}
+
+# Guidelines state ranges ("150-240 min of exercise per week") and paired blood
+# pressures ("185/110 mmHg"). Only the LAST number carries the unit, so a
+# single-number pattern sees 240 and misses 150.
+#
+# The two separators mean different things and are treated differently. A DASH
+# is one quantity with two endpoints: a rule encoding `>= 150` has kept it, and
+# flagging the missing 240 would be a false alarm. A SLASH is two distinct
+# measurements -- systolic AND diastolic -- and dropping either is a real loss.
+_RANGE = re.compile(r"(\d+(?:[.,]\d+)?)\s*[-\u2010-\u2015]\s*$")
+_PAIR = re.compile(r"(\d+(?:[.,]\d+)?)\s*/\s*$")
+
+def source_quantities(span: str | None) -> list[tuple[tuple[float, ...], str]]:
+    """Clinical quantities stated in the source, as (alternatives, unit).
+
+    `alternatives` holds the endpoints of a range: the quantity counts as kept
+    if the rule constrains on ANY of them."""
+    if not span:
+        return []
+    out: list[tuple[tuple[float, ...], str]] = []
+    for m in _QUANTITY.finditer(span):
+        window = span[max(0, m.start() - 40):m.end() + 20]
+        if _STATISTICAL.search(window):
+            continue
+        try:
+            value = float(m.group(1).replace(",", "."))
+        except ValueError:
+            continue
+        unit = m.group(2).lower()
+        before = span[max(0, m.start() - 12):m.start()]
+        pair = _PAIR.search(before)
+        rng = _RANGE.search(before)
+        if pair:                       # 185/110 -- two measurements
+            try:
+                out.append(((float(pair.group(1).replace(",", ".")),), unit))
+            except ValueError:
+                pass
+            out.append(((value,), unit))
+        elif rng:                      # 150-240 -- one quantity, two endpoints
+            try:
+                out.append(((float(rng.group(1).replace(",", ".")), value), unit))
+            except ValueError:
+                out.append(((value,), unit))
+        else:
+            out.append(((value,), unit))
+    return out
+
+def rule_quantities(rule: "Rule") -> set[float]:
+    """Every number the rule actually constrains on, durations included."""
+    vals: set[float] = set()
+
+    def walk(e):
+        if isinstance(e, Cmp) and _is_number(e.value):
+            vals.add(float(e.value))
+        elif isinstance(e, Between):
+            vals.update({float(e.lo), float(e.hi)})
+        elif isinstance(e, Since):
+            vals.add(float(e.days))
+        elif isinstance(e, Not):
+            walk(e.operand)
+        elif isinstance(e, (And, Or)):
+            for o in e.operands:
+                walk(o)
+    walk(rule.when); walk(rule.then)
+    return vals
+
+def dropped_quantities(rule: "Rule") -> list[tuple[float, str]]:
+    """Quantities the source states that the rule does not constrain on.
+
+    A duration counts as kept if the rule carries it in ANY unit -- "the first
+    24 h" and `Since(event, days=1)` are the same window, and flagging that
+    would be a false alarm on a correct encoding."""
+    have = rule_quantities(rule)
+    # A DOSE belongs to the ACTION, not to the applicability condition, and it
+    # lives in `target`. Measured on a hand-written fixture rule: "Reduce the
+    # apixaban dose to 2.5 mg twice daily if at least two of ..." correctly
+    # encodes the three criteria as numeric comparisons and the action as a
+    # boolean, with the dose recorded in
+    # `target="reduced apixaban dose (2.5 mg twice daily)"`. The 2.5 is not
+    # lost, so flagging it is a false alarm on a correct rule.
+    #
+    # Restricted to DOSE units, because the first version accepted any quantity
+    # in the target and a real rule immediately exploited it: the model wrote
+    # `target="intensive lowering of systolic BP < 140 mmHg in the first 24 h
+    # after successful mechanical thrombectomy"` -- the whole sentence restated
+    # -- which made the check pass on the very rule it was written to catch.
+    # A threshold (mmHg, mmol/L) and a window (h, days) are CONDITIONS and must
+    # be in the logic; only a dose is discharged by naming it.
+    for alts, unit in source_quantities(rule.target):
+        if unit.rstrip("s.") in _DOSE_UNITS:
+            have |= set(alts)
+    missing = []
+    for alts, unit in source_quantities(rule.source_span):
+        stem = unit.rstrip("s.")
+        forms = set(alts)
+        for value in alts:
+            if stem in _TO_DAYS:                   # try every equivalent unit
+                days = value * _TO_DAYS[stem]
+                forms |= {days, days * 24, days * 1440, days / 7, days / 30}
+        if not any(any(abs(f - h) < 1e-6 for h in have) for f in forms):
+            missing.append((alts[0], unit))
+    return missing
+
 def _vars_in(e: Expr) -> set[str]:
     """Every variable an expression references, regardless of the registry."""
-    if isinstance(e, (Cmp, Between)):
+    if isinstance(e, (Cmp, Between, Delta)):
         return {e.var}
     if isinstance(e, Not):
         return _vars_in(e.operand)
@@ -410,6 +629,13 @@ def open_holes(rule: Rule, reg: Registry) -> tuple[str, ...]:
     used = set()
     def walk(e):
         if isinstance(e, (Cmp, Between)):
+            if e.var in reg and reg[e.var].unbound:
+                used.add(e.var)
+        elif isinstance(e, Delta):
+            # The prior value is free unless the caller supplies it. Naming it
+            # is the whole point: the statement is expressed and what is
+            # missing is one datum, rather than the sentence being refused.
+            used.add(baseline_var(e.var, e.baseline))
             if e.var in reg and reg[e.var].unbound:
                 used.add(e.var)
         elif isinstance(e, Not):
@@ -492,6 +718,16 @@ def validate_rule(rule: Rule, reg: Registry) -> list[Issue]:
                                 "the action the recommendation is about may have been "
                                 "dropped, leaving only its preconditions",
                                 severity="warn"))
+    dropped = dropped_quantities(rule)
+    if dropped:
+        issues.append(Issue("rule", "DROPPED_THRESHOLD",
+                            "the source states "
+                            + ", ".join(f"{v:g} {u}" for v, u in dropped)
+                            + " and the rule constrains on none of it",
+                            "a rule missing its threshold is not a weaker version of "
+                            "the recommendation, it is a different one -- check "
+                            "whether the quantity belongs in `when` or `then`",
+                            severity="warn"))
     if not _action_atoms(rule.then, reg):
         issues.append(Issue("then", "NO_ACTION_ATOM",
                             "the obligation mentions no action variable or event",
@@ -520,6 +756,15 @@ def make_env(reg: Registry) -> dict:
     for e in reg.event_names():
         env[occurred_var(e)] = z3.Bool(occurred_var(e))
         env[days_since_var(e)] = z3.Int(days_since_var(e))
+        # A baseline symbol per (numeric variable, event). Registries are the
+        # STATEMENT's vocabulary, not the document's (R8), so this is a handful
+        # of extra symbols, and creating them here keeps `domain_axioms` and
+        # `to_z3` working from the same env rather than one of them inventing a
+        # symbol the other has never seen.
+        for n in reg.names():
+            if reg.type_of(n) in {"real", "int"}:
+                b = baseline_var(n, e)
+                env[b] = z3.Real(b) if reg.type_of(n) == "real" else z3.Int(b)
     return env
 
 def domain_axioms(reg: Registry, env: dict) -> list:
@@ -538,6 +783,21 @@ def domain_axioms(reg: Registry, env: dict) -> list:
     for e in reg.event_names():
         d = env[days_since_var(e)]
         ax.append(z3.And(d >= 0, d <= HORIZON_DAYS))
+        # A baseline dose is a real prior measurement: strictly positive, and
+        # inside the same plausible range as the variable itself. Without the
+        # positivity the solver satisfies "reduce by 50%" with a baseline of 0,
+        # where every value is simultaneously half of it and the rule becomes
+        # unfalsifiable -- the vacuity class, arriving through the back door.
+        for n in reg.names():
+            vd = reg[n]
+            if vd.unbound or vd.type not in NUMERIC:
+                continue
+            b = env.get(baseline_var(n, e))
+            if b is None:
+                continue
+            ax.append(b > 0)
+            if vd.plausible:
+                ax.append(z3.And(b >= vd.plausible[0], b <= vd.plausible[1]))
     return ax
 
 def to_z3(expr: Expr, env: dict):
@@ -569,6 +829,18 @@ def to_z3(expr: Expr, env: dict):
         lo = (x >= expr.lo) if expr.lo_inclusive else (x > expr.lo)
         hi = (x <= expr.hi) if expr.hi_inclusive else (x < expr.hi)
         return z3.And(lo, hi)
+    if isinstance(expr, Delta):
+        x = env[expr.var]
+        base = env[baseline_var(expr.var, expr.baseline)]
+        sign = -1.0 if expr.direction == "reduce" else 1.0
+        # "reduce BY 50%" leaves 50%: new <= 0.5 * baseline. A range gives two
+        # bounds -- reduce by at least lo and at most hi.
+        lo_mult = z3.RealVal(1.0 + sign * float(expr.lo_pct))
+        parts = [x <= base * lo_mult] if sign < 0 else [x >= base * lo_mult]
+        if expr.hi_pct is not None:
+            hi_mult = z3.RealVal(1.0 + sign * float(expr.hi_pct))
+            parts.append(x >= base * hi_mult if sign < 0 else x <= base * hi_mult)
+        return z3.And(*parts) if len(parts) > 1 else parts[0]
     if isinstance(expr, Since):
         # "not checked at all" is the commonest real violation, so the event
         # must carry an occurrence flag; a bare days_since_* lets the solver
@@ -663,6 +935,8 @@ def rename_vars(e: Expr, alias: dict[str, str]) -> Expr:
     if isinstance(e, Cmp):
         return replace(e, var=alias.get(e.var, e.var))
     if isinstance(e, Between):
+        return replace(e, var=alias.get(e.var, e.var))
+    if isinstance(e, Delta):
         return replace(e, var=alias.get(e.var, e.var))
     if isinstance(e, Not):
         return replace(e, operand=rename_vars(e.operand, alias))
@@ -820,10 +1094,22 @@ MODAL_PREDICATES = frozenset({
     "preferred", "possible", "permitted", "allowed", "reasonable",
 })
 
+# The core modal VERBS, as opposed to the discretionary adjectives above. These
+# are function words: a predicate about a patient never contains one. Measured:
+# "may be sufficient" produced the hole `has_may_sufficient`, which survived the
+# all-tokens-modal test because "sufficient" is not itself modal. One modal verb
+# anywhere in the name is enough to condemn it.
+MODAL_VERBS = frozenset({"may", "might", "could", "would", "should", "shall",
+                         "must", "can", "ought"})
+
 def modal_only(name: str) -> bool:
     """True if a variable name says nothing but 'the guideline is hedging'."""
     toks = [t for t in _stem(name).split("_") if t]
-    return bool(toks) and all(t in MODAL_PREDICATES for t in toks)
+    if not toks:
+        return False
+    if any(t in MODAL_VERBS for t in toks):
+        return True
+    return all(t in MODAL_PREDICATES for t in toks)
 
 # ---------------------------------------------------------------- degeneracy
 
@@ -941,6 +1227,9 @@ def expr_to_dict(e: Expr) -> dict:
                                        "lo_inclusive": e.lo_inclusive, "hi_inclusive": e.hi_inclusive}
     if isinstance(e, Since):   return {"kind": "since", "event": e.event, "days": e.days,
                                        "inclusive": e.inclusive}
+    if isinstance(e, Delta):   return {"kind": "delta", "var": e.var,
+                                       "baseline": e.baseline, "direction": e.direction,
+                                       "lo_pct": e.lo_pct, "hi_pct": e.hi_pct}
     if isinstance(e, Not):     return {"kind": "not", "operand": expr_to_dict(e.operand)}
     if isinstance(e, (And, Or)): return {"kind": e.kind,
                                          "operands": [expr_to_dict(o) for o in e.operands]}
@@ -952,6 +1241,8 @@ def expr_from_dict(d: dict) -> Expr:
     if k == "between": return Between(d["var"], d["lo"], d["hi"],
                                       d.get("lo_inclusive", True), d.get("hi_inclusive", True))
     if k == "since":   return Since(d["event"], d["days"], d.get("inclusive", True))
+    if k == "delta":   return Delta(d["var"], d["baseline"], d["direction"],
+                                    d["lo_pct"], d.get("hi_pct"))
     if k == "not":     return Not(expr_from_dict(d["operand"]))
     if k == "and":     return And([expr_from_dict(x) for x in d["operands"]])
     if k == "or":      return Or([expr_from_dict(x) for x in d["operands"]])
@@ -1057,11 +1348,11 @@ def bundle_from_dict(d: dict) -> tuple[Registry, list[Rule], list[Refusal]]:
 
 def write_bundle(path: str, reg: Registry, rules: Iterable[Rule],
                  refusals: Iterable[Refusal] = (), **kw) -> None:
-    with open(path, "w") as fh:
+    with open(path, "w", encoding="utf-8") as fh:
         json.dump(bundle_to_dict(reg, rules, refusals), fh, indent=1, **kw)
 
 def read_bundle(path: str) -> tuple[Registry, list[Rule], list[Refusal]]:
-    with open(path) as fh:
+    with open(path, encoding="utf-8") as fh:
         return bundle_from_dict(json.load(fh))
 
 def json_schema(reg: Registry) -> dict:
@@ -1196,6 +1487,17 @@ def decoding_schema(reg: Registry, max_depth: int = MAX_DECODING_DEPTH) -> dict:
              "lo_inclusive": {"type": "boolean"}, "hi_inclusive": {"type": "boolean"}}),
     ]
     if reg.event_names():
+        # Only offered when the registry has both an event to measure from and
+        # a numeric variable to change -- a titration node with nowhere to
+        # anchor is a decode the model cannot get right.
+        if any(reg.type_of(n) in NUMERIC for n in reg.names()):
+            leaves.append(obj(
+                ["kind", "var", "baseline", "direction", "lo_pct", "hi_pct"],
+                {"kind": {"const": "delta"}, "var": {"$ref": "#/$defs/var"},
+                 "baseline": {"$ref": "#/$defs/event"},
+                 "direction": {"enum": ["reduce", "increase"]},
+                 "lo_pct": {"type": "number"},
+                 "hi_pct": {"type": ["number", "null"]}}))
         leaves.append(obj(["kind", "event", "days"],
                           {"kind": {"const": "since"},
                            "event": {"$ref": "#/$defs/event"},

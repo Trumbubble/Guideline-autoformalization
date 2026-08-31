@@ -69,7 +69,7 @@ def score(path: str) -> int:
     """Validate a labelled sheet and report the distribution. Run this before
     computing agreement -- a sheet with unlabelled or ill-formed rows produces
     an agreement figure that means nothing."""
-    rows = list(csv.DictReader(open(path)))
+    rows = list(csv.DictReader(open(path, encoding="utf-8")))
     problems, done = [], []
     for i, r in enumerate(rows, 2):
         lab, reason = r["label"].strip(), r["reason"].strip()
@@ -131,7 +131,7 @@ def main(argv=None) -> int:
         import llm
         classify = llm.classify_block
     rows = build(a.corpus, a.per_doc, a.seed, classify)
-    with open(a.out, "w", newline="") as fh:
+    with open(a.out, "w", newline="", encoding="utf-8") as fh:
         w = csv.DictWriter(fh, fieldnames=FIELDS)
         w.writeheader()
         w.writerows(rows)
