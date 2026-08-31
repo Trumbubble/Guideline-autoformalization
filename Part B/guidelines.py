@@ -163,20 +163,11 @@ def server_has_api_key() -> bool:
 
 
 def _events_in(rule) -> list:
-    out = []
-
-    def walk(e):
-        if isinstance(e, dsl.Since):
-            out.append(e.event)
-        elif isinstance(e, dsl.Not):
-            walk(e.operand)
-        elif isinstance(e, (dsl.And, dsl.Or)):
-            for o in e.operands:
-                walk(o)
-
-    walk(rule.when)
-    walk(rule.then)
-    return out
+    """Delegates. This was a third copy of the same walker (demo.py had one,
+    cql.py had another) and it handled `Since` only, so a rule with a `Delta`
+    shipped with `events: []` and was rejected at load as UNKNOWN_EVENT. One
+    walker, in the module that owns the node types."""
+    return list(dsl.events_in(rule))
 
 
 def _merged_registry(triages, index, mention_llm, select_llm) -> "dsl.Registry":

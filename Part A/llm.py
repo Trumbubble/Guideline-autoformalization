@@ -35,6 +35,8 @@ DEFAULT_MODEL = "claude-opus-5"
 # if variance at default settings turns out to be zero.
 TEMPERATURE_CAPABLE = {"claude-sonnet-4-6", "claude-haiku-4-5"}
 
+import cassette
+
 def load_env(path: str | None = None) -> None:
     """Read a .env into os.environ without adding a dependency. Existing
     environment variables win, so an exported key overrides the file."""
@@ -123,6 +125,13 @@ def ask_json(system: str, user: str, schema: dict, *,
     `system` is cached: it is the fixed instruction prefix, identical across a
     run, so only `user` is billed at full rate after the first call."""
     m = model_id or model()
+    # Record/replay, before anything is billed. One real run becomes a fixture
+    # that every later code change is tested against offline -- see cassette.py
+    # for why the unit tests could not catch what a real document catches.
+    _mode = cassette.mode()
+    _key = (cassette.key_for(m, system, user, schema) if _mode != "off" else "")
+    if _mode == "replay":
+        return cassette.replay(_key, note=user)
     kwargs: dict[str, Any] = dict(
         model=m, max_tokens=max_tokens,
         system=[{"type": "text", "text": system,
@@ -146,7 +155,10 @@ def ask_json(system: str, user: str, schema: dict, *,
     if r.stop_reason == "refusal":
         raise RuntimeError(f"model refused: {getattr(r.stop_details, 'category', '?')}")
     text = next((b.text for b in r.content if b.type == "text"), "")
-    return json.loads(text)
+    parsed = json.loads(text)
+    if _mode == "record":
+        cassette.record(_key, parsed, note=user)
+    return parsed
 
 # ---------------------------------------------------------------- hooks
 

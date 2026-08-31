@@ -405,6 +405,24 @@ def validate(expr: Expr, reg: Registry, path: str = "when") -> list[Issue]:
                              f"{expr.baseline!r} is not a declared event",
                              "the baseline is the point in time the change is "
                              "measured from; declare it as an event"))
+        elif expr.var == expr.baseline or expr.var.startswith(expr.baseline + "_"):
+            # The baseline is the SAME CONCEPT as the variable being changed:
+            # "the basal insulin dose as it stood at the time the patient was
+            # on basal insulin". That is circular -- it names no point in time,
+            # so the rule is satisfied by any dose at all.
+            #
+            # It happens because the only events on offer are the drug
+            # bindings themselves (`datable_events`), while the anchor the
+            # sentence actually names -- "at start LRD" -- has no event to be,
+            # and is declared as a plain boolean hole instead. The encoding
+            # typechecks, compiles, and is clinically wrong, which is precisely
+            # the class this project exists to make visible.
+            out.append(Issue(path, "CIRCULAR_BASELINE",
+                             f"the change in {expr.var!r} is measured from "
+                             f"{expr.baseline!r}, which is the same concept",
+                             "the baseline must be a distinct clinical event "
+                             "(the anchor the sentence names), not the drug "
+                             "whose dose is changing", severity="warn"))
         if expr.direction not in {"reduce", "increase"}:
             out.append(Issue(path, "TYPE_ERROR",
                              f"direction must be reduce|increase, got "
@@ -568,6 +586,12 @@ def rule_quantities(rule: "Rule") -> set[float]:
             vals.update({float(e.lo), float(e.hi)})
         elif isinstance(e, Since):
             vals.add(float(e.days))
+        elif isinstance(e, Delta):
+            # As percentages, which is how the source writes them: "reduce by
+            # 50%" is lo_pct=0.5 in the node and "50" in the sentence.
+            vals.add(float(e.lo_pct) * 100.0)
+            if e.hi_pct is not None:
+                vals.add(float(e.hi_pct) * 100.0)
         elif isinstance(e, Not):
             walk(e.operand)
         elif isinstance(e, (And, Or)):
@@ -645,6 +669,60 @@ def open_holes(rule: Rule, reg: Registry) -> tuple[str, ...]:
                 walk(o)
     walk(rule.when); walk(rule.then)
     return tuple(sorted(used))
+
+def delta_baselines(rule: Rule) -> set[tuple[str, str]]:
+    """(variable, event) pairs the rule's relative-change nodes measure from."""
+    out: set[tuple[str, str]] = set()
+
+    def walk(e):
+        if isinstance(e, Delta):
+            out.add((e.var, e.baseline))
+        elif isinstance(e, Not):
+            walk(e.operand)
+        elif isinstance(e, (And, Or)):
+            for o in e.operands:
+                walk(o)
+    walk(rule.when); walk(rule.then)
+    return out
+
+def events_in(rule: Rule) -> tuple[str, ...]:
+    """Every event the rule anchors to -- `Since` AND `Delta`.
+
+    Whoever assembles a bundle registry has to declare these or Track B
+    rejects the rule as UNKNOWN_EVENT. The walker in demo.py handled `Since`
+    only, so the first `Delta` we ever produced shipped with `events: []` and
+    was rejected at load. Defined here so there is one walker, not one per
+    caller that happens to need it."""
+    out: set[str] = set()
+
+    def walk(e):
+        if isinstance(e, Since):
+            out.add(e.event)
+        elif isinstance(e, Delta):
+            out.add(e.baseline)
+        elif isinstance(e, Not):
+            walk(e.operand)
+        elif isinstance(e, (And, Or)):
+            for o in e.operands:
+                walk(o)
+    walk(rule.when); walk(rule.then)
+    return tuple(sorted(out))
+
+def hole_defs(reg: Registry, holes: Iterable[str],
+              rule: Rule | None = None) -> list[VarDef]:
+    """VarDefs for the holes a registry does not already declare.
+
+    Callers used to write `VarDef(h, "bool", ...)` inline, which broke a
+    `Delta` two ways at once. A baseline (`<var>_at_<event>`) is a DERIVED
+    name that `rule_to_cql` already emits as a named null, so declaring it
+    again produced `Identifier "..." is already in use` and the library would
+    not translate at all. And it holds the prior value of a REAL variable, so
+    typing it bool made `dose <= baseline * 0.5` compare a number to a
+    boolean. Skipped here: a derived name is the lowering's to declare, not
+    the registry's."""
+    derived = {baseline_var(v, e) for v, e in delta_baselines(rule)} if rule else set()
+    return [VarDef(h, "bool", None, h, unbound=True)
+            for h in holes if h not in reg and h not in derived]
 
 def validate_rule(rule: Rule, reg: Registry) -> list[Issue]:
     issues = validate(rule.when, reg, "when") + validate(rule.then, reg, "then")
@@ -910,20 +988,37 @@ def canonical_aliases(reg: Registry) -> dict[str, str]:
     for names in by_binding.values():
         if len(names) < 2:
             continue
-        # Deterministic, and prefers the descriptive name: a governance report
-        # reading `patient_controlled_intravenous_analgesia` beats one reading
-        # `pca`.
-        keep = max(names, key=lambda n: (len(n), n))
+        # The same code does NOT make two variables the same variable when
+        # their TYPES differ. `on_basal_insulin` (bool -- is it prescribed) and
+        # `on_basal_insulin_dose` (real -- how much) both carry ATC D049528 and
+        # denote different things. Merging them retyped the boolean, and the
+        # model's `on_basal_insulin == true` surfaced three stages later as
+        # "on_basal_insulin_dose is real but value is bool" -- with the boolean
+        # gone from the shipped registry entirely. A rewrite that changes a
+        # variable's type is never safe, because every comparison already
+        # written against it silently changes meaning.
+        by_type: dict[str, list[str]] = {}
         for n in names:
-            if n != keep:
-                alias[n] = keep
+            by_type.setdefault(reg[n].type, []).append(n)
+        for group in by_type.values():
+            if len(group) < 2:
+                continue
+            # Deterministic, and prefers the descriptive name: a governance
+            # report reading `patient_controlled_intravenous_analgesia` beats
+            # one reading `pca`.
+            keep = max(group, key=lambda n: (len(n), n))
+            for n in group:
+                if n != keep:
+                    alias[n] = keep
 
     bound_stems = {_stem(n): n for n in reg.names()
                    if not reg[n].unbound and reg[n].binding}
     for n in reg.names():
         if reg[n].unbound and _stem(n) in bound_stems:
             target = bound_stems[_stem(n)]
-            if target != n:
+            # Same type guard as above. A hole is declared `bool`, so a stem
+            # match onto a numeric bound variable would retype it.
+            if target != n and reg[target].type == reg[n].type:
                 alias[n] = alias.get(target, target)
     return alias
 
@@ -1466,6 +1561,32 @@ def check_decoding_schema(schema: dict, path: str = "$") -> list[str]:
     for i, sub in enumerate(schema.get("anyOf") or []):
         out += check_decoding_schema(sub, f"{path}.anyOf[{i}]")
     return out
+
+def offered_leaves(reg: Registry, max_depth: int = MAX_DECODING_DEPTH) -> list[str]:
+    """Which leaf nodes a constrained decode against `reg` can actually emit.
+
+    A `beyond_dsl` refusal is ambiguous on its own: the DSL may genuinely lack
+    the construct, or the construct may EXIST and have been withheld from the
+    grammar because the registry had no event to anchor to or no numeric
+    variable to change. Three separate times a titration sentence refused as
+    "this DSL has no delta" when the DSL had one -- the node was gated off
+    upstream and the model was answering honestly about the menu it was given.
+
+    Read off `decoding_schema` rather than a hand-kept list, so it cannot drift
+    from what the decoder will actually accept."""
+    out: set[str] = set()
+    def walk(node):
+        if isinstance(node, dict):
+            k = node.get("properties", {}).get("kind")
+            if isinstance(k, dict) and "const" in k:
+                out.add(k["const"])
+            for v in node.values():
+                walk(v)
+        elif isinstance(node, list):
+            for v in node:
+                walk(v)
+    walk(decoding_schema(reg, max_depth))
+    return sorted(out)
 
 def decoding_schema(reg: Registry, max_depth: int = MAX_DECODING_DEPTH) -> dict:
     """`json_schema` flattened into what a constrained decoder will accept.

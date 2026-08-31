@@ -25,13 +25,14 @@ Runs the whole product in the order a reviewer should watch it:
 import argparse
 import json
 import os
+import re
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, "Part A"))
 sys.path.insert(0, os.path.join(HERE, "Part B"))
 
-import bind, cql, dsl, gate  # noqa: E402
+import bind, cassette, cql, dsl, gate  # noqa: E402
 
 # Statements are quoted verbatim from KDIGO-style CKD guidance. Chosen to
 # exercise every path: one that encodes cleanly, one that is partial, one that
@@ -52,6 +53,12 @@ RULE = "-" * 78
 def hdr(n, title):
     print(f"\n{RULE}\n {n}. {title}\n{RULE}")
 
+# Evidence that does not block an encoding but says the encoding may not mean
+# what the sentence meant. Printed with the triage line, not buried in JSON.
+CAUTION_CODES = {"CIRCULAR_BASELINE", "DROPPED_THRESHOLD", "ACTION_TARGET_MISMATCH",
+                 "DROPPED_CONCEPT_RISK", "UNUSED_BOUND_CONCEPT", "REGISTRY_TRUNCATED",
+                 "TERMINOLOGY_UNAVAILABLE"}
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[1])
     ap.add_argument("--live", action="store_true",
@@ -62,7 +69,25 @@ def main(argv=None):
                          "PubMed Central id like PMC13276589")
     ap.add_argument("--max", type=int, default=5,
                     help="how many recommendations to process from --doc")
+    ap.add_argument("--no-record", action="store_true",
+                    help="do not tape this run's model responses")
     a = ap.parse_args(argv)
+
+    # Tape every live run by default. Each defect in this pipeline so far
+    # surfaced only when a real document was run, because a real document is
+    # the only thing that exercises the live path -- which made the user the
+    # integration test. A tape turns one paid run into a fixture the whole
+    # suite replays offline afterwards, so the next such defect is found at
+    # commit time instead of on the next run. See Part A/cassette.py.
+    if a.live and not a.no_record and not os.environ.get(cassette.ENV_PATH):
+        tapes = os.path.join(HERE, "Part A", "cassettes")
+        os.makedirs(tapes, exist_ok=True)
+        stem = re.sub(r"[^A-Za-z0-9_.-]", "_", os.path.basename(a.doc or "builtin"))
+        os.environ[cassette.ENV_PATH] = os.path.join(tapes, f"{stem}.jsonl")
+        os.environ[cassette.ENV_MODE] = "record"
+        print(f"  recording model responses to "
+              f"{os.path.relpath(os.environ[cassette.ENV_PATH], HERE)} "
+              f"(replayable offline; --no-record to skip)")
 
     mention_llm = select_llm = formalize = classify = None
     compiler = None
@@ -85,6 +110,16 @@ def main(argv=None):
         formalize = lambda t, r: _formalize(t, r, effort="medium", abbrevs=abbrevs)
     if a.doc:
         print(f"  source: {a.doc}  ->  {len(statements)} recommendation(s)\n")
+    # The statements go on the tape too. Without them a replay would have to
+    # re-segment the source document, which means shipping the PDF/XML and
+    # re-running the classifier -- so the fixture would rot the moment the
+    # corpus moved. With them, `test_replay.py` reruns the real pipeline from
+    # a file and a tape alone.
+    if os.environ.get(cassette.ENV_MODE) == "record":
+        side = os.environ[cassette.ENV_PATH].replace(".jsonl", ".statements.json")
+        with open(side, "w", encoding="utf-8") as fh:
+            json.dump({"doc": a.doc, "abbrevs": abbrevs,
+                       "statements": [list(x) for x in statements]}, fh, indent=1)
 
     # ---- 1. triage, before anything is compiled --------------------------
     hdr(1, "TRIAGE  -- what the tool refuses to encode, and why")
@@ -100,6 +135,20 @@ def main(argv=None):
             print(f"            reason: {t.reason_code}")
         if t.open_holes:
             print(f"            holes : {', '.join(t.open_holes)}  (left FREE, not stubbed)")
+        # Printed on every refusal so "the DSL cannot express this" can be told
+        # apart from "the construct existed and was withheld from the grammar"
+        # without opening the bundle or spending another live run.
+        _menu = next((e for e in t.evidence if e.code == "GRAMMAR_OFFERED"), None)
+        if _menu and t.decision == "refuse":
+            print(f"            offered: {_menu.detail}")
+        # The findings that do NOT block an encode but mean the rule may be
+        # clinically wrong: a dropped threshold, a circular baseline, an action
+        # that does not match its own gloss. These are the whole point -- a
+        # rule that typechecks, compiles and is wrong is the failure mode a
+        # governance reader cannot see -- so they must not sit unread in the
+        # bundle's evidence list.
+        for _c in [e for e in t.evidence if e.code in CAUTION_CODES]:
+            print(f"            CAUTION [{_c.code}] {_c.detail[:96]}")
     if len(getattr(index, "failures", ())):
         print(f"\n  [warn] {len(index.failures)} terminology lookup(s) FAILED "
               f"(transport or server error, not an absent concept). Refusals "
@@ -134,11 +183,10 @@ def main(argv=None):
             bs, _ = bind.bind_statement(t.text, index, mention_llm, select_llm,
                                         doc_abbrevs=abbrevs)
             reg = bind.registry_from_bindings(bs)
-        for h in t.open_holes:
-            if h not in reg:
-                reg = dsl.Registry([reg[n] for n in reg.names()]
-                                   + [dsl.VarDef(h, "bool", None, h, unbound=True)],
-                                   [dsl.EventDef(e) for e in reg.event_names()])
+        _stubs = dsl.hole_defs(reg, t.open_holes, t.rule)
+        if _stubs:
+            reg = dsl.Registry([reg[n] for n in reg.names()] + _stubs,
+                               [reg.event(e) for e in reg.event_names()])
         try:
             lib = cql.rule_to_cql(t.rule, reg, library_name=f"Demo{t.statement_id}")
         except Exception as exc:
@@ -409,22 +457,18 @@ def _merge_registries(triages, index, mention_llm, select_llm):
             bs, _ = bind.bind_statement(t.text, index, mention_llm, select_llm)
             for v in bind.registry_from_bindings(bs)._v.values():
                 seen.setdefault(v.name, v)
-        for h in t.open_holes:
-            seen.setdefault(h, dsl.VarDef(h, "bool", None, h, unbound=True))
+        # Events BEFORE holes: a `Delta` baseline is derived from an event, and
+        # `hole_defs` needs the event declared to recognise it as the lowering's
+        # to emit rather than the registry's.
         if t.rule is not None:
-            for e in _events_in(t.rule):
-                events.setdefault(e, dsl.EventDef(e, e.replace("_", " ")))
+            for e in dsl.events_in(t.rule):
+                events.setdefault(e, (t.registry.event(e)
+                                      if t.registry is not None and e in t.registry.event_names()
+                                      else dsl.EventDef(e, e.replace("_", " "))))
+        _reg_so_far = dsl.Registry(list(seen.values()), list(events.values()))
+        for v in dsl.hole_defs(_reg_so_far, t.open_holes, t.rule):
+            seen.setdefault(v.name, v)
     return dsl.Registry(list(seen.values()), list(events.values()))
-
-def _events_in(rule):
-    out = []
-    def walk(e):
-        if isinstance(e, dsl.Since): out.append(e.event)
-        elif isinstance(e, dsl.Not): walk(e.operand)
-        elif isinstance(e, (dsl.And, dsl.Or)):
-            for o in e.operands: walk(o)
-    walk(rule.when); walk(rule.then)
-    return out
 
 def _patients_for(lr):
     """A pinned compliant patient, a pinned violating one, and a partial one --

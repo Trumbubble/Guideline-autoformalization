@@ -1278,7 +1278,7 @@ def fetch_pmc(pmcid: str, cache_dir: str = "corpus") -> str:
         req = urllib.request.Request(
             EUROPE_PMC.format(pmcid),
             headers={"User-Agent": "GuidelineForge/0.1 (research; segmenter)"})
-        with urllib.request.urlopen(req, timeout=60, encoding="utf-8") as r:
+        with urllib.request.urlopen(req, timeout=60) as r:
             data = r.read()
         # Parse rather than sniff: real PMC JATS may open with <?xml, with a
         # <!DOCTYPE article ...> declaration, or with <article> directly.
@@ -1305,7 +1305,7 @@ def search_pmc(query: str, limit: int = 25) -> list[tuple[str, str]]:
     url = ("https://www.ebi.ac.uk/europepmc/webservices/rest/search?"
            + urllib.parse.urlencode({"query": q, "format": "json",
                                      "pageSize": limit, "resultType": "lite"}))
-    with urllib.request.urlopen(url, timeout=60, encoding="utf-8") as r:
+    with urllib.request.urlopen(url, timeout=60) as r:
         data = json.loads(r.read())
     return [(x.get("pmcid", ""), x.get("title", ""))
             for x in data["resultList"]["result"] if x.get("pmcid")]

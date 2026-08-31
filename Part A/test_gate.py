@@ -509,6 +509,71 @@ def test_a_dropped_clause_is_reported_on_the_partial_path_too():
     assert "egfr" in ev[0].detail        # bound from the sentence, never used
 
 
+def test_bound_procedures_become_datable_events():
+    """Nothing ever created an EventDef for a real statement, and BOTH temporal
+    nodes are gated on `reg.event_names()` in the decoder -- so `Since` and
+    `Delta` were never once offered to the model on a real guideline. It
+    surfaced as `unsupported_temporal` refusals and as "the first 24 h" being
+    dropped from a rule that otherwise encoded."""
+    bs, _ = bind.bind_statement(S_OK, IX)
+    events = gate.datable_events(bs)
+    assert [e.name for e in events] == ["on_ace_inhibitor"]
+
+def test_a_finding_is_not_a_datable_event():
+    """"has diabetes" has no single moment a guideline means; a procedure or a
+    medication does. Restricting the set also keeps the decoding grammar small,
+    which R8 showed is a hard constraint."""
+    bs, _ = bind.bind_statement(S_OK, IX)
+    names = {e.name for e in gate.datable_events(bs)}
+    assert "has_diabetes" not in names
+    assert "albumin_to_creatinine_ratio_mg_g" not in names
+
+def test_the_decoder_offers_the_temporal_nodes_once_an_event_exists():
+    import json as _json
+    bs, _ = bind.bind_statement(S_OK, IX)
+    reg = bind.registry_from_bindings(bs, events=gate.datable_events(bs))
+    sch = _json.dumps(dsl.decoding_schema(reg, 1))
+    assert '"since"' in sch and '"delta"' in sch
+    assert dsl.check_decoding_schema(dsl.decoding_schema(reg, 1)) == []
+
+
+def test_a_dose_change_declares_a_numeric_dose_variable():
+    """`Delta` needs a QUANTITY to change. A medication binds as a boolean --
+    "is it prescribed" -- so a registry built from bindings alone has nothing
+    numeric, and the decoder withholds the node however many events exist.
+    Third gate in a row blocking the same feature."""
+    bs, _ = bind.bind_statement(S_OK, IX)
+    doses = gate.dose_companions(bs, "Reduce the ACE inhibitor dose by 50%.")
+    assert [d.name for d in doses] == ["on_ace_inhibitor_dose"]
+    assert doses[0].type == "real" and doses[0].plausible is None
+
+def test_no_dose_variable_when_no_change_is_asked_for():
+    """Every extra variable enlarges the decoding grammar, and R8 showed that
+    is a hard ceiling -- so the companion is declared only when the sentence
+    asks for a relative change."""
+    bs, _ = bind.bind_statement(S_OK, IX)
+    assert gate.dose_companions(bs, S_OK) == []
+
+def test_the_dose_cue_needs_a_verb_and_a_quantity():
+    bs, _ = bind.bind_statement(S_OK, IX)
+    for text, expected in [("Reduce basal insulin by 50%.", True),
+                           ("Increase the dose gradually.", True),
+                           ("Reduce the risk of stroke.", False),
+                           ("The dose was 5 mg.", False)]:
+        got = bool(gate.dose_companions(bs, text))
+        assert got is expected, (text, got)
+
+def test_a_titration_sentence_makes_the_decoder_offer_delta():
+    import json as _json
+    bs, _ = bind.bind_statement(S_OK, IX)
+    text = "Reduce the ACE inhibitor dose by 50% at the start of therapy."
+    reg = bind.registry_from_bindings(bs, events=gate.datable_events(bs))
+    reg = dsl.Registry([reg[n] for n in reg.names()] + gate.dose_companions(bs, text),
+                       [reg.event(e) for e in reg.event_names()])
+    assert '"delta"' in _json.dumps(dsl.decoding_schema(reg, 1))
+    assert dsl.check_decoding_schema(dsl.decoding_schema(reg, 1)) == []
+
+
 if __name__ == "__main__":
     tests = [(n, f) for n, f in sorted(globals().items())
              if n.startswith("test_") and callable(f)]
@@ -521,3 +586,39 @@ if __name__ == "__main__":
             print(f"FAIL {name}: {type(exc).__name__}: {exc}")
     print(f"\n{len(tests) - len(failed)}/{len(tests)} passed")
     raise SystemExit(1 if failed else 0)
+
+# ---------------------------------------------------------- the offered menu
+
+def test_a_refusal_records_the_grammar_it_was_actually_offered():
+    """"beyond_dsl" alone cannot be trusted: three times a titration sentence
+    refused because the delta node was gated OFF upstream, and the model was
+    honestly reporting a menu that did not have it. The refusal has to carry
+    the menu, or diagnosing it costs a live run."""
+    f = lambda text, reg: _refusal("beyond_dsl", "no delta construct exists")
+    t = triage(S_OK, IX, statement_id="s1", formalize=f, source_span="s")
+    assert t.decision == "refuse"
+    menu = [e for e in t.evidence if e.code == "GRAMMAR_OFFERED"]
+    assert len(menu) == 1, "every post-formalization refusal names its menu"
+    assert "cmp" in menu[0].detail and "vars [" in menu[0].detail
+    # and the registry the model was constrained against ships with it
+    assert t.registry is not None
+
+def test_the_menu_is_read_off_the_decoder_not_a_hand_kept_list():
+    """`offered_leaves` must move when the schema moves. A registry with no
+    event cannot anchor a titration, so `delta` and `since` are absent; adding
+    an event and a numeric variable puts both on the menu."""
+    import bind
+    b = bind.Binding(variable="on_basal_insulin", var_type="bool", role="action",
+                     mention="basal insulin", kind="drug_class",
+                     system="http://snomed.info/sct", code="325230009",
+                     display="Insulin, Long-Acting", version="2024")
+    plain = bind.registry_from_bindings([b])
+    assert "delta" not in dsl.offered_leaves(plain)
+    assert "since" not in dsl.offered_leaves(plain)
+
+    text = "Reduce basal insulin by 50% at start LRD."
+    reg = bind.registry_from_bindings([b], events=gate.datable_events([b]))
+    reg = dsl.Registry([reg[n] for n in reg.names()] + gate.dose_companions([b], text),
+                       [reg.event(e) for e in reg.event_names()])
+    assert "delta" in dsl.offered_leaves(reg)
+    assert "since" in dsl.offered_leaves(reg)

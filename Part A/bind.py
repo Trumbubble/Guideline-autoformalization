@@ -1396,7 +1396,7 @@ class VsacIndex:
         req = urllib.request.Request(url, headers={
             "Accept": "application/fhir+json", "Authorization": f"Basic {token}",
             "User-Agent": "GuidelineForge/0.1 (research; terminology binder)"})
-        with urllib.request.urlopen(req, timeout=timeout, encoding="utf-8") as r:
+        with urllib.request.urlopen(req, timeout=timeout) as r:
             return json.loads(r.read())
 
     def search(self, phrase: str, kind: Kind, k: int = 8) -> list[Candidate]:

@@ -80,8 +80,18 @@ class SemanticIndex:
 
     def _load_model(self):
         try:
+            # transformers prints a weight-loading progress bar and an
+            # "embeddings.position_ids | UNEXPECTED" table to stderr. Both are
+            # benign -- position_ids is a buffer this architecture does not use
+            # -- but they land in the middle of the pipeline's own output and
+            # read as an error. Quietened here rather than by the caller, so
+            # every entry point gets it.
             os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
+            os.environ.setdefault("HF_HUB_DISABLE_PROGRESS_BARS", "1")
+            os.environ.setdefault("TRANSFORMERS_VERBOSITY", "error")
             import torch
+            import transformers
+            transformers.logging.set_verbosity_error()
             from transformers import AutoModel, AutoTokenizer
         except Exception as exc:
             raise SemanticUnavailable(

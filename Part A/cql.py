@@ -263,21 +263,6 @@ def expr_to_cql(e: dsl.Expr, reg: dsl.Registry, indent: int = 1) -> str:
 
 # ---------------------------------------------------------------- library
 
-def _delta_baselines(rule: dsl.Rule) -> set[tuple[str, str]]:
-    """(variable, event) pairs the rule's relative-change nodes measure from."""
-    out: set[tuple[str, str]] = set()
-
-    def walk(e):
-        if isinstance(e, dsl.Delta):
-            out.add((e.var, e.baseline))
-        elif isinstance(e, dsl.Not):
-            walk(e.operand)
-        elif isinstance(e, (dsl.And, dsl.Or)):
-            for o in e.operands:
-                walk(o)
-    walk(rule.when); walk(rule.then)
-    return out
-
 def rule_to_cql(rule: dsl.Rule, reg: dsl.Registry, *,
                 library_name: str | None = None) -> CqlLibrary:
     """A complete, self-contained CQL library for one rule."""
@@ -320,7 +305,7 @@ def rule_to_cql(rule: dsl.Rule, reg: dsl.Registry, *,
     # prior MedicationRequests. Emitted as a NAMED null, so the missing datum is
     # declared rather than guessed -- Arden Syntax made the same call with its
     # curly braces, and it is the same discipline as an unbound predicate here.
-    for var, event in sorted(_delta_baselines(rule)):
+    for var, event in sorted(dsl.delta_baselines(rule)):
         b = dsl.baseline_var(var, event)
         vd = reg[var] if var in reg else None
         unit = f" -- in {vd.unit}" if vd and vd.unit else ""

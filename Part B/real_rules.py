@@ -289,6 +289,12 @@ def _vars_and_events(expr) -> tuple:
     def walk(e):
         if isinstance(e, (Cmp, Between)):
             variables.add(e.var)
+        elif isinstance(e, dsl.Delta):
+            # A relative change references BOTH: the variable it changes and
+            # the event it measures from. Missing this made a titration rule's
+            # vocabulary invisible to the load-time check.
+            variables.add(e.var)
+            events.add(e.baseline)
         elif isinstance(e, Since):
             events.add(e.event)
         elif isinstance(e, dsl.Not):

@@ -878,3 +878,91 @@ if __name__ == "__main__":
             print(f"FAIL {name}: {type(exc).__name__}: {exc}")
     print(f"\n{len(tests) - len(failed)}/{len(tests)} passed")
     raise SystemExit(1 if failed else 0)
+
+# ------------------------------------------- the dose companion / Delta chain
+
+def _insulin_registry():
+    """What a titration statement builds: a boolean 'is it prescribed' and a
+    real 'how much', both carrying the SAME drug code, plus the event."""
+    return Registry(
+        [VarDef("on_basal_insulin", "bool", None, "Insulin, Long-Acting",
+                binding="http://www.whocc.no/atc|D049528|2026", role="action"),
+         VarDef("on_basal_insulin_dose", "real", None, "Insulin, Long-Acting dose",
+                binding="http://www.whocc.no/atc|D049528|2026", role="action")],
+        [EventDef("on_basal_insulin", "basal insulin")])
+
+def _wide_insulin_registry():
+    """...as the gate widens it for the partial attempt: bound vocabulary plus
+    the declared holes. This is what the model actually decodes against."""
+    reg = _insulin_registry()
+    return Registry([reg[n] for n in reg.names()]
+                    + [VarDef("has_start_lrd", "bool", None, "at start LRD",
+                              unbound=True)],
+                    [reg.event(e) for e in reg.event_names()])
+
+def _insulin_rule():
+    return Rule(rule_id="r", when=And([Cmp("on_basal_insulin", "==", True),
+                                       Cmp("has_start_lrd", "==", True)]),
+                then=dsl.Delta("on_basal_insulin_dose", "on_basal_insulin",
+                               "reduce", 0.5),
+                action="recommend", target="dose reduction", source_span="x")
+
+def test_one_code_two_types_is_two_variables():
+    """`on_basal_insulin` (is it prescribed) and `on_basal_insulin_dose` (how
+    much) carry the identical ATC code. Merging them retyped the boolean, so
+    the model's `on_basal_insulin == true` became "real but value is bool" and
+    the boolean vanished from the shipped registry. A canonicalisation that
+    changes a variable's TYPE silently rewrites every comparison against it."""
+    reg = _insulin_registry()
+    assert dsl.canonical_aliases(reg) == {}
+    # and the guard is specific: same code AND same type still merges
+    same = Registry([reg["on_basal_insulin"],
+                     VarDef("prescribed_basal_insulin", "bool", None, "same drug",
+                            binding="http://www.whocc.no/atc|D049528|2026",
+                            role="action")], [])
+    assert dsl.canonical_aliases(same) != {}
+
+def test_a_hole_is_never_merged_into_a_numeric_variable():
+    """The stem rule has the same trap: a hole is declared bool, so matching it
+    onto a real-valued bound variable would retype it."""
+    reg = Registry([VarDef("insulin_dose", "real", None, "dose",
+                           binding="http://www.whocc.no/atc|D049528|2026"),
+                    VarDef("has_insulin_dose", "bool", None, "hole", unbound=True)], [])
+    assert "has_insulin_dose" not in dsl.canonical_aliases(reg)
+
+def test_the_bundle_registry_declares_a_delta_baseline_event():
+    """The event walker handled `Since` only, so the first `Delta` we produced
+    shipped with `events: []` and Track B rejected it as UNKNOWN_EVENT."""
+    assert dsl.events_in(_insulin_rule()) == ("on_basal_insulin",)
+    since = Rule(rule_id="r", when=Since("on_basal_insulin", 30),
+                 then=Cmp("on_basal_insulin", "==", True), action="recommend",
+                 target="t", source_span="x")
+    assert dsl.events_in(since) == ("on_basal_insulin",)
+
+def test_a_delta_baseline_is_the_lowerings_to_declare_not_the_registrys():
+    """`rule_to_cql` already emits `<var>_at_<event>` as a named null. Adding it
+    to the registry as a bool hole produced BOTH a duplicate CQL identifier
+    (the library would not translate) and a number-vs-boolean comparison."""
+    reg, rule = _wide_insulin_registry(), _insulin_rule()
+    holes = dsl.open_holes(rule, reg)
+    assert "on_basal_insulin_dose_at_on_basal_insulin" in holes, "still reported"
+    names = [v.name for v in dsl.hole_defs(reg, holes, rule)]
+    assert names == [], "the derived baseline is skipped, the rest already declared"
+    # and a hole the registry does NOT yet declare is still stubbed
+    assert [v.name for v in dsl.hole_defs(reg, ["has_ketoacidosis"], rule)] \
+        == ["has_ketoacidosis"]
+
+def test_the_titration_rule_survives_validation_and_lowering():
+    """End to end: the shape that produced TYPE_ERROR, UNKNOWN_EVENT and a
+    duplicate identifier in one run."""
+    import cql
+    import re
+    reg, rule = _wide_insulin_registry(), _insulin_rule()
+    reg = Registry([reg[n] for n in reg.names()]
+                   + dsl.hole_defs(reg, dsl.open_holes(rule, reg), rule),
+                   [reg.event(e) for e in reg.event_names()])
+    assert not [i for i in validate_rule(rule, reg) if i.severity == "error"]
+    lib = cql.rule_to_cql(rule, reg, library_name="T")
+    assert not [i for i in cql.check_cql(lib.text) if i.severity == "error"]
+    defs = re.findall(r'^define "([^"]+)"', lib.text, re.M)
+    assert len(defs) == len(set(defs)), f"duplicate define: {defs}"

@@ -722,3 +722,32 @@ if __name__ == "__main__":
     print(f"\n{len(tests) - len(failed)}/{len(tests)} passed")
     raise SystemExit(1 if failed else 0)
 
+
+
+# ------------------------------------- source hygiene (R34)
+
+def test_no_non_builtin_open_carries_an_encoding_argument():
+    """A bulk rewrite adding `encoding="utf-8"` to every `open(` matched
+    `urlopen(` too, because it ends in the same four letters. Every terminology
+    lookup then raised TypeError, 177 in one run, nothing bound, and an entire
+    document came back refused -- a self-inflicted outage that looked exactly
+    like a guideline with no encodable content.
+
+    Cheap to assert, and it pins the whole family: urlopen, popen, gzip.open,
+    webbrowser.open. Only the builtin takes `encoding`."""
+    import glob
+    import os
+    import re
+    here = os.path.dirname(os.path.abspath(__file__))
+    roots = [os.path.join(here, "*.py"),
+             os.path.join(os.path.dirname(here), "Part B", "*.py"),
+             os.path.join(os.path.dirname(here), "demo.py")]
+    bad = []
+    # `.open(` or `urlopen(` -- anything but a bare builtin `open(`.
+    pat = re.compile(r"(?:\w\.|url|p|gzip\.|webbrowser\.)open\([^()]*encoding=")
+    for pattern in roots:
+        for path in glob.glob(pattern):
+            for i, line in enumerate(open(path, encoding="utf-8"), 1):
+                if pat.search(line):
+                    bad.append(f"{os.path.basename(path)}:{i}: {line.strip()[:70]}")
+    assert not bad, "non-builtin open() given encoding=:\n" + "\n".join(bad)

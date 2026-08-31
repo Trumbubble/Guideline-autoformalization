@@ -36,6 +36,7 @@ the assumption. That is the comparison E3 is built on.
 from __future__ import annotations
 
 import concurrent.futures as cf
+import re
 import statistics
 from dataclasses import dataclass, field, replace
 from typing import Callable, Iterable
@@ -197,6 +198,81 @@ def hole_for(mention: str, kind: str) -> dsl.VarDef:
     return dsl.VarDef(name=name, type="bool", description=mention,
                       role="observation", unbound=True)
 
+# Concept kinds that name something DATABLE -- something with a moment it
+# happened, which a temporal node can anchor to.
+_DATABLE_KINDS = {"procedure", "drug", "drug_class"}
+
+def datable_events(bindings) -> list:
+    """EventDefs for the bound concepts a temporal node can measure from.
+
+    Nothing ever created one. `registry_from_bindings` takes `events` and every
+    caller left it None, so `reg.event_names()` was empty for every real
+    statement -- and BOTH temporal nodes are gated on it in
+    `dsl.decoding_schema`. `Since` and `Delta` were therefore never offered to
+    the model on a real guideline, in this entire project. It shows up as
+    `unsupported_temporal` refusals, as "the first 24 h" silently dropped from
+    PMC13151662:0002, and as PMC13074134 refusing dose titration for
+    `beyond_dsl` the day after `Delta` was built for exactly that sentence.
+
+    A procedure or a medication is datable: it has a moment it was done or
+    started. A finding is not -- "has diabetes" has no single timestamp a
+    guideline means. Restricting to those kinds also keeps the decoding grammar
+    small, which R8 showed is a hard constraint: a 13-variable registry
+    compiles only at depth 1."""
+    out, seen = [], set()
+    for b in bindings:
+        kind = getattr(b, "kind", None)
+        if getattr(b, "role", "") != "action" and kind not in _DATABLE_KINDS:
+            continue
+        if b.variable in seen:
+            continue
+        seen.add(b.variable)
+        out.append(dsl.EventDef(b.variable, b.display or b.variable,
+                                b.binding_uri))
+    return out
+
+# Verbs that ask for a RELATIVE change to a quantity. A closed-ish set, and
+# used only to decide whether a dose variable is worth declaring -- WHAT gets
+# changed is still the model's choice from the bound vocabulary.
+_DOSE_CHANGE = re.compile(
+    r"\b(reduc\w+|decreas\w+|lower\w*|halv\w+|increas\w+|rais\w+|up-?titrat\w+|"
+    r"down-?titrat\w+|titrat\w+|adjust\w*|escalat\w+|de-?escalat\w+)\b"
+    r"[^.]{0,60}?(\b\d+\s*%|\bdose\b|\bdosage\b)", re.I)
+
+def dose_companions(bindings, statement: str) -> list:
+    """A numeric dose variable for each bound medication, when the sentence
+    asks for a dose change.
+
+    `Delta` needs something numeric to change. A medication binds as a BOOLEAN
+    -- `on_basal_insulin`, is it prescribed -- so a registry built from
+    bindings alone has no quantity, and `dsl.decoding_schema` will not offer
+    the node however many events are declared. That is why "Reduce basal
+    insulin by 50%" still refused as `beyond_dsl` after both were added.
+
+    Declared only when the statement contains a relative-change cue, because
+    every extra variable enlarges the decoding grammar and R8 showed that is a
+    hard ceiling: a 13-variable registry compiles only at depth 1. The cue is a
+    closed set of verbs; which variable actually changes is the model's choice.
+
+    Parallel to how `Since` derives `<event>_occurred` and
+    `days_since_<event>`: a companion the DSL needs, named rather than
+    implicit, so a report can say which quantity it wants."""
+    if not _DOSE_CHANGE.search(statement or ""):
+        return []
+    out = []
+    for b in bindings:
+        if b.kind not in {"drug", "drug_class"}:
+            continue
+        name = f"{b.variable}_dose"
+        out.append(dsl.VarDef(
+            name=name, type="real", unit=None,
+            description=f"{b.display} dose".strip(),
+            binding=b.binding_uri, role="action",
+            # No plausible range: doses span micrograms to units and a wrong
+            # one would be asserted to the solver as fact.
+            plausible=None))
+    return out
+
 # ---------------------------------------------------------------- gate
 
 def triage(statement: str, index, *, statement_id: str = "s",
@@ -245,7 +321,11 @@ def triage(statement: str, index, *, statement_id: str = "s",
                            f"here may not be a property of the guideline: "
                            + "; ".join(index.failures.summary()[-_failed:])[:200]))
 
-    reg = bind.registry_from_bindings(bindings)
+    reg = bind.registry_from_bindings(bindings, events=datable_events(bindings))
+    _doses = dose_companions(bindings, statement)
+    if _doses:
+        reg = dsl.Registry([reg[n] for n in reg.names()] + _doses,
+                           [reg.event(e) for e in reg.event_names()])
     holes = holes_from(statement, refusals, [])
 
     if not bindings:
@@ -403,9 +483,20 @@ def triage(statement: str, index, *, statement_id: str = "s",
     else:
         code = (best.reason_code if best else
                 "unbound_concept" if refusals else "beyond_dsl")
+    # What the decoder was ACTUALLY offered. A model that says "this DSL has no
+    # delta construct" is reporting its menu, not the DSL: three times running,
+    # a titration sentence refused because the node was gated off upstream (no
+    # events declared; then the leaf required an event; then it also required a
+    # numeric variable, and medications bind as booleans). Recording the menu
+    # next to the refusal makes that distinguishable from the outside instead
+    # of costing a live run each time.
+    ev.append(Evidence("gate", "GRAMMAR_OFFERED",
+                       f"decoder could emit [{', '.join(dsl.offered_leaves(reg))}] "
+                       f"over vars [{', '.join(reg.names())}] and events "
+                       f"[{', '.join(reg.event_names()) or 'none'}]"))
     return Triage(statement_id, statement, "refuse", code, None, 1.0 - rate,
                   tuple(ev), tuple(h.name for h in holes), refusal=best,
-                  samples=len(outcomes), refusal_rate=rate)
+                  samples=len(outcomes), refusal_rate=rate, registry=reg)
 
 def _attempt_k(statement, reg, formalize, sid, page, span, k):
     """K samples in parallel. They are independent calls, and sequentially K=8
