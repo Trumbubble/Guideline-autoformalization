@@ -7,9 +7,13 @@ given a rule, a patient, and a partial care plan, decide whether the plan
 complies, and when it might not, produce a minimal, concrete witness instead
 of a vague "maybe." This directory is Track B.
 
-Track A isn't wired up yet. Until it is, [`real_rules.py`](real_rules.py)
-hand-authors real guideline rules through the same DSL, so the rest of this
-directory has real material to run against.
+[`real_rules.py`](real_rules.py) hand-authors ten real guideline rules
+through the same DSL, so the rest of this directory always has real
+material to run against. [`guidelines.py`](guidelines.py) is the actual
+Track A connection: it runs Part A's real pipeline (segment → gate.triage →
+bind → dsl.write_bundle) over an uploaded document and stores the result as
+another guideline the checker can run against, alongside the fixtures. See
+[Guidelines and uploads](#guidelines-and-uploads) below.
 
 ## The three verdicts
 
@@ -97,49 +101,122 @@ consumes this metadata.
 
 ### `api.py` -- the Flask app
 
-`GET /rules` lists the fixtures and the variable names each one takes.
-`POST /check` takes a JSON `patient` + `plan` (merged into one set of known
-values), pins whatever the request touches, and returns -- for every rule
-with at least one touched variable -- the verdict above plus, for
-MAY-violate, a **minimized counterexample**: the smallest subset of the
-still-free values that alone forces a violation. That minimization is
-assumption-dropping: take a witness model, then repeatedly drop one latent
-assignment and re-check compliance-with-the-rest as a Z3 assumption list,
-keeping the drop only if the remainder still can't be made compliant. It's
-the same algorithm `tests/benchmark.py`'s `minimal_counterexample_core`
-uses, generalized from generic drug/monitor indices to named fixture
-variables.
+`GET /guidelines/<id>/rules` lists a guideline's rules and the variable
+names each one takes. `POST /guidelines/<id>/check` takes a JSON `patient` +
+`plan` (merged into one set of known values), pins whatever the request
+touches, and returns -- for every rule in that guideline with at least one
+touched variable -- the verdict above plus, for MAY-violate, a **minimized
+counterexample**: the smallest subset of the still-free values that alone
+forces a violation. That minimization is assumption-dropping: take a witness
+model, then repeatedly drop one latent assignment and re-check
+compliance-with-the-rest as a Z3 assumption list, keeping the drop only if
+the remainder still can't be made compliant. It's the same algorithm
+`tests/benchmark.py`'s `minimal_counterexample_core` uses, generalized from
+generic drug/monitor indices to named fixture (or Track A) variables.
+
+`GET /rules` and `POST /check` still work as aliases for
+`/guidelines/fixtures/...`, for anything written against the earlier
+single-guideline API.
 
 ```sh
 python3 -m pip install -r ../requirements.txt
 python3 api.py
 
-curl -s localhost:8000/rules | python3 -m json.tool
+curl -s localhost:8000/guidelines/fixtures/rules | python3 -m json.tool
 
-curl -s -X POST localhost:8000/check -H 'Content-Type: application/json' -d '{
+curl -s -X POST localhost:8000/guidelines/fixtures/check -H 'Content-Type: application/json' -d '{
   "patient": {"potassium": 5.4},
   "plan": {"ace_inhibitor_on": true}
 }' | python3 -m json.tool
 ```
 
-### `ui.html` -- the click-through demo
+### `ui.html` -- the click-through checker
 
-Served from `GET /` by `api.py`. A dropdown of ten example patient/plan
-scenarios (spanning all three verdicts, including one that pins
-`potassium_check_occurred: false` to show a monitoring rule catching "never
-checked at all"), two JSON textareas to paste your own, a Check button, and
-a reference table of every rule's variable names pulled live from
-`GET /rules`. Each result renders as a color-coded verdict badge and a
-plain-English sentence -- for MAY-violate, the counterexample translated
-into prose ("It becomes a certain violation if digoxin dose reduced =
-false") instead of raw JSON, though the raw JSON is one click away behind a
-`<details>` toggle. Single static file, no build step, no dependency beyond
-the Flask app that serves it.
+Served from `GET /check` by `api.py`, scoped to one guideline via
+`?guideline=<id>` in the URL (defaults to `fixtures`). A dropdown of ten
+example patient/plan scenarios (fixtures only -- an uploaded guideline's
+variables aren't known in advance, so its dropdown is empty and the rules
+table is the reference instead), two JSON textareas to paste your own, a
+Check button, and a table of the guideline's rules and variables pulled
+live from `GET /guidelines/<id>/rules`. Each result renders as a
+color-coded verdict badge and a plain-English sentence -- for MAY-violate,
+the counterexample translated into prose ("It becomes a certain violation
+if digoxin dose reduced = false") instead of raw JSON, and for a **partial**
+rule (one with an open hole -- see below), a badge naming the undefined
+predicate. Raw JSON is one click away behind a `<details>` toggle. Single
+static file, no build step, no dependency beyond the Flask app that serves
+it.
+
+### `dashboard.html` -- the guideline library
+
+Served from `GET /`. A grid of rounded-card guidelines fetched from
+`GET /guidelines` -- the built-in fixtures plus anything uploaded, each
+showing its rule count and (if any) refusal / awaiting-formalization
+counts. Clicking a card opens `ui.html` scoped to that guideline. A dashed
+"+ Upload guideline" card opens a modal: a title, either pasted text or a
+file (`.pdf` / `.html` / `.xml` / `.txt`), and a "process live" checkbox --
+posted as `multipart/form-data` to `POST /guidelines`.
+
+Checking "process live" reveals an API key field. `GET /settings` reports
+(without ever revealing the key itself) whether the server already has one
+configured, so the hint text says whether pasting one is necessary or just
+an override. A key typed here is kept only in that browser's `localStorage`
+-- never written to disk on the server -- and is sent along with the upload
+request as `api_key`, used for that one call via
+`guidelines._temporary_api_key` and then discarded from the server
+process. Leave it blank to fall back to the server's own `.env`.
 
 ```sh
 python3 api.py
 # open http://localhost:8000/
 ```
+
+## Guidelines and uploads
+
+[`guidelines.py`](guidelines.py) is the library of guidelines the checker
+can run against: the always-available `fixtures` entry (`real_rules.py`),
+plus anything uploaded and stored under `guidelines/` (gitignored --
+uploads are runtime data, not source). Each upload goes through Part A's
+real pipeline exactly as `demo.py` does, just over an arbitrary document
+instead of a fixed statement list:
+
+```
+segment.segment(blocks, doc_id)          -> candidate statements
+gate.triage(text, index, ...)            -> one Triage per statement:
+                                             encode / partial / refuse
+dsl.write_bundle(path, registry, rules, refusals)
+```
+
+**Formalizing a statement into a checkable `dsl.Rule` is a model step.**
+`gate.triage` returns no rule at all without a `formalize` callable --
+there is no heuristic path that invents the `when`/`then` structure of a
+sentence. So an upload with `live=False` (no `ANTHROPIC_API_KEY` configured)
+still segments and triages the document -- real statement counts, real
+binder evidence, real refusals where the binder found no vocabulary at
+all -- but produces **zero rules**, and reports how many statements looked
+encodable but couldn't be formalized as `needs_model_count`. This is
+reported honestly rather than silently: a `0 rules` bundle from a live run
+would mean the guideline genuinely didn't encode; the same `0 rules` offline
+means formalization was never attempted. Pass `live=True` (the dashboard's
+checkbox) to actually call the model. A bad or expired key doesn't silently
+read as "this guideline can't be encoded" either: `gate.triage` catches a
+`formalize` failure per statement and reports it as an ordinary refusal, so
+`guidelines.ingest` specifically checks for every refusal looking like an
+authentication error and raises a clear one instead of writing a
+zero-rule bundle.
+
+A rule Track A produces can be **partial**: a predicate the source states
+but the pipeline can't bind or quantify ("high risk", "an adequate trial")
+becomes a declared free variable (`dsl.open_holes`) instead of being
+silently dropped or stubbed. The checker reports these on `/check` as
+`open_holes` / `partial`, and the UI badges them, so "we don't know this
+patient's value" (an ordinary free variable) stays visually distinct from
+"the guideline never defined this precisely" (a hole).
+
+`GET /guidelines/<id>/residue` is the other half of the deliverable: what
+Track A refused to encode for that guideline, and why, grouped by
+`reason_code`. A checker that only ever shows what compiled tells a
+governance reader the tool covered everything.
 
 ## `tests/` -- checks against the checker, not needed to run it
 
@@ -198,14 +275,29 @@ where these bundles sit.
 
 ## Open questions
 
-- **Track A isn't connected.** `real_rules.py` is a stand-in for what a
-  document-extraction pipeline would eventually emit. Its `source_page` is a
-  nominal placeholder, not a real citation, and its `source_sentence` fields
-  are paraphrases, not verbatim extracted text.
+- **`real_rules.py` is still a stand-in, not a Track A output.** Its
+  `source_page` is a nominal placeholder, not a real citation, and its
+  `source_sentence` fields are paraphrases, not verbatim extracted text --
+  unlike an uploaded guideline's rules, which carry real page numbers and
+  real quoted spans from `segment.py`.
+- **An offline upload produces zero rules, honestly but unhelpfully.**
+  There's no local/heuristic fallback for formalization -- it's a model call
+  or nothing. A real deployment needs either a configured key by default or
+  a much clearer UI story for what "0 rules, N awaiting formalization"
+  means to someone who didn't read this file.
+- **`bind.fixture_index()` is a small, fixed terminology set.** A real
+  guideline outside the demo's CKD-style vocabulary (potassium, eGFR, ACR,
+  ACEi/ARB, ...) will mostly refuse with `unbound_concept`, correctly per
+  the DSL's retrieval-not-generation rule, but that makes most real-world
+  uploads look broken rather than clearly under-covered. `demo.py --live`'s
+  `_build_index` shows the richer path (a seeded LOINC SQLite index) that
+  `guidelines.py` doesn't use yet.
 - **`Boundary` metadata can drift.** It's derived by hand-reasoning about
-  each rule's compliance direction, not read mechanically off the `when`/
-  `then` tree, so nothing currently catches a rule edit that isn't mirrored
-  in its boundaries.
-- **The differential check covers 3 of 10 rules,** by hand. It's a proof of
-  concept for what a real dual-encoding pass would automate, not a
-  systematic sweep.
+  each fixture's compliance direction, not read mechanically off the
+  `when`/`then` tree, so nothing currently catches a rule edit that isn't
+  mirrored in its boundaries. Track A rules have no `Boundary` metadata at
+  all yet -- `synthesize_boundary_tests.py` and everything downstream of it
+  only run against the fixtures.
+- **The differential check covers 3 of 10 fixtures,** by hand. It's a proof
+  of concept for what a real dual-encoding pass would automate, not a
+  systematic sweep, and doesn't touch Track A rules either.

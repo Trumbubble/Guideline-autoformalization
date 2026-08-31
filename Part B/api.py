@@ -1,35 +1,17 @@
-"""Flask API for the Track B checker: GET /rules, POST /check, GET / (ui.html).
+"""Flask API for the Track B checker: dashboard + per-guideline check.
 See CHECKER.md for the endpoints, the verdict semantics, and how the
 counterexample is minimized."""
 
-import os
 from pathlib import Path
 
 from flask import Flask, jsonify, request, send_from_directory
 from z3 import Not, Solver, is_bool, is_int, sat, unsat
 
-from real_rules import DOMAIN_AXIOMS, REAL_RULES
-
-# A Track A bundle, when one is present, is served alongside the fixtures.
-# Its rules carry their OWN domain axioms (from the bundle's registry), which
-# is why `_pin` reads `rule.domain` rather than the module-level constant --
-# a global axiom set only works while every rule comes from one hand-written
-# file.
-BUNDLE_PATH = os.environ.get("GF_BUNDLE", str(Path(__file__).parent / "bundle.json"))
-LOADED_RULES, LOADED_REFUSALS, LOADED_REGISTRY = [], [], None
-if Path(BUNDLE_PATH).exists():
-    try:
-        from from_dsl import load_bundle
-        LOADED_RULES, LOADED_REFUSALS, LOADED_REGISTRY = load_bundle(BUNDLE_PATH)
-    except Exception as exc:            # a bad bundle must not take the app down
-        print(f"[warn] could not load bundle {BUNDLE_PATH}: {exc}")
-
-ALL_RULES = list(REAL_RULES) + list(LOADED_RULES)
+import guidelines
+from real_rules import DOMAIN_AXIOMS as FIXTURE_DOMAIN_AXIOMS
 
 app = Flask(__name__)
-
 APP_DIR = Path(__file__).parent
-RULES_BY_ID = {rule.rule_id: rule for rule in ALL_RULES}
 
 
 def _python_value(ref, model):
@@ -50,8 +32,10 @@ def _coerce(ref, value):
 
 
 def _pin(rule, known: dict) -> tuple:
-    # Track A rules bring their own axioms; fixtures fall back to the global set.
-    domain = list(getattr(rule, "domain", None) or DOMAIN_AXIOMS)
+    # Track A rules bring their own per-rule axioms (their own registry's
+    # plausible ranges); fixtures fall back to the fixture module's shared
+    # DOMAIN_AXIOMS, since a SpecClause carries no `.domain` of its own.
+    domain = list(getattr(rule, "domain", None) or FIXTURE_DOMAIN_AXIOMS)
     provided = {}
     for name, ref in rule.var_refs.items():
         if name in known:
@@ -77,9 +61,9 @@ def classify(domain: list, predicate) -> str:
 def minimal_counterexample_core(rule, domain: list, free_names: list) -> dict:
     """The smallest set of free-variable values that forces a violation.
 
-    Same assumption-dropping minimization as `tests/benchmark.py`'s function of
-    the same name, generalized from generic drug/monitor indices to named
-    fixture variables.
+    Same assumption-dropping minimization as `tests/benchmark.py`'s function
+    of the same name, generalized from generic drug/monitor indices to named
+    fixture (or Track A) variables.
     """
     witness_solver = Solver()
     witness_solver.add(*domain, Not(rule.predicate))
@@ -130,35 +114,150 @@ def check_rule(rule, known: dict) -> dict:
         "partial": bool(holes),
         "source_page": getattr(rule, "source_page", None),
         "provenance": getattr(rule, "source_span", None),
-        "origin": "track-a" if hasattr(rule, "domain") else "fixture",
     }
 
 
+# ---------------------------------------------------------------- pages
+
 @app.get("/")
-def ui():
+def dashboard():
+    return send_from_directory(APP_DIR, "dashboard.html")
+
+
+@app.get("/check")
+def checker_page():
     return send_from_directory(APP_DIR, "ui.html")
 
 
-@app.get("/rules")
-def list_rules():
+# ---------------------------------------------------------------- guidelines
+
+@app.get("/settings")
+def settings():
+    # Never echoes the key itself -- only whether one is already configured,
+    # so the UI can tell a visitor whether pasting their own is necessary.
+    return jsonify({"server_key_configured": guidelines.server_has_api_key()})
+
+
+@app.get("/guidelines")
+def list_guidelines():
+    return jsonify(guidelines.list_guidelines())
+
+
+@app.post("/guidelines")
+def upload_guideline():
+    is_json = request.is_json
+    json_body = request.get_json(silent=True) if is_json else None
+    json_body = json_body or {}
+
+    title = request.form.get("title") or json_body.get("title")
+    live_raw = request.form.get("live") if not is_json else json_body.get("live")
+    live = str(live_raw if live_raw is not None else "").lower() in ("1", "true", "on")
+    # A key typed into the browser overrides the server's own .env for this
+    # upload only -- see guidelines._temporary_api_key. Blank means "use
+    # whatever the server already has configured".
+    api_key = (request.form.get("api_key") or json_body.get("api_key") or "").strip() or None
+
+    file_bytes = filename = text = None
+    if "file" in request.files and request.files["file"].filename:
+        upload = request.files["file"]
+        filename = upload.filename
+        file_bytes = upload.read()
+        title = title or Path(filename).stem
+    elif is_json:
+        text = json_body.get("text")
+    else:
+        text = request.form.get("text")
+
+    if not title:
+        return jsonify({"error": "'title' is required"}), 400
+    if not (file_bytes or text):
+        return jsonify({"error": "provide a 'file' upload or 'text'"}), 400
+
+    try:
+        entry = guidelines.ingest(
+            title, file_bytes=file_bytes, filename=filename, text=text,
+            live=live, api_key=api_key,
+        )
+    except guidelines.IngestError as error:
+        return jsonify({"error": str(error)}), 400
+    except Exception as error:  # a bad upload must not take the app down
+        return jsonify({"error": f"ingestion failed: {error}"}), 502
+
+    return jsonify(entry), 201
+
+
+@app.get("/guidelines/<guideline_id>")
+def guideline_detail(guideline_id):
+    found = guidelines.get_guideline(guideline_id)
+    if found is None:
+        return jsonify({"error": f"unknown guideline {guideline_id!r}"}), 404
+    rules, refusals, reg, meta = found
+    return jsonify(
+        dict(
+            meta,
+            rules=[
+                {
+                    "rule_id": r.rule_id,
+                    "title": r.title,
+                    "category": r.category,
+                    "drug": r.drug,
+                    "source": getattr(r, "source", ""),
+                    "source_sentence": r.source_sentence,
+                    "variables": sorted(r.var_refs.keys()),
+                    "partial": bool(getattr(r, "holes", ())),
+                }
+                for r in rules
+            ],
+        )
+    )
+
+
+@app.get("/guidelines/<guideline_id>/rules")
+def guideline_rules(guideline_id):
+    found = guidelines.get_guideline(guideline_id)
+    if found is None:
+        return jsonify({"error": f"unknown guideline {guideline_id!r}"}), 404
+    rules, _refusals, _reg, _meta = found
     return jsonify(
         [
             {
-                "rule_id": rule.rule_id,
-                "title": rule.title,
-                "category": rule.category,
-                "drug": rule.drug,
-                "source": rule.source,
-                "source_sentence": rule.source_sentence,
-                "variables": sorted(rule.var_refs.keys()),
+                "rule_id": r.rule_id,
+                "title": r.title,
+                "category": r.category,
+                "drug": r.drug,
+                "source": getattr(r, "source", ""),
+                "source_sentence": r.source_sentence,
+                "variables": sorted(r.var_refs.keys()),
             }
-            for rule in ALL_RULES
+            for r in rules
         ]
     )
 
 
-@app.post("/check")
-def check():
+@app.get("/guidelines/<guideline_id>/residue")
+def guideline_residue(guideline_id):
+    """What Track A REFUSED to encode for this guideline, and why.
+
+    A checker that serves only the rules that compiled tells a governance
+    reader the tool covered everything. This route is the other half of the
+    deliverable."""
+    found = guidelines.get_guideline(guideline_id)
+    if found is None:
+        return jsonify({"error": f"unknown guideline {guideline_id!r}"}), 404
+    _rules, refusals, _reg, _meta = found
+    from from_dsl import residue_report
+
+    return jsonify(residue_report(refusals))
+
+
+@app.post("/guidelines/<guideline_id>/check")
+def guideline_check(guideline_id):
+    found = guidelines.get_guideline(guideline_id)
+    if found is None:
+        return jsonify({"error": f"unknown guideline {guideline_id!r}"}), 404
+    rules, _refusals, _reg, _meta = found
+    rules_by_id = {r.rule_id: r for r in rules}
+
     body = request.get_json(force=True, silent=True) or {}
     patient = body.get("patient", {})
     plan = body.get("plan", {})
@@ -170,14 +269,12 @@ def check():
 
     try:
         if rule_id is not None:
-            rule = RULES_BY_ID.get(rule_id)
+            rule = rules_by_id.get(rule_id)
             if rule is None:
                 return jsonify({"error": f"unknown rule_id {rule_id!r}"}), 404
             return jsonify(check_rule(rule, known))
 
-        touched_rules = [
-            rule for rule in ALL_RULES if set(rule.var_refs) & set(known)
-        ]
+        touched_rules = [r for r in rules if set(r.var_refs) & set(known)]
     except (TypeError, ValueError) as error:
         return jsonify({"error": f"bad patient/plan value: {error}"}), 400
 
@@ -187,7 +284,8 @@ def check():
                 {
                     "error": (
                         "no rule variables matched 'patient'/'plan' keys; "
-                        "GET /rules to see available variable names"
+                        f"GET /guidelines/{guideline_id}/rules to see available "
+                        "variable names"
                     )
                 }
             ),
@@ -195,30 +293,33 @@ def check():
         )
 
     try:
-        return jsonify([check_rule(rule, known) for rule in touched_rules])
+        return jsonify([check_rule(r, known) for r in touched_rules])
     except (TypeError, ValueError) as error:
         return jsonify({"error": f"bad patient/plan value: {error}"}), 400
 
 
-@app.get("/residue")
-def residue():
-    """What Track A REFUSED to encode, and why.
+# --------------------------------------------------- back-compat: fixtures
 
-    A checker that serves only the rules that compiled tells a governance
-    reader the tool covered everything. This route is the other half of the
-    deliverable, and it is why the bundle carries refusals alongside rules."""
-    from from_dsl import residue_report
-    return jsonify(residue_report(LOADED_REFUSALS))
+@app.get("/rules")
+def rules_alias():
+    return guideline_rules(guidelines.FIXTURES_ID)
+
+
+@app.post("/check")
+def check_alias():
+    return guideline_check(guidelines.FIXTURES_ID)
 
 
 @app.get("/health")
 def health():
-    return jsonify({"status": "ok",
-                    "rules_loaded": len(ALL_RULES),
-                    "fixture_rules": len(REAL_RULES),
-                    "track_a_rules": len(LOADED_RULES),
-                    "refused_statements": len(LOADED_REFUSALS),
-                    "bundle": BUNDLE_PATH if LOADED_RULES else None})
+    all_guidelines = guidelines.list_guidelines()
+    return jsonify(
+        {
+            "status": "ok",
+            "guidelines": len(all_guidelines),
+            "total_rules": sum(g["rule_count"] for g in all_guidelines),
+        }
+    )
 
 
 if __name__ == "__main__":
