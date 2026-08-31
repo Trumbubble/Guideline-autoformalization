@@ -367,3 +367,103 @@ at least 90 days apart"* is the definition of CKD, and under a snapshot model it
 lands in the residue. Whichever way it goes, the paper has to say so explicitly
 — otherwise a reviewer discovers that CKD's own definition is out of fragment
 and concludes it was hidden rather than measured.
+
+## Canonical form: when two names are one concept
+
+A **generated** registry can contain the same concept twice; a hand-authored
+one cannot, because a person does not write two names for one thing. This
+matters more than it sounds: on a real guideline the formalizer wrote both
+`pca` and `patient_controlled_intravenous_analgesia` — both bound to SNOMED
+`1351574007` — into one rule, producing
+
+```
+(has_ap AND pca) -> patient_controlled_intravenous_analgesia
+```
+
+which denotes `(A AND B) -> B`. That is valid under every interpretation, so
+the rule **certifies every patient** and can never fail. It is not a crash and
+does not look like a bug; it looks like a rule that works.
+
+```python
+dsl.canonical_aliases(reg)      # {alias -> canonical}, on ground truth only
+dsl.canonicalize(reg, rules)    # -> (reduced registry, rewritten rules, alias map)
+```
+
+Two signals are trusted to merge concepts, and only two:
+
+| Signal | Why it is ground truth |
+|---|---|
+| Same `system\|code\|version` | The terminology server said they are one concept |
+| A hole restating a bound variable (`has_X` / `X`) | A hole with a real binding available is a duplicate, not residue |
+
+Similarity judgements are **not** used. Asked whether "acute pancreatitis" and
+"severe acute pancreatitis" are the same, a model says yes, and that
+distinction is the entire content of some recommendations.
+
+`check_nondegenerate` canonicalises internally before it calls the solver, so
+`VACUOUS_RULE` fires whether or not the caller canonicalised. `bundle_to_dict`
+canonicalises on write and records what it collapsed under `merged_concepts` —
+a merge is a claim about the guideline, so it is reported, never silent.
+
+## Modal predicates: strength is not a patient fact
+
+A recommendation carries two separable things: **facts about the patient**, and
+**how hard the guideline is pushing**. The second is a property of the
+document, identical for every patient, and `Rule.strength` is its slot.
+
+When the formalizer read *"epidural analgesia may be considered"* it filled
+`strength` correctly with `"suggest (conditional)"` — and *also* put the modal
+into the antecedent as `has_may`. That rule cannot run: no FHIR resource
+populates "has may", so it is UNKNOWN for every patient forever.
+
+```python
+dsl.modal_only("has_may")                    # True   -- deontic force
+dsl.modal_only("has_appropriate_acupoints")  # False  -- vague, but clinical
+```
+
+`validate_rule` reports `MODAL_PREDICATE` as an **error**, and the gate refuses
+the statement as `defeasible`. A fixed word list is the right tool here because
+English modals are a closed class — about a dozen, with no new ones being
+coined. (Abbreviations are open-ended, which is why those get a per-document
+pass instead.) `modal_only` requires *every* token to be modal, so a hedged but
+genuinely clinical predicate still becomes a hole.
+
+## Deontic force: obligation vs permission
+
+`Rule.deontic` is an operator, not a label.
+
+```
+obligation   O(then | when)    violation = when AND NOT then
+permission   P(then | when)    violation = FALSE, unconditionally
+```
+
+*"We recommend anticoagulant prophylaxis"* is an obligation: a patient meeting
+`when` without `then` is a real deviation. *"Epidural analgesia may be
+considered"* is a permission: the same patient has violated nothing.
+
+**GRADE conditional is not permission.** "We suggest X" still recommends the
+action — the weakness is in the evidence, not the obligation. Only explicit
+permission language counts. Treating every weak recommendation as optional
+would silence most of a guideline.
+
+Prohibition is not a third case: `F(p) = O(NOT p)`, written as
+`action="avoid"` with a negated consequent.
+
+```python
+dsl.deontic_of(rule)                    # the operator, with a wording backstop
+dsl.violation_condition(rule, env)      # what Track B negates
+dsl.conflicts(rules, reg)               # permits what another rule forbids
+```
+
+`violation_condition` is the interface that matters. `rule_to_z3` still gives
+`when -> then`, which describes the *content* of a permission, so degeneracy
+checking still applies to it; what differs is what counts as a violation.
+
+`deontic_of` prefers the explicit field but promotes obligation → permission
+when the source says "may be considered". It never demotes — guessing
+permission wrongly silences an alert, guessing obligation wrongly accuses a
+clinician.
+
+Track B dispatches on the operator, and a permission gets its own verdict
+lattice: `OPTION-taken`, `OPTION-not-taken`, `OPTION-not-applicable`,
+`OPTION-available`. None of them is an accusation.

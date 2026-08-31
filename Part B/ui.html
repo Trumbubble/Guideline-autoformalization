@@ -252,6 +252,8 @@ function describeCounterexample(result) {
 
 function verdictBadgeClass(verdict) {
   if (verdict === "MUST-violate") return "must";
+  if (verdict === "OPTION-taken") return "certified";
+  if (verdict && verdict.startsWith("OPTION-")) return "may";
   if (verdict === "CERTIFIED-compliant") return "certified";
   return "may";
 }
@@ -261,6 +263,19 @@ function renderResult(result) {
   let explanation;
   if (result.verdict === "MUST-violate") {
     explanation = "This plan definitely violates the rule, given what's specified.";
+  } else if (result.verdict === "OPTION-not-taken") {
+    explanation = "The guideline OFFERS this action, it does not require it. The " +
+      "conditions are met and the action is absent -- that is not a violation, " +
+      "the option simply was not taken.";
+  } else if (result.verdict === "OPTION-taken") {
+    explanation = "The guideline offers this action and it was taken.";
+  } else if (result.verdict === "OPTION-not-applicable") {
+    explanation = "This option does not apply to this patient -- the conditions " +
+      "under which the guideline offers it are not met.";
+  } else if (result.verdict === "OPTION-available") {
+    explanation = "The guideline offers this action. Whether it applies to this " +
+      "patient is not yet determined from what's specified. Nothing here can be " +
+      "a violation: the action is permitted, not required.";
   } else if (result.verdict === "CERTIFIED-compliant") {
     explanation = "This plan is certified compliant with the rule -- no completion of the unspecified values could violate it.";
   } else {

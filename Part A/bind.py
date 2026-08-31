@@ -390,25 +390,70 @@ def normalise_query(phrase: str) -> str:
     return " ".join(t for t in _tokens(phrase.replace("-", " "))
                     if t not in QUERY_STOPWORDS)
 
-def expand_query(phrase: str) -> list[str]:
-    """The phrase, its bare keyword form, and its expansion if it is a known
-    abbreviation. Union, so a query that works on one endpoint is not lost
-    because another prefers a different shape."""
+# A slash in guideline prose usually joins two concepts --
+# "leukemia/lymphoblastic lymphoma", "medium-/long-term" -- but it is also
+# division in a unit ("mg/g") and part of many terminology terms
+# ("Albumin/Creatinine"). Splitting is therefore ADDITIVE: the compound is still
+# searched, and the halves are searched as well, so a meaningful slash loses
+# nothing.
+_UNITISH = re.compile(r"^\s*[a-zµ]{1,6}\s*$", re.I)
+
+def split_compound(phrase: str) -> list[str]:
+    """The halves of a slash-joined phrase, when both look like real terms."""
+    if "/" not in phrase:
+        return []
+    parts = [p.strip(" -\u2010\u2011\u2013") for p in phrase.split("/")]
+    if len(parts) < 2 or any(not p for p in parts):
+        return []
+    # "mg/g", "mL/min" -- both sides are unit-shaped, so the slash is division.
+    if all(_UNITISH.match(p) for p in parts):
+        return []
+    return [p for p in parts if len(p) > 3]
+
+def expand_query(phrase: str, doc_abbrevs: dict[str, str] | None = None) -> list[str]:
+    """The phrase, its bare keyword form, the halves of any slash-compound, and
+    its expansion if it is a known abbreviation. Union, so a query that works on
+    one endpoint is not lost because another prefers a different shape.
+
+    `doc_abbrevs` is the glossary segment.py read out of THIS document, and it
+    is consulted before the hand-written table below. A guideline defines its
+    own abbreviations on first use, so the document is a better authority on
+    what "PCA" means here than any list we could write in advance -- and it
+    covers specialties the hand-written table was never written for."""
     key = " ".join(_tokens(phrase))
     out = [phrase]
+    if doc_abbrevs:
+        for form in (phrase, phrase.strip()):
+            if form in doc_abbrevs and doc_abbrevs[form] not in out:
+                out.append(doc_abbrevs[form])
     bare = normalise_query(phrase)
     if bare and bare != phrase:
         out.append(bare)
+    for half in split_compound(phrase):
+        if half not in out:
+            out.append(half)
     for k in (key, bare):
         if k in ABBREVIATIONS and ABBREVIATIONS[k] not in out:
             out.append(ABBREVIATIONS[k])
     return out
 
-def search_all(index: TerminologyIndex, mention: Mention, k: int) -> list[Candidate]:
+# The kind is the MODEL's guess, and terminology hierarchies do not line up
+# with it. "CVAD" is a physical object to SNOMED, a procedure to a model, and a
+# patient state to a guideline. Searching the neighbouring kind costs one query
+# and recovers exactly the cases where the two disagree.
+KIND_FALLBACK: dict[Kind, tuple[Kind, ...]] = {
+    "procedure": ("condition",),
+    "condition": ("procedure",),
+    "drug": ("drug_class",),
+    "drug_class": ("drug",),
+}
+
+def search_all(index: TerminologyIndex, mention: Mention, k: int,
+               doc_abbrevs: dict[str, str] | None = None) -> list[Candidate]:
     """Union over the phrase and its expansion. Union, not intersection: each
     query sees terms the other misses, and the selector decides between them."""
     found: list[Candidate] = []
-    queries = expand_query(mention.text)
+    queries = expand_query(mention.text, doc_abbrevs)
     if mention.canonical and mention.canonical.lower() not in {q.lower() for q in queries}:
         queries.append(mention.canonical)
         bare = normalise_query(mention.canonical)
@@ -416,6 +461,16 @@ def search_all(index: TerminologyIndex, mention: Mention, k: int) -> list[Candid
             queries.append(bare)
     for q in queries:
         found.extend(index.search(q, mention.kind, k=k))
+    # Always search the neighbouring kind, not only when the chosen one comes up
+    # empty. Measured: "CVAD" typed as a procedure returns *Repair of central
+    # venous access device* -- high token overlap, convincing-looking, and the
+    # wrong concept. Retrieval proposes from both hierarchies; the selector,
+    # which can see the sentence, decides.
+    for alt in KIND_FALLBACK.get(mention.kind, ()):
+        for q in queries:
+            found.extend(replace(c, score=c.score - 0.5,
+                                 why=c.why + (f"kind_fallback:{alt}",))
+                         for c in index.search(q, alt, k=k))
 
     # Drop candidates that share NO word with any query. Measured: tx.fhir.org's
     # $expand?filter= does prefix matching, and on a MISS it returns arbitrary
@@ -755,9 +810,11 @@ def variable_name(mention: Mention) -> str:
 
 def bind(mention: Mention, sentence: str, index: TerminologyIndex,
          llm: Callable[[str], dict] | None = None, k: int = 8,
-         ref_id: str = "", _exclude: tuple = ()) -> Binding | dsl.Refusal:
+         ref_id: str = "", _exclude: tuple = (),
+         doc_abbrevs: dict[str, str] | None = None) -> Binding | dsl.Refusal:
     """One phrase -> a verified Binding, or a refusal. Never a guessed code."""
-    cands = rerank_stewards(rerank_by_unit(search_all(index, mention, k), mention))
+    cands = rerank_stewards(rerank_by_unit(
+        search_all(index, mention, k, doc_abbrevs), mention))
     if _exclude:
         cands = [c for c in cands if c.concept.code not in _exclude]
     shown = tuple(f"{c.concept.term} ({c.concept.curie})" for c in cands)
@@ -810,10 +867,12 @@ def bind(mention: Mention, sentence: str, index: TerminologyIndex,
 def bind_statement(text: str, index: TerminologyIndex,
                    mention_llm: Callable[[str], dict] | None = None,
                    select_llm: Callable[[str], dict] | None = None,
-                   ref_id: str = "") -> tuple[list[Binding], list[dsl.Refusal]]:
+                   ref_id: str = "",
+                   doc_abbrevs: dict[str, str] | None = None
+                   ) -> tuple[list[Binding], list[dsl.Refusal]]:
     bindings, refusals = [], []
     for m in propose_mentions(text, mention_llm):
-        r = bind(m, text, index, select_llm, ref_id=ref_id)
+        r = bind(m, text, index, select_llm, ref_id=ref_id, doc_abbrevs=doc_abbrevs)
         (bindings if isinstance(r, Binding) else refusals).append(r)
     return bindings, refusals
 
@@ -1138,18 +1197,35 @@ class CachedIndex:
     def __init__(self, local: SqliteIndex, remote: RemoteIndex | None = None):
         self.local, self.remote = local, remote
 
+    # Systems for which a licensed local release is strictly better than the
+    # free keyword endpoints -- which do prefix matching, carry no synonyms and
+    # rank badly. Once loaded, the remote is not consulted for these.
+    LOCAL_AUTHORITATIVE = (LOINC, SNOMED, RXNORM, ATC)
+
     def authoritative_for(self, kind: Kind) -> bool:
-        """True when the local index holds a full licensed release for every
-        system this kind uses. Then the remote adds nothing and can only do
-        harm: it was the free endpoint that put a DISCOURAGED HEDIS grouper
-        into a LOINC-seeded index, via the write-through cache."""
-        systems = KIND_SYSTEMS.get(kind, ())
-        return bool(systems) and all(self.local.version(s) for s in systems
-                                     if s in {LOINC})
+        """True when a licensed release is loaded for every single-concept
+        system this kind uses. VSAC is deliberately excluded: curated value
+        sets are not something a local release replaces, so the remote is still
+        worth asking for set-valued kinds."""
+        systems = [s for s in KIND_SYSTEMS.get(kind, ())
+                   if s in self.LOCAL_AUTHORITATIVE]
+        return bool(systems) and all(self.local.version(s) for s in systems)
 
     def search(self, phrase: str, kind: Kind, k: int = 8) -> list[Candidate]:
         hits = self.local.search(phrase, kind, k)
-        if kind == "lab" and self.authoritative_for(kind):
+        if self.authoritative_for(kind):
+            # Local release covers the single-concept systems. For set-valued
+            # kinds still ask VSAC -- a curated value set beats a lone code --
+            # but never the weak keyword endpoints that poisoned the index.
+            if kind in SET_VALUED_KINDS and self.remote is not None:
+                try:
+                    vsac = self.remote.vsac
+                    if vsac.available:
+                        hits = _dedupe_candidates(
+                            sorted(hits + vsac.search(phrase, kind, k),
+                                   key=lambda c: -c.score))[:k]
+                except Exception:
+                    pass
             return hits
         # A cache that holds only WEAK candidates must not shadow the remote.
         # Measured: demo.db held three eGFR entries -- two deprecated panels and
@@ -1264,6 +1340,172 @@ def load_loinc(index: SqliteIndex, path: str | None = None, *,
     if concepts:
         index.add(concepts)
     index.set_version(LOINC, version)
+    return n
+
+# ------------------------------------------------------------- SNOMED load
+
+# SNOMED's Fully Specified Name ends in a semantic tag -- "Diabetes mellitus
+# (disorder)", "Central venous catheter (physical object)". That tag says which
+# hierarchy a concept lives in WITHOUT reading the 382 MB relationship file, so
+# it is how concepts are routed to kinds here.
+SNOMED_TAG_KIND = {
+    "disorder": "condition", "finding": "condition", "situation": "condition",
+    "event": "condition",
+    # A device IN PLACE is a patient state, not a procedure. "In pediatric
+    # patients with a short-term CVAD" is about the catheter being present; the
+    # procedure hierarchy only offers *repair of* and *maintenance of* one.
+    "physical object": "condition", "observable entity": "condition",
+    "procedure": "procedure", "regime/therapy": "procedure",
+    "substance": "drug", "product": "drug",
+    "medicinal product": "drug", "medicinal product form": "drug",
+    "clinical drug": "drug",
+}
+_FSN_TAG = re.compile(r"\(([^()]+)\)\s*$")
+
+def find_snomed_dir(path: str | None = None) -> str | None:
+    """Locate an unpacked RF2 release's Snapshot/Terminology directory."""
+    roots = [p for p in (path, os.environ.get("SNOMED_DIR"),
+                         os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+             if p]
+    for root in roots:
+        if os.path.isdir(root) and os.path.basename(root) == "Terminology":
+            return root
+        for base, dirs, _files in os.walk(root):
+            if os.path.basename(base) == "Terminology" and "Snapshot" in base:
+                return base
+    return None
+
+def load_snomed(index: SqliteIndex, path: str | None = None, *,
+                kinds: set | None = None) -> int:
+    """Load SNOMED CT descriptions into the local index.
+
+    SYNONYMS ARE THE POINT. A guideline writes "CVAD"; the preferred term is
+    "Central venous catheter". Without the synonym rows a keyword search cannot
+    connect them, which is why the free endpoints returned *Structure of central
+    axillary lymph node* for that query. RF2 ships every synonym.
+
+    Reads Snapshot (current state), not Full (every historical revision), and
+    keeps only ACTIVE rows in clinically relevant hierarchies -- about 250 MB of
+    a 3.6 GB release."""
+    term_dir = find_snomed_dir(path)
+    if not term_dir:
+        raise FileNotFoundError(
+            "SNOMED RF2 Snapshot not found. Unpack a release into the repo or set "
+            "SNOMED_DIR. Download (UMLS licence): "
+            "https://www.nlm.nih.gov/healthit/snomedct/international.html")
+    files = os.listdir(term_dir)
+    desc = next((f for f in files if f.startswith("sct2_Description_Snapshot")), None)
+    conc = next((f for f in files if f.startswith("sct2_Concept_Snapshot")), None)
+    if not desc or not conc:
+        raise FileNotFoundError(f"Description/Concept snapshot missing in {term_dir}")
+    version = re.search(r"(\d{8})", desc)
+    version = version.group(1) if version else "unknown"
+    kinds = kinds or {"condition", "procedure", "drug"}
+
+    active = set()
+    with open(os.path.join(term_dir, conc), encoding="utf-8") as fh:
+        next(fh, None)
+        for line in fh:
+            p = line.split("\t")
+            if len(p) > 2 and p[2] == "1":
+                active.add(p[0])
+
+    # First pass: the FSN gives each concept its semantic tag, hence its kind.
+    kind_of: dict[str, str] = {}
+    with open(os.path.join(term_dir, desc), encoding="utf-8") as fh:
+        next(fh, None)
+        for line in fh:
+            p = line.rstrip("\n").split("\t")
+            if len(p) < 8 or p[2] != "1" or p[6] != "900000000000003001":
+                continue                       # inactive, or not the FSN
+            if p[4] not in active:
+                continue
+            m = _FSN_TAG.search(p[7])
+            k = SNOMED_TAG_KIND.get((m.group(1).strip().lower() if m else ""), None)
+            if k in kinds:
+                kind_of[p[4]] = k
+
+    # Second pass: every active description of a kept concept, synonyms included.
+    n, batch = 0, []
+    with open(os.path.join(term_dir, desc), encoding="utf-8") as fh:
+        next(fh, None)
+        for line in fh:
+            p = line.rstrip("\n").split("\t")
+            if len(p) < 8 or p[2] != "1":
+                continue
+            k = kind_of.get(p[4])
+            if not k:
+                continue
+            term = _FSN_TAG.sub("", p[7]).strip() if p[6] == "900000000000003001" else p[7]
+            if not term:
+                continue
+            batch.append(Concept(SNOMED, p[4], term, k, version))
+            n += 1
+            if len(batch) >= 20000:
+                index.add(batch); batch = []
+    if batch:
+        index.add(batch)
+    index.set_version(SNOMED, version)
+    return n
+
+# ------------------------------------------------------------- RxNorm load
+
+# RxNorm term types worth indexing. IN/PIN are ingredients (what a guideline
+# names), BN a brand, SCD/SBD a dispensable product. Everything else is
+# packaging and dose-form noise.
+RXNORM_TTY = {"IN", "PIN", "MIN", "BN", "SCD", "SBD", "SCDC", "PSN"}
+
+def find_rxnorm_file(path: str | None = None) -> str | None:
+    roots = [p for p in (path, os.environ.get("RXNORM_DIR"),
+                         os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+             if p]
+    for root in roots:
+        if os.path.isfile(root):
+            return root
+        for base, _dirs, files in os.walk(root):
+            if "RXNCONSO.RRF" in files and "prescribe" in base:
+                return os.path.join(base, "RXNCONSO.RRF")
+    for root in roots:                          # fall back to the full release
+        for base, _dirs, files in os.walk(root):
+            if "RXNCONSO.RRF" in files:
+                return os.path.join(base, "RXNCONSO.RRF")
+    return None
+
+def load_rxnorm(index: SqliteIndex, path: str | None = None) -> int:
+    """Load RxNorm drug names into the local index.
+
+    Prefers the `prescribe/` subset -- currently prescribable content, and the
+    portion NLM states is freely redistributable. Fixes the gap where RxClass
+    `byName` needed an exact class name: "ACE inhibitor" got 0 hits while
+    "ACE INHIBITORS, PLAIN" got 2."""
+    src = find_rxnorm_file(path)
+    if not src:
+        raise FileNotFoundError(
+            "RXNCONSO.RRF not found. Unpack an RxNorm release into the repo or set "
+            "RXNORM_DIR. Download (UMLS licence): "
+            "https://www.nlm.nih.gov/research/umls/rxnorm/docs/rxnormfiles.html")
+    version = re.search(r"(\d{8})", os.path.basename(os.path.dirname(
+        os.path.dirname(src))) or "")
+    version = version.group(1) if version else "unknown"
+    n, batch = 0, []
+    with open(src, encoding="utf-8", errors="replace") as fh:
+        for line in fh:
+            p = line.split("|")
+            # RXCUI | LAT | ... | SAB(11) | TTY(12) | ... | STR(14) | ... | SUPPRESS(16)
+            if len(p) < 17 or p[1] != "ENG" or p[12] not in RXNORM_TTY:
+                continue
+            if p[16] not in ("N", ""):
+                continue                        # suppressed
+            term = p[14].strip()
+            if not term:
+                continue
+            batch.append(Concept(RXNORM, p[0], term, "drug", version))
+            n += 1
+            if len(batch) >= 20000:
+                index.add(batch); batch = []
+    if batch:
+        index.add(batch)
+    index.set_version(RXNORM, version)
     return n
 
 # ---------------------------------------------------------------- fixture

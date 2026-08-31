@@ -83,7 +83,17 @@ def term_name(var: str, reg: dsl.Registry) -> str:
     return '"' + _label(var, reg) + ' codes"'
 
 def _slug(s: str) -> str:
-    return re.sub(r"[^A-Za-z0-9]+", "", s.title()) or "Rule"
+    """A safe CQL library identifier.
+
+    Statement ids carry the document they came from -- `PMC12355350:0129` --
+    and a colon is not legal in a CQL identifier. An unsanitised name produced
+    `library DemoPMC12355350:0129`, which the translator rejected with
+    "Syntax error at :" and cost the whole statement. A leading digit is
+    illegal too, so one is prefixed away."""
+    out = re.sub(r"[^A-Za-z0-9]+", "", s.title())
+    if not out:
+        return "Rule"
+    return out if out[0].isalpha() else f"L{out}"
 
 def parse_binding(binding: str | None) -> tuple[str, str, str | None]:
     """`VarDef.binding` -> (kind, identifier, version).
@@ -246,7 +256,9 @@ def expr_to_cql(e: dsl.Expr, reg: dsl.Registry, indent: int = 1) -> str:
 def rule_to_cql(rule: dsl.Rule, reg: dsl.Registry, *,
                 library_name: str | None = None) -> CqlLibrary:
     """A complete, self-contained CQL library for one rule."""
-    name = library_name or _slug(rule.rule_id)
+    # Sanitise whatever the caller passed: this function is what guarantees the
+    # output is valid CQL, so it cannot trust a name handed to it.
+    name = _slug(library_name or rule.rule_id)
     valuesets, codesystems, codes = declarations(reg)
     holes = tuple(n for n in reg.names() if reg[n].unbound)
 
@@ -282,7 +294,27 @@ def rule_to_cql(rule: dsl.Rule, reg: dsl.Registry, *,
     # With a null hole inside Applicable this evaluates to null, not false --
     # which is the three-valued verdict, expressed in the target language.
     lines += ['define "Compliant":\n  not "Applicable" or "Satisfied"', ""]
-    lines += ['define "Violated":\n  "Applicable" and not "Satisfied"', ""]
+
+    # CQL has no deontic content: it is an expression language, so "Violated"
+    # means the same thing whether the source required the action or merely
+    # offered it. The distinction therefore CANNOT live in the lowering -- it
+    # can only live at the verdict layer, which is a property of the target
+    # language rather than a shortcut taken here (RESULTS.md R17d).
+    #
+    # What the library can do is carry the operator so a consumer is not left
+    # to infer it: `Deontic` is emitted as a literal, and for a permission
+    # `Violated` is defined as false, so even a consumer that reads only that
+    # define cannot turn a declined option into a violation.
+    deontic = dsl.deontic_of(rule)
+    lines += [f"""define "Deontic":\n  '{deontic}'""", ""]
+    if deontic == "permission":
+        lines += ['// The source PERMITS this action; it does not require it.',
+                  '// Not taking a permitted option is not a violation.',
+                  'define "OptionTaken":\n  "Applicable" and "Satisfied"', "",
+                  'define "OptionNotTaken":\n  "Applicable" and not "Satisfied"', "",
+                  'define "Violated":\n  false', ""]
+    else:
+        lines += ['define "Violated":\n  "Applicable" and not "Satisfied"', ""]
 
     return CqlLibrary(name, "\n".join(lines), tuple(valuesets),
                       tuple(codesystems), holes)

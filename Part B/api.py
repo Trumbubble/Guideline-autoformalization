@@ -20,7 +20,8 @@ LOADED_RULES, LOADED_REFUSALS, LOADED_REGISTRY = [], [], None
 if Path(BUNDLE_PATH).exists():
     try:
         from from_dsl import load_bundle
-        LOADED_RULES, LOADED_REFUSALS, LOADED_REGISTRY = load_bundle(BUNDLE_PATH)
+        (LOADED_RULES, LOADED_REFUSALS,
+         LOADED_REGISTRY, LOADED_REJECTED) = load_bundle(BUNDLE_PATH)
     except Exception as exc:            # a bad bundle must not take the app down
         print(f"[warn] could not load bundle {BUNDLE_PATH}: {exc}")
 
@@ -74,6 +75,31 @@ def classify(domain: list, predicate) -> str:
     return "MAY-violate"
 
 
+def classify_option(domain: list, applies, taken) -> str:
+    """The verdict lattice for a PERMISSION.
+
+    A permitted action cannot be violated, so compliance is the wrong question
+    and the three-valued verdict does not apply. The useful question is
+    applicability: does this patient meet the conditions under which the option
+    exists, and was it taken? None of these four outcomes is an accusation --
+    that is the point, and it is guaranteed by construction rather than by
+    rewriting a verdict string after the fact."""
+    def sat_(*claims) -> bool:
+        s = Solver()
+        s.add(*domain, *claims)
+        return s.check() == sat
+
+    if not sat_(applies):
+        return "OPTION-not-applicable"
+    if sat_(Not(applies)):
+        return "OPTION-available"          # applicability itself undetermined
+    if not sat_(Not(taken)):
+        return "OPTION-taken"
+    if not sat_(taken):
+        return "OPTION-not-taken"
+    return "OPTION-available"
+
+
 def minimal_counterexample_core(rule, domain: list, free_names: list) -> dict:
     """The smallest set of free-variable values that forces a violation.
 
@@ -106,7 +132,15 @@ def minimal_counterexample_core(rule, domain: list, free_names: list) -> dict:
 
 def check_rule(rule, known: dict) -> dict:
     domain, provided, free_names = _pin(rule, known)
-    verdict = classify(domain, rule.predicate)
+    # Deontic force selects the QUESTION, not just the wording of the answer.
+    # An obligation is judged by compliance; a permission by applicability. The
+    # DSL carries the operator (dsl.Rule.deontic), so this is a dispatch on the
+    # rule's declared meaning rather than a guard bolted onto a verdict string.
+    permissive = bool(getattr(rule, "is_permissive", False))
+    if permissive and rule.applies is not None:
+        verdict = classify_option(domain, rule.applies, rule.taken)
+    else:
+        verdict = classify(domain, rule.predicate)
     counterexample = (
         minimal_counterexample_core(rule, domain, free_names)
         if verdict == "MAY-violate"
@@ -119,6 +153,9 @@ def check_rule(rule, known: dict) -> dict:
         "category": rule.category,
         "drug": rule.drug,
         "verdict": verdict,
+        # Named so a consumer can tell "the guideline required this and it did
+        # not happen" from "the guideline offered this and it was not taken".
+        "deontic": "permission" if permissive else "obligation",
         "counterexample_core": counterexample,
         "source_sentence": rule.source_sentence,
         "known_variables": provided,

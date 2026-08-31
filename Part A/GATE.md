@@ -190,3 +190,32 @@ asking *"why was this refused"* gets those, not a score. Same discipline as
   `unsupported_temporal` or to a temporal hole. Known, not fixed.
 - **`beyond_dsl` is under-detected.** It is only reached when validation fails
   or a decode errors, not predicted from the statement.
+
+## Modal predicates are refused, not turned into holes
+
+`holes_from` will not mint a hole from a phrase that reduces to a modal.
+*"may be considered"* becomes `has_may`, which is the guideline's own deontic
+force wearing a patient predicate's clothes.
+
+Declaring it as a hole is **worse than refusing**. A hole is a promise that
+some data source could one day fill it — that is what makes a PARTIAL encoding
+meaningful, and what a governance reader relies on when deciding whether the
+gap is closable. Nothing will ever populate "has may". The statement is
+discretionary, and discretionary is a refusal.
+
+The guard drops the modal without swallowing the real predicate: given
+`["may be considered", "at high risk"]`, only `has_high_risk` survives.
+
+## The validator's diagnosis now sets the refusal reason
+
+When the model returns a rule and the validator rejects it, the reason code
+comes from the defect rather than from the fallback:
+
+| Defect | Reason code | Why |
+|---|---|---|
+| `MODAL_PREDICATE` | `defeasible` | The guideline hedged; the statement is discretionary |
+| `VACUOUS_RULE` | `beyond_dsl` | No non-vacuous obligation could be extracted |
+
+Previously both fell through to `unbound_concept` (if anything failed to bind)
+or `beyond_dsl`, which told a governance reader to go looking for a missing
+code when the real problem was that the sentence had no checkable content.

@@ -405,6 +405,128 @@ publishing the same concept) rather than only on under-determination. It is now
 told that redundancy is not a reason to abstain, and to prefer a curated value
 set over a single code for category phrases.
 
+## Stage 1 addendum: the document's own glossary
+
+- **Schwartz & Hearst (2003), not an LLM.** The standard biomedical
+  abbreviation matcher: walk `Long form (SHORT)` right-to-left, every short-form
+  character must appear in order, and the first must land at a word start (that
+  boundary is what stops `AP` matching the tail of *thera-p-y*). ~60 lines,
+  deterministic, auditable. Reaching for a model here would have been slower,
+  more expensive, and less correct.
+- **Window = `min(len(short)+5, len(short)*2)` words before the bracket.** From
+  the original paper. A definition is never far from its parenthesis.
+- **Reject an expansion containing a bracket or a sentence boundary.** Without
+  it the matcher walks out of the phrase and into the surrounding prose; on
+  PMC13276589 it yielded `95% CI -> "...0.23-0.76). There were 246 fewer
+  recurrent thrombotic events"`. Two characters of guard, one whole error class.
+- **Stoplist the statistics vocabulary** (RR, OR, CI, HR, SD, IQR, NNT, AUC...).
+  Some are defined correctly -- `HR -> hazard ratio` is right in the document
+  that says it -- but they are measurement terms, never clinical concepts, and
+  expanding `HR` inside a cardiology retrieval query when it means *heart rate*
+  is worse than not expanding it.
+- **Require one reuse after the definition.** Defined-once-never-reused is the
+  signature of a society name in an author list (ESDO, EAGEN), not a clinical
+  concept. Drops them without a hand-written stoplist.
+- **Skip reference/acknowledgement/funding sections by `section_path`.** That
+  is where journal abbreviations live (`Berl`, `FL`).
+- **Never rewrite `Statement.text`.** Verbatim text and character offsets are
+  provenance-critical; `expand_abbreviations` is for retrieval queries only.
+  The docstring says so, because this is the kind of helper someone reuses.
+- **Threaded as an explicit parameter, not module state.** `doc_abbrevs` passes
+  `triage -> bind_statement -> bind -> search_all -> expand_query`. A module-level
+  "current document" global would have been shorter and would have raced: the
+  binder runs concurrently (see the `SqliteIndex` RLock note above).
+- **The formalizer gets it via a closure in demo.py**, so `gate.py`'s
+  `formalize(text, registry)` hook keeps its two-argument contract. Adding a
+  third parameter to an injected callable would have touched every test double.
+- **It supersedes nothing.** The hand-written `bind.ABBREVIATIONS` table stays
+  as the fallback; the document glossary is consulted first, because a guideline
+  is a better authority on what "PCA" means in itself than any list we can write
+  in advance, and it covers specialties the table was never written for.
+
+## Canonical form and the vacuity check
+
+- **Alias the solver ENV, do not rewrite the rule.** `check_nondegenerate`
+  builds `env = make_env(reg)` and then points every alias at the same Z3
+  symbol. Three lines, and every existing caller gets the fix without a
+  signature change. Rewriting the expression tree is only needed where the
+  REGISTRY itself must shrink (`canonicalize`, used at the bundle boundary).
+- **Merge only on ground truth.** A shared `system|code|version`, or a hole
+  that is a `has_`-prefixed restatement of a bound variable. Never a similarity
+  judgement -- see the LLM-synonym-pass note above for why.
+- **Merging across roles is deliberate.** `close_monitoring` is an action,
+  `has_close_monitoring` an observation. If they really were distinct, the
+  merged rule reads "if monitored, then monitor" -- and the vacuity check
+  rejects it. Either the merge is right or its consequence is caught, so the
+  aggressive choice is the safe one.
+- **Prefer the LONGER name as canonical.** Deterministic, and a governance
+  report reading `patient_controlled_intravenous_analgesia` beats one reading
+  `pca`.
+- **Report the merge in the bundle** (`merged_concepts`). Silent canonicalisation
+  would hide a claim about the guideline from the committee reviewing it.
+- **Modals are a CLOSED word class.** ~12 in English, none being coined. That
+  is why a fixed list is the right tool here and was the wrong tool for
+  abbreviations. `modal_only` requires ALL tokens to be modal, so
+  `has_appropriate_acupoints` survives (it is vague, which is the gate's job,
+  not this check's).
+- **`Rule.strength` already existed and was already filled in correctly.** The
+  bug was duplication into the antecedent, not a missing slot. Worth
+  remembering: the schema was right, the enforcement was missing.
+- **Track B re-verifies at load.** A bundle is a file -- older Track A,
+  hand-edited, or written before a check existed. Rejected rules come back in a
+  SEPARATE list from the guideline's refusals; folding them together would put
+  our defects into the residue number.
+- **`demo.py` writes to a fixed `--out` path.** An offline dry run silently
+  clobbers a live run's bundle. Use `--out` when smoke-testing.
+
+## Carrying state instead of re-deriving it
+
+- **`Triage.registry` exists because re-derivation is not idempotent here.**
+  `bind_statement` consults a model selector, so calling it twice on one
+  sentence can return two different vocabularies. Any code that rebuilds the
+  registry for the bundle can therefore drop a variable the rule still
+  references. If a step involves a model, carry its output forward; do not
+  recompute it and assume you will get the same answer.
+- **The symptom appeared three stages downstream**, as a cql-to-elm
+  "could not resolve identifier". Worth remembering when triaging: the
+  translator is rarely the thing that is wrong.
+- **`strength` is carried, not honoured.** It is populated, serialised and
+  copied into `LoadedRule`, and read by nothing. See RESULTS.md R17b.
+
+## The deontic operator
+
+- **`violation_condition` is the real interface, not `rule_to_z3`.** phi =
+  when -> then still describes the CONTENT of a permission (what is offered,
+  under what conditions), so vacuity checking still applies to it. What differs
+  is what counts as a violation, and that is a separate function.
+- **`deontic` is REQUIRED in the decoding schema.** An optional field with a
+  default of "obligation" would silently promote every permission the model
+  forgot to mark. Making it required costs nothing and removes the failure.
+- **The wording backstop is one-directional by design.** obligation ->
+  permission only. Documented in `deontic_of`; the asymmetry is a safety
+  argument, not an oversight.
+- **z3 `Solver.add(D, ...)` where D is a list raises.** Use `s.add(*D)`. Cost
+  me one debugging cycle.
+- **Prohibition is not a third operator.** F(p) = O(NOT p), already expressible.
+  Adding it would have been surface area with no semantics behind it.
+
+## The deterministic vetoes
+
+- **Guard every veto with `_DIRECTIVE`.** Table rows fold the recommendation
+  together with its evidence grading, so a rule keyed on "Certainty of
+  evidence:" alone deletes the recommendation it is attached to.
+- **Evidence sentences score 3.00 on `grade_certainty`** -- "low certainty" is
+  the same vocabulary a graded recommendation uses. That is why they reach the
+  classifier at all, and why a veto is needed rather than a prefilter tweak.
+- **A vetoed span VANISHES; a refused one is counted.** That asymmetry sets the
+  precision bar: the looser noun rule caught one more non-recommendation and
+  deleted a real `defeasible` statement, which would have understated the
+  residue. Yield was traded for zero false vetoes.
+- **The veto runs AFTER the prefilter threshold**, so anything scoring below 1.5
+  never reaches it -- which caught out the first version of the manifest test.
+- **Report vetoes in the manifest by reason, with sample texts.** Same rule as
+  `[judge: ...]`: a filter nobody can see is a filter nobody can audit.
+
 ## Known gaps
 
 - **The Docling path is written but untested here** — docling is not installed,
@@ -426,5 +548,7 @@ set over a single code for category phrases.
   `llm.select_candidate`, but only smoke-tested, not measured at scale. The heuristic is deliberately
   conservative, so live-terminology refusal rates are an upper bound, not the
   real residue.
-- The classifier has only ever run as the offline heuristic. No LLM has been
-  wired in, so `prefilter_disagreements` has not been measured for real.
+- ~~The classifier has only ever run as the offline heuristic~~ -- now wired
+  (`demo.py --live`, `goldset.py --live`). Measured: it rejects 11 of the 12
+  non-recommendations the heuristic let through (RESULTS.md R21).
+  `prefilter_disagreements` is still unmeasured at scale.

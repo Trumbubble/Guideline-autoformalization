@@ -175,6 +175,27 @@ Encode this clinical recommendation as a rule in the given schema.
 The rule means `when -> then`. Use ONLY the variables and events in the schema
 enums; there are no others. Give `then` at least one action variable.
 
+`deontic` is the FORCE of the recommendation, and it is not the same as the
+strength of the evidence:
+
+  "obligation" -- the guideline REQUIRES the action. "We recommend X." "X is
+                  indicated." "We suggest X." A patient who meets `when` and
+                  did not get `then` is a real deviation.
+  "permission" -- the guideline OFFERS the action. "X may be considered."
+                  "X is an option." "at the discretion of the clinician."
+                  The same patient has violated NOTHING; the option was not
+                  taken.
+
+"We suggest X" is an OBLIGATION -- GRADE-conditional means the evidence is
+weaker, not that the action is optional. "We suggest that X may be considered"
+is a PERMISSION: the permissive wording governs. Getting this wrong in the
+permissive direction accuses a clinician of a violation for declining an
+option, so when the wording genuinely offers rather than requires, say so.
+
+Never encode the modality as a variable. "may", "should", "consider" describe
+the recommendation, not the patient, and no data source can populate them.
+`deontic` and `strength` are where that information belongs.
+
 If the recommendation cannot be faithfully encoded -- an unstated threshold
 ("adequate", "high risk", "significant"), an exception or discretion the logic
 cannot carry, a statement about services rather than a patient -- return a
@@ -194,9 +215,24 @@ class GrammarTooLarge(RuntimeError):
     vocabulary, not the whole document's -- smaller, and it also stops the
     model reaching for a variable this statement never mentioned."""
 
+def _glossary_block(abbrevs: dict[str, str] | None) -> str:
+    """The document's own abbreviation definitions, handed to the formalizer so
+    it does not mint two variables for one concept. PMC13270348 wrote both
+    `pca` and `patient_controlled_intravenous_analgesia` into a single rule and
+    produced the tautology (has_ap and pca) -> pca, which certifies every
+    patient. Telling the model the two strings are one concept is the cheap half
+    of the fix; the sound half is the post-binding check in dsl.py."""
+    if not abbrevs:
+        return ""
+    lines = "\n".join(f"  {k} = {v}" for k, v in sorted(abbrevs.items()))
+    return ("\n\nThis document defines the following abbreviations. A short form "
+            "and its expansion are THE SAME CONCEPT: use one variable for both, "
+            "never two.\n" + lines)
+
 def formalize(statement: str, registry, *, effort: str = "high",
               model_id: str | None = None, max_depth: int | None = None,
-              temperature: float | None = None) -> dict:
+              temperature: float | None = None,
+              abbrevs: dict[str, str] | None = None) -> dict:
     """One encoding attempt. Returns what `dsl.decoding_schema` produces --
     pass it to `dsl.from_decoded()` for a Rule or a Refusal. The model must
     commit to one or the other in the same decode, which is what makes refusal
@@ -206,7 +242,8 @@ def formalize(statement: str, registry, *, effort: str = "high",
     while depth >= 0:
         try:
             return ask_json(FORMALIZE_INSTRUCTIONS,
-                            f'Recommendation:\n"""\n{statement}\n"""',
+                            f'Recommendation:\n"""\n{statement}\n"""'
+                            + _glossary_block(abbrevs),
                             dsl.decoding_schema(registry, depth), effort=effort,
                             max_tokens=4000, model_id=model_id,
                             temperature=temperature)

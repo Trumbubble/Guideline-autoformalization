@@ -228,3 +228,8 @@ Part B/engine/classes/
 Part B/engine/cp.txt
 Part B/engine/*.json
 !Part B/engine/package.json
+
+# Licensed terminology releases -- load locally, never redistribute.
+SnomedCT_*/
+RxNorm_*/
+Part A/terms.db
