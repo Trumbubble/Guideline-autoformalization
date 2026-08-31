@@ -72,6 +72,16 @@ class Triage:
     refusal: dsl.Refusal | None = None
     samples: int = 1
     refusal_rate: float = 0.0
+    # The registry the rule was ACTUALLY WRITTEN AGAINST. Carried rather than
+    # re-derived: binding goes through a model selector, so re-binding the same
+    # statement can return a different answer, and a caller that rebuilds the
+    # vocabulary for the bundle can drop a variable the rule still references.
+    # Measured on PMC13270348: `close_monitoring` bound during triage, did not
+    # bind on the rebuild, and the shipped rule referenced a variable the
+    # shipped registry did not contain -- so the artifact delivered was not the
+    # artifact verified. Track B caught it as UNKNOWN_VAR, which is the net
+    # working, not the pipeline working.
+    registry: dsl.Registry | None = None
 
     @property
     def encodable(self) -> bool:
@@ -81,12 +91,22 @@ class Triage:
         return self.decision in {"encode", "partial"}
 
     def as_refusal(self) -> dsl.Refusal | None:
+        """The statement-level refusal, carrying the concept-level detail.
+
+        The evidence is what makes a residue report actionable: "unbound_concept"
+        alone cannot be triaged, while "no code for 'deprescribing'" tells a
+        reader whether to fix the index or accept the residue."""
         if self.decision != "refuse":
             return None
-        return self.refusal or dsl.Refusal(
+        ev = tuple(f"[{e.source}/{e.code}] {e.detail}" for e in self.evidence)
+        if self.refusal is not None:
+            return replace(self.refusal,
+                               evidence=self.refusal.evidence or ev,
+                               source_span=self.refusal.source_span or self.text)
+        return dsl.Refusal(
             self.statement_id, self.reason_code or "beyond_dsl",
             "; ".join(e.detail for e in self.evidence) or "no encoding produced",
-            confidence=1.0 - self.confidence)
+            source_span=self.text, confidence=1.0 - self.confidence, evidence=ev)
 
 # ---------------------------------------------------------------- holes
 
@@ -117,7 +137,16 @@ def holes_from(statement: str, refusals, declined) -> tuple[dsl.VarDef, ...]:
             if (p and p.lower() in statement.lower() and p.lower() not in seen
                     and len(p.split()) <= MAX_HOLE_WORDS):
                 seen.add(p.lower())
-                out.append(hole_for(p, "condition"))
+                h = hole_for(p, "condition")
+                # "may be considered" reduces to `has_may`, which is the
+                # guideline's deontic force wearing a patient predicate's
+                # clothes. Declaring it as a hole makes it worse, not better:
+                # a hole is a promise that a data source could one day fill it,
+                # and nothing will ever populate "has may". The statement is
+                # discretionary; that is a refusal, not a free variable.
+                if dsl.modal_only(h.name):
+                    continue
+                out.append(h)
     for r in refusals:
         p = (r.source_span or "").strip()
         if p and is_vague(p) and p.lower() not in seen:
@@ -177,14 +206,16 @@ def triage(statement: str, index, *, statement_id: str = "s",
            samples: int = 1, allow_partial: bool = True,
            is_patient_level: bool | None = None,
            source_page: int | None = None,
-           source_span: str | None = None) -> Triage:
+           source_span: str | None = None,
+           doc_abbrevs: dict[str, str] | None = None) -> Triage:
     """Decide one statement. `formalize(text, registry) -> dict` is injected the
     same way every other model hook is, so this runs offline in tests."""
     ev: list[Evidence] = []
 
     # -- stage 2 evidence: what would not bind ---------------------------
     bindings, refusals = bind.bind_statement(
-        statement, index, mention_llm, select_llm, ref_id=statement_id)
+        statement, index, mention_llm, select_llm, ref_id=statement_id,
+        doc_abbrevs=doc_abbrevs)
     for r in refusals:
         # Attribute the failure. An `unbound_concept` that is really an INDEX
         # GAP is a bug in our retrieval; one where no candidate exists at all
@@ -218,7 +249,7 @@ def triage(statement: str, index, *, statement_id: str = "s",
                       "refuse" if refusals else "encode",
                       "unbound_concept" if refusals else None,
                       None, 0.0 if refusals else 0.5, tuple(ev),
-                      tuple(h.name for h in holes), samples=0)
+                      tuple(h.name for h in holes), samples=0, registry=reg)
 
     # -- attempt 1: strict. Only bound vocabulary is available. ----------
     outcomes = _attempt_k(statement, reg, formalize, statement_id,
@@ -227,10 +258,12 @@ def triage(statement: str, index, *, statement_id: str = "s",
     decls = [o for o in outcomes if isinstance(o, dsl.Refusal)]
     rate = len(decls) / len(outcomes)
 
+    blocked_codes: set[str] = set()
     if rules:
         rule, iss = _best(rules, reg)
         ev += [Evidence("validator", i.code, i.message) for i in iss]
         blocking = [i for i in iss if i.severity == "error"]
+        blocked_codes |= {i.code for i in blocking}
 
         # A strict encode is UNSAFE when the binder refused something. The
         # strict registry does not contain that concept, so a rule it produces
@@ -253,11 +286,28 @@ def triage(statement: str, index, *, statement_id: str = "s",
                                f"encoding may have silently omitted them; retrying "
                                f"with them declared as holes"))
             blocking = list(iss) or [Evidence]      # force the partial path below
+        # A concept that BOUND and then went unused. Not an error: an outcome
+        # is legitimately absent from `when` -- "acupuncture may be effective in
+        # relieving abdominal pain in patients with AP" has AP as the
+        # population and pain as the EFFECT, so encoding pain as a condition
+        # would be wrong. But a dropped population restriction looks identical
+        # from here, and that one changes who the rule applies to. So: surface
+        # it, name it, and let a reviewer decide. DROPPED_CONCEPT_RISK covers
+        # only the case where the BINDER failed; this covers the case where the
+        # binder succeeded and the model simply did not use the result.
+        used = dsl._vars_in(rule.when) | dsl._vars_in(rule.then)
+        unused = sorted(n for n in reg.names() if n not in used)
+        if unused:
+            ev.append(Evidence("gate", "UNUSED_BOUND_CONCEPT",
+                               f"bound but not used in the rule: {', '.join(unused)}"
+                               f" -- an outcome may legitimately be unused, a dropped "
+                               f"population restriction may not"))
         if not blocking:
             return Triage(statement_id, statement, "encode", None,
                           dsl.fragment_of(rule.when, rule.then), 1.0 - rate,
                           tuple(ev), dsl.open_holes(rule, reg), rule=rule,
-                          samples=len(outcomes), refusal_rate=rate)
+                          samples=len(outcomes), refusal_rate=rate,
+                          registry=reg)
         if [i for i in iss if getattr(i, "severity", "") == "error"]:
             ev.append(Evidence("validator", "REJECTED_AFTER_ENCODING",
                                f"encoding failed validation: "
@@ -288,6 +338,7 @@ def triage(statement: str, index, *, statement_id: str = "s",
         prate = sum(1 for o in outs if isinstance(o, dsl.Refusal)) / len(outs)
         if prules:
             rule, iss = _best(prules, wide)
+            blocked_codes |= {i.code for i in iss if i.severity == "error"}
             if not [i for i in iss if i.severity == "error"]:
                 open_ = dsl.open_holes(rule, wide)
                 if open_:
@@ -298,14 +349,26 @@ def triage(statement: str, index, *, statement_id: str = "s",
                                   dsl.fragment_of(rule.when, rule.then),
                                   1.0 - prate, tuple(ev), open_, rule=rule,
                                   samples=len(outcomes) + len(outs),
-                                  refusal_rate=prate)
+                                  refusal_rate=prate, registry=wide)
 
     # -- refuse, carrying the model's own reason where it gave one -------
     best = decls[0] if decls else None
     if best:
         ev.append(Evidence("model", best.reason_code, best.reason_text))
-    code = (best.reason_code if best else
-            "unbound_concept" if refusals else "beyond_dsl")
+    # The validator's diagnosis outranks the fallback, and outranks the model's
+    # own reason when the model did not decline at all. A statement rejected
+    # for MODAL_PREDICATE is discretionary -- the guideline hedged -- which is
+    # `defeasible`, not the "unbound_concept" the fallback would have reported.
+    # A VACUOUS_RULE means no non-vacuous obligation could be extracted; that
+    # is reported as `beyond_dsl` with the vacuity named in the evidence, so a
+    # governance reader is never told a rule certifies patients when it cannot.
+    if "MODAL_PREDICATE" in blocked_codes:
+        code = "defeasible"
+    elif "VACUOUS_RULE" in blocked_codes:
+        code = "beyond_dsl"
+    else:
+        code = (best.reason_code if best else
+                "unbound_concept" if refusals else "beyond_dsl")
     return Triage(statement_id, statement, "refuse", code, None, 1.0 - rate,
                   tuple(ev), tuple(h.name for h in holes), refusal=best,
                   samples=len(outcomes), refusal_rate=rate)

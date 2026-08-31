@@ -327,6 +327,17 @@ def test_rule_json_round_trip():
     assert loads(dumps([rule])) == [rule]
     json.dumps(to_dict(rule))                       # must be JSON-serialisable
 
+def test_a_refusal_carries_the_evidence_beneath_it():
+    """"unbound_concept" alone cannot be triaged. A reader needs to know WHICH
+    concept failed, to tell a vague guideline from a gap in our index."""
+    r = Refusal("s4", "unbound_concept", "nothing resolved",
+                undefined_predicates=("an adequate trial",),
+                evidence=("[binder/unbound_index_gap] no code for 'deprescribing'",))
+    assert from_dict(to_dict(r)) == r
+    assert "evidence" in to_dict(r)
+    sch = dsl.decoding_schema(R)
+    assert "evidence" in sch["$defs"]["refusal"]["properties"]
+
 def test_refusal_json_round_trip():
     ref = Refusal("r5", "vague_predicate",
                   "'after an adequate trial of conservative therapy' has no threshold",
@@ -347,6 +358,282 @@ def test_schema_and_validator_agree_on_value_types():
 
 def test_degenerate_junction():
     assert "DEGENERATE_JUNCTION" in codes(validate(And([Cmp("egfr", "<", 30)]), R))
+
+
+# ------------------------------------------- (N) canonical form and modals
+# The PMC13270348 failure: two names for one code made a tautology look
+# contingent, and a deontic modal became a patient predicate. See RESULTS.md R14.
+
+_PCA = "http://snomed.info/sct|1351574007|20260801"
+
+def _pca_registry():
+    return Registry([
+        VarDef("has_ap", "bool", binding="http://snomed.info/sct|197456007|x",
+               role="observation"),
+        VarDef("pca", "bool", binding=_PCA, role="action"),
+        VarDef("patient_controlled_intravenous_analgesia", "bool",
+               binding=_PCA, role="action"),
+    ])
+
+def test_two_variables_on_one_code_are_aliased():
+    a = dsl.canonical_aliases(_pca_registry())
+    assert a == {"pca": "patient_controlled_intravenous_analgesia"}
+
+def test_a_hole_restating_a_bound_variable_is_aliased_onto_it():
+    """`has_close_monitoring` (unbound) alongside `close_monitoring` (bound) is
+    a duplicate, not residue -- and the rule used the hole, so it was reported
+    PARTIAL despite the concept having bound."""
+    reg = Registry([
+        VarDef("close_monitoring", "bool", binding="http://snomed.info/sct|182777000|x",
+               role="action"),
+        VarDef("has_close_monitoring", "bool", role="observation", unbound=True)])
+    assert dsl.canonical_aliases(reg) == {"has_close_monitoring": "close_monitoring"}
+
+def test_an_unbound_variable_with_no_bound_twin_is_left_alone():
+    reg = Registry([VarDef("has_high_risk", "bool", role="observation", unbound=True)])
+    assert dsl.canonical_aliases(reg) == {}
+
+def test_the_binding_collision_tautology_is_caught():
+    """(has_ap AND pca) -> patient_controlled_intravenous_analgesia denotes
+    (A AND B) -> B. It shipped as a sound encoding because the two names are
+    two SYMBOLS; the identity is in the terminology layer."""
+    reg = _pca_registry()
+    rule = Rule("t", And([Cmp("has_ap", "==", True), Cmp("pca", "==", True)]),
+                Cmp("patient_controlled_intravenous_analgesia", "==", True),
+                "monitor", "PCA", source_span="x")
+    assert "VACUOUS_RULE" in codes(check_nondegenerate(rule, reg))
+
+def test_the_same_rule_over_distinct_concepts_is_not_vacuous():
+    """The check must not fire just because a rule mentions its consequent's
+    neighbours -- only when the two really are one concept."""
+    reg = Registry([
+        VarDef("has_ap", "bool", binding="http://snomed.info/sct|197456007|x"),
+        VarDef("pca", "bool", binding=_PCA, role="action"),
+        VarDef("epidural", "bool", binding="http://snomed.info/sct|18946005|x",
+               role="action")])
+    rule = Rule("t", And([Cmp("has_ap", "==", True), Cmp("pca", "==", True)]),
+                Cmp("epidural", "==", True), "recommend", "epidural", source_span="x")
+    assert "VACUOUS_RULE" not in codes(check_nondegenerate(rule, reg))
+
+def test_canonicalize_rewrites_rules_and_shrinks_the_registry():
+    reg = _pca_registry()
+    rule = Rule("t", Cmp("pca", "==", True), Cmp("has_ap", "==", True),
+                "monitor", "x", source_span="x")
+    reg2, rules2, alias = dsl.canonicalize(reg, [rule])
+    assert len(reg2.names()) == 2 and "pca" not in reg2
+    assert rules2[0].when.var == "patient_controlled_intravenous_analgesia"
+    assert alias == {"pca": "patient_controlled_intravenous_analgesia"}
+
+def test_canonicalize_leaves_events_alone():
+    """Since() names an EventDef, a separate namespace from variables."""
+    reg = Registry([VarDef("a", "bool", binding="s|1|x"),
+                    VarDef("aa", "bool", binding="s|1|x")], [EventDef("dialysis")])
+    rule = Rule("t", Since("dialysis", 30), Cmp("a", "==", True),
+                "monitor", "x", source_span="x")
+    _, rules2, _ = dsl.canonicalize(reg, [rule])
+    assert rules2[0].when.event == "dialysis"
+
+def test_the_bundle_is_canonical_and_says_what_it_merged():
+    reg = _pca_registry()
+    rule = Rule("t", Cmp("pca", "==", True), Cmp("has_ap", "==", True),
+                "monitor", "x", source_span="x")
+    d = dsl.bundle_to_dict(reg, [rule])
+    assert len(d["registry"]["variables"]) == 2
+    assert d["merged_concepts"] == {"pca": "patient_controlled_intravenous_analgesia"}
+
+def test_a_clean_bundle_carries_no_merge_record():
+    d = dsl.bundle_to_dict(Registry([VarDef("a", "bool", binding="s|1|x")]), [])
+    assert "merged_concepts" not in d
+
+def test_modal_only_separates_deontic_force_from_clinical_predicates():
+    assert dsl.modal_only("has_may")
+    assert dsl.modal_only("is_recommended")
+    assert dsl.modal_only("has_considered")
+    assert not dsl.modal_only("has_close_monitoring")
+    assert not dsl.modal_only("has_appropriate_acupoints")   # vague, but clinical
+    assert not dsl.modal_only("egfr")
+
+def test_a_modal_predicate_is_a_validation_error():
+    """`has_may`, distilled from "may be considered", is the guideline's own
+    strength wearing a patient predicate's clothes. Nothing populates it, so
+    the rule is UNKNOWN for every patient forever."""
+    reg = Registry([VarDef("has_may", "bool", role="observation", unbound=True),
+                    VarDef("epidural", "bool", binding="s|1|x", role="action")])
+    rule = Rule("t", Cmp("has_may", "==", True), Cmp("epidural", "==", True),
+                "recommend", "epidural", source_span="x")
+    iss = [i for i in validate_rule(rule, reg) if i.severity == "error"]
+    assert "MODAL_PREDICATE" in [i.code for i in iss]
+
+def test_strength_in_its_own_slot_is_not_an_error():
+    """The DSL already separates deontic force from the condition; the check
+    must object only when the modal LEAKS into the logic."""
+    reg = Registry([VarDef("has_ap", "bool", binding="s|1|x"),
+                    VarDef("epidural", "bool", binding="s|2|x", role="action")])
+    rule = Rule("t", Cmp("has_ap", "==", True), Cmp("epidural", "==", True),
+                "recommend", "epidural", strength="suggest (conditional)",
+                source_span="x")
+    assert "MODAL_PREDICATE" not in codes(validate_rule(rule, reg))
+
+
+# ------------------------------------------- (N+1) deontic force (R17b)
+
+def test_explicit_permission_is_detected():
+    assert dsl.is_permissive("weak (suggest); may be considered")
+    assert dsl.is_permissive(None, "epidural analgesia may be considered when "
+                                   "expertise is available")
+    assert dsl.is_permissive("optional")
+
+def test_grade_conditional_is_not_permission():
+    """"We suggest anticoagulant prophylaxis" still recommends the ACTION --
+    the weakness is in the evidence, not in the obligation. Treating every weak
+    recommendation as optional would silence most of a guideline."""
+    assert not dsl.is_permissive("weak (suggest)", "We suggest anticoagulant "
+                                                  "prophylaxis in this population.")
+    assert not dsl.is_permissive("conditional recommendation")
+    assert not dsl.is_permissive("strong", "We recommend prophylaxis.")
+
+def test_permission_is_read_from_the_source_when_strength_is_loose():
+    """The model's strength summary is not always faithful; the span is
+    verbatim from the document, so both are consulted."""
+    assert dsl.is_permissive("suggest (conditional)",
+                             "We suggest that acupuncture may be considered.")
+
+
+# ------------------------------------- (N+2) deontic operator (R18)
+
+def _deontic_reg():
+    return Registry([VarDef("a", "bool", binding="s|1|x"),
+                     VarDef("b", "bool", binding="s|2|x"),
+                     VarDef("x", "bool", binding="s|3|x", role="action")])
+
+def _rule_d(deontic, span="We recommend x.", when="a", then_val=True, rid="r"):
+    return Rule(rid, Cmp(when, "==", True), Cmp("x", "==", then_val),
+                "recommend", "x", deontic=deontic, source_span=span)
+
+def test_the_operator_round_trips():
+    r = _rule_d("permission")
+    assert to_dict(r)["deontic"] == "permission"
+    assert from_dict(to_dict(r)).deontic == "permission"
+
+def test_a_rule_with_no_operator_defaults_to_obligation():
+    """Bundles written before the field existed must not silently become
+    permissions -- the default has to be the stricter reading."""
+    d = to_dict(_rule_d("obligation"))
+    del d["deontic"]
+    assert from_dict(d).deontic == "obligation"
+
+def test_the_wording_can_only_strengthen_permission_never_weaken_it():
+    """The fallback moves obligation -> permission, never the reverse. Guessing
+    permission wrongly silences an alert, which is recoverable; guessing
+    obligation wrongly accuses a clinician, which is not."""
+    assert dsl.deontic_of(_rule_d("obligation", "x may be considered")) == "permission"
+    assert dsl.deontic_of(_rule_d("permission", "We recommend x.")) == "permission"
+    assert dsl.deontic_of(_rule_d("obligation", "We recommend x.")) == "obligation"
+
+def test_a_permission_can_never_be_violated():
+    """The soundness property the operator buys, checked directly on the
+    formula rather than on a verdict string: there is no patient, and no
+    completion of the unknowns, for which a permission is violated."""
+    reg = _deontic_reg()
+    env = make_env(reg)
+    s = z3.Solver()
+    s.add(*domain_axioms(reg, env))
+    s.add(dsl.violation_condition(_rule_d("permission"), env))
+    assert s.check() == z3.unsat
+
+def test_an_obligation_can_be_violated():
+    reg = _deontic_reg()
+    env = make_env(reg)
+    s = z3.Solver()
+    s.add(*domain_axioms(reg, env))
+    s.add(dsl.violation_condition(_rule_d("obligation"), env))
+    assert s.check() == z3.sat
+
+def test_permitting_what_another_rule_forbids_is_a_conflict():
+    """The check the operator makes POSSIBLE. Collapse permission into
+    obligation and "x may be considered" and "avoid x" are just two
+    obligations about x -- their disagreement is invisible."""
+    reg = _deontic_reg()
+    permit = _rule_d("permission", "x may be considered", rid="perm")
+    forbid = _rule_d("obligation", "Avoid x.", when="b", then_val=False, rid="avoid")
+    got = dsl.conflicts([permit, forbid], reg)
+    assert len(got) == 1
+    assert got[0]["permits"] == "perm" and got[0]["requires"] == "avoid"
+    assert got[0]["shared_variables"] == ["x"]
+
+def test_two_obligations_are_not_a_deontic_conflict():
+    """They may still contradict each other, but that is not what this check
+    is for -- reporting it here would bury the signal."""
+    reg = _deontic_reg()
+    a = _rule_d("obligation", "We recommend x.", rid="a")
+    b = _rule_d("obligation", "Avoid x.", when="b", then_val=False, rid="b")
+    assert dsl.conflicts([a, b], reg) == []
+
+def test_rules_over_different_actions_do_not_conflict():
+    reg = Registry([VarDef("a", "bool", binding="s|1|x"),
+                    VarDef("x", "bool", binding="s|2|x", role="action"),
+                    VarDef("y", "bool", binding="s|3|x", role="action")])
+    permit = Rule("p", Cmp("a", "==", True), Cmp("x", "==", True),
+                  "recommend", "x", deontic="permission", source_span="s")
+    other = Rule("o", Cmp("a", "==", True), Cmp("y", "==", True),
+                 "recommend", "y", deontic="obligation", source_span="s")
+    assert dsl.conflicts([permit, other], reg) == []
+
+def test_the_decoding_schema_forces_a_choice_of_operator():
+    """`deontic` is REQUIRED, so the model must commit rather than letting the
+    default quietly promote a permission into an obligation."""
+    sch = dsl.decoding_schema(CKD_REGISTRY, 1)
+    rule = sch["$defs"]["rule"]
+    assert "deontic" in rule["required"]
+    assert rule["properties"]["deontic"]["enum"] == ["obligation", "permission"]
+    assert dsl.check_decoding_schema(sch) == []
+
+
+# ------------------------------------- (N+3) the action must survive (R19)
+
+def _action_reg():
+    return Registry([
+        VarDef("has_expertise_available", "bool", role="observation", unbound=True),
+        VarDef("strict_aseptic_techniques", "bool", binding="s|1|x", role="action",
+               description="Implements aseptic technique"),
+        VarDef("epidural", "bool", binding="s|2|x", role="action",
+               description="Epidural analgesia"),
+        VarDef("on_ace_inhibitor", "bool", binding="s|3|x", role="action",
+               description="ACE INHIBITORS, PLAIN")])
+
+def _act_codes(then, target, reg=None):
+    r = Rule("r", Cmp("has_expertise_available", "==", True), Cmp(then, "==", True),
+             "recommend", target, source_span="x")
+    return [i.code for i in validate_rule(r, reg or _action_reg())]
+
+def test_the_recommended_action_going_missing_is_flagged():
+    """The real PMC13270348:0143 shape: "epidural analgesia may be considered
+    ... aseptic technique and close monitoring are essential" encoded as
+    expertise -> aseptic technique. The epidural is gone and its PRECONDITION
+    was promoted to be the recommendation. NO_ACTION_ATOM passed, because
+    aseptic technique is itself an action variable."""
+    assert "ACTION_TARGET_MISMATCH" in _act_codes(
+        "strict_aseptic_techniques", "epidural analgesia")
+
+def test_the_right_action_is_not_flagged():
+    assert "ACTION_TARGET_MISMATCH" not in _act_codes("epidural", "epidural analgesia")
+
+def test_an_abbreviated_target_is_not_a_mismatch():
+    """`target` is a human gloss and abbreviates. Requiring exact token
+    equality fired on a correct rule -- "ACEi" vs `on_ace_inhibitor`."""
+    assert "ACTION_TARGET_MISMATCH" not in _act_codes("on_ace_inhibitor", "ACEi")
+    assert "ACTION_TARGET_MISMATCH" not in _act_codes("on_ace_inhibitor", "ACE inhibitor")
+
+def test_the_mismatch_is_a_warning_not_an_error():
+    """The match is lexical and `target` may name the action in a different
+    vocabulary than the variable does ("thromboprophylaxis" vs `on_lmwh`), so
+    rejecting on it would discard good rules. It belongs in the report."""
+    reg = _action_reg()
+    r = Rule("r", Cmp("has_expertise_available", "==", True),
+             Cmp("strict_aseptic_techniques", "==", True),
+             "recommend", "epidural analgesia", source_span="x")
+    bad = [i for i in validate_rule(r, reg) if i.code == "ACTION_TARGET_MISMATCH"]
+    assert bad and all(i.severity == "warn" for i in bad)
 
 
 if __name__ == "__main__":

@@ -320,6 +320,201 @@ def _first_match(pats, *texts) -> str | None:
                 return m.group(1).strip()
     return None
 
+# ---------------------------------------------------------------- glossary
+# Guidelines define their abbreviations once, on first use, in a fixed shape:
+# "Long form (SHORT)". Collecting those in one sweep is what stops the
+# formalizer minting two variables for one concept -- PMC13270348 wrote both
+# `pca` and `patient_controlled_intravenous_analgesia` into a single rule,
+# which made it the tautology (A and B) -> B. See NOTES.md.
+#
+# This is Schwartz & Hearst (2003), the standard biomedical abbreviation
+# matcher: deterministic, ~60 lines, no model. It is deliberately NOT an LLM
+# synonym pass -- merging "acute pancreatitis" with "severe acute
+# pancreatitis" would be a clinical error, and a model asked "do these mean
+# the same thing?" will make it. Only two signals are trusted to merge
+# concepts: a definition stated in the document (here) and a shared
+# terminology code (bind.py). Both are ground truth; judgement is not.
+
+# Sections whose acronyms are bibliographic or organisational, not clinical.
+_GLOSSARY_SKIP = re.compile(
+    r"reference|acknowledg|competing|conflict|funding|contribut|appendix|"
+    r"supplement|author information", re.I)
+
+_PARENTHETICAL = re.compile(r"\(([^()]{2,40})\)")
+
+# Statistics and study-design tokens. Some do get defined correctly (HR ->
+# hazard ratio) but they are measurement vocabulary, never clinical concepts,
+# and expanding them inside a retrieval query is noise at best -- "HR" in a
+# cardiology guideline means heart rate, whatever this document defined it as.
+# Excluded from the glossary rather than trusted and filtered downstream.
+_ABBREV_STOPLIST = {
+    "RR", "OR", "aOR", "CI", "95% CI", "95%CI", "HR", "SD", "SE", "IQR",
+    "NNT", "ARR", "MD", "SMD", "ROC", "AUC", "ITT", "PP", "NO",
+}
+
+def _is_short_form(s: str) -> bool:
+    """Schwartz-Hearst short-form test: 2-10 chars, <=2 words, starts
+    alphanumeric, contains a letter, and carries at least one capital."""
+    return (2 <= len(s) <= 10 and s[0].isalnum() and len(s.split()) <= 2
+            and any(c.isalpha() for c in s)
+            and any(c.isupper() for c in s))
+
+def _best_long_form(short: str, window: str) -> str | None:
+    """Walk both strings right-to-left. Every character of the short form must
+    appear in the window in order, and the short form's FIRST character must
+    land at the start of a word -- that word boundary is what stops "AP"
+    matching the tail of "therapy"."""
+    s, l = len(short) - 1, len(window) - 1
+    while s >= 0:
+        c = short[s].lower()
+        if not c.isalnum():
+            s -= 1
+            continue
+        while (l >= 0 and window[l].lower() != c) or \
+              (s == 0 and l > 0 and window[l - 1].isalnum()):
+            l -= 1
+        if l < 0:
+            return None
+        l -= 1
+        s -= 1
+    return window[l + 1:].strip()
+
+def _long_form_for(short: str, before: str) -> str | None:
+    # S&H window: the definition is never far from the parenthesis.
+    words = before.split()
+    if not words:
+        return None
+    window = " ".join(words[-min(len(short) + 5, len(short) * 2):])
+    long = _best_long_form(short, window)
+    if not long:
+        return None
+    # An expansion that is shorter than what it expands, or that already
+    # contains the short form spelled out, is a false match.
+    if len(long.split()) > min(len(short) + 5, len(short) * 2):
+        return None
+    if len(long) <= len(short) or short.lower() in long.lower().split():
+        return None
+    # A "definition" that runs through a bracket or a sentence boundary is the
+    # matcher having walked out of the phrase and into the surrounding prose:
+    # PMC13276589 offered `95% CI -> "95% CI, 0.23-0.76). There were 246 fewer
+    # recurrent thrombotic events"`. Cheap guard, kills the whole class.
+    if "(" in long or ")" in long or re.search(r"\.\s+[A-Z]", long):
+        return None
+    return long
+
+def extract_abbreviations(blocks: Iterable["Block"],
+                          min_uses: int = 1) -> dict[str, str]:
+    """One pass over the whole document -> {SHORT: long form}.
+
+    `min_uses` is how many times the short form must appear again AFTER its
+    definition to be kept. Defining an acronym and never reusing it is the
+    signature of a society name in an author list (ESDO, EAGEN), not of a
+    clinical concept; requiring one reuse drops those without a stoplist.
+
+    This is the only stage that sees the whole document -- every later stage
+    works one statement at a time -- so the sweep has to happen here."""
+    body = [b for b in blocks
+            if not any(_GLOSSARY_SKIP.search(s) for s in b.section_path)]
+    text = "\n".join(b.text for b in body)
+    found: dict[str, str] = {}
+    for m in _PARENTHETICAL.finditer(text):
+        # "(PCA)" but also "(patient-controlled analgesia, PCA)"
+        for cand in [m.group(1)] + [p.strip() for p in m.group(1).split(",")]:
+            if not _is_short_form(cand):
+                continue
+            long = _long_form_for(cand, text[max(0, m.start() - 200):m.start()])
+            if cand in _ABBREV_STOPLIST:
+                break
+            if long and cand not in found:
+                found[cand] = long
+            break
+    if min_uses:
+        for short in list(found):
+            uses = len(re.findall(rf"(?<![A-Za-z]){re.escape(short)}(?![A-Za-z])",
+                                  text))
+            if uses - 1 < min_uses:        # -1 for the definition itself
+                del found[short]
+    return found
+
+def expand_abbreviations(text: str, abbrevs: dict[str, str]) -> str:
+    """Rewrite short forms to their definitions, for RETRIEVAL QUERIES ONLY.
+
+    Never call this on a Statement's stored text: `text` is verbatim from the
+    source and its character offsets index the original document. Rewriting it
+    breaks provenance and the classifier's verbatim-quote check. The binder
+    searches on the expansion; the record keeps the original."""
+    for short, long in sorted(abbrevs.items(), key=lambda kv: -len(kv[0])):
+        text = re.sub(rf"(?<![A-Za-z]){re.escape(short)}(?![A-Za-z])",
+                      long, text)
+    return text
+
+# ------------------------------------------------------- deterministic vetoes
+# The prefilter scores directive VOCABULARY, and a sentence can carry that
+# vocabulary while talking ABOUT a recommendation rather than making one:
+# "this result should be interpreted with caution" is about a confidence
+# interval. Measured on the gold set, 12 of 45 extracted spans were not
+# recommendations at all (RESULTS.md R20).
+#
+# The model classifier catches 11 of those 12, but it costs a call per
+# candidate. These three rules catch most of them for free and with certainty,
+# so the model only sees what actually needs judgement. Every one is guarded by
+# `_DIRECTIVE`: a sentence that also states a real obligation is never vetoed,
+# because table rows fold the recommendation together with its evidence grading
+# ("We recommend epidural analgesia ...; Certainty of evidence: Weak") and a
+# rule keyed on the grading alone would delete the recommendation with it.
+
+_DIRECTIVE = re.compile(
+    r"\b(we recommend|we suggest|is recommended|are recommended|is not recommended|"
+    r"recommends?|should|must|shall|is indicated|are indicated|"
+    r"may be considered|should be considered|avoid|do not use|contraindicated)\b", re.I)
+
+# Statistics and evidence-grading vocabulary. An effect estimate is a finding,
+# not an instruction.
+_EVIDENCE_MARKERS = re.compile(
+    r"\b(odds ratio|hazard ratio|risk ratio|confidence interval|"
+    r"certainty (of|in) (the )?evidence|"
+    r"(OR|HR|RR|aOR)\s*[,=]?\s*\d|95%\s*CI|"
+    r"n\s*=\s*\d|p\s*[<=]\s*0?\.\d|\d+\s+studies)\b")
+
+# "recommendation" used to REFER to one -- "a strong recommendation", "this
+# conditional recommendation", "recommendation 6" -- rather than to make one.
+# A leading "Recommendation 12:" is a LABEL on a real recommendation and is
+# exempt: numbered guidelines write their statements that way.
+# Only the two constructions that cannot introduce a clinical action:
+# "recommendations THAT <someone does something>" reports one, and
+# "recommendation 6" names one. The looser "a/the/this <adjective>
+# recommendation" was tried and vetoed a real statement -- "Although the panel
+# made a conditional recommendation for no primary anticoagulant prophylaxis
+# for persistently positive APLA, panel members emphasised ..." -- which
+# belongs in the residue report as a `defeasible` refusal, not deleted. A
+# vetoed span vanishes; a refused one is still counted and explained. Losing it
+# understates the residue, so the rule gives up yield for safety.
+_RECOMMENDATION_NOUN = re.compile(
+    r"\brecommendations?\s+that\b|\brecommendation\s+\d", re.I)
+_RECOMMENDATION_LABEL = re.compile(r"^\s*recommendations?\s*\d*\s*[:.\u2013-]", re.I)
+
+def not_a_statement(text: str) -> str | None:
+    """A reason this span cannot be a recommendation, or None.
+
+    Deliberately conservative: each rule is vetoed by the presence of directive
+    language, so the cost of a miss is one model call and the cost of a false
+    veto is a lost recommendation. Those are not symmetric."""
+    t = text.strip()
+    if not t:
+        return "empty"
+    if _DIRECTIVE.search(t) and not t.endswith(":"):
+        return None
+    if t.endswith(":"):
+        # "Once the decision has been made to proceed with surgery, the
+        # following should be considered:" -- a lead-in to a list. The
+        # recommendations are the list items, which are separate blocks.
+        return "list_stem"
+    if _EVIDENCE_MARKERS.search(t):
+        return "evidence_summary"
+    if _RECOMMENDATION_NOUN.search(t) and not _RECOMMENDATION_LABEL.match(t):
+        return "about_a_recommendation"
+    return None
+
 # ---------------------------------------------------------------- classifier
 
 CLASSIFIER_SCHEMA = {
@@ -499,11 +694,16 @@ def segment(blocks: list[Block], doc_id: str,
     features the prefilter scores, so it can only disagree where a negative
     weight outvoted a positive one."""
     units = blocks_to_units(blocks)
+    abbrevs = extract_abbreviations(blocks)
     scored = [(u, *prefilter(u)) for u in units]
-    candidates, labels, rejected = [], {}, []
+    candidates, labels, rejected, vetoed = [], {}, [], []
     for u, sc, f in scored:
         if sc < threshold:
             rejected.append((u, sc, f))
+            continue
+        veto = not_a_statement(u.text)
+        if veto:
+            vetoed.append((u, veto))
             continue
         if is_label_only(u.text):
             slot = labels.setdefault(u.box_id or u.prov.locator, [None, None])
@@ -545,13 +745,31 @@ def segment(blocks: list[Block], doc_id: str,
     by_kind: dict[str, int] = {}
     for b in blocks:
         by_kind[b.kind] = by_kind.get(b.kind, 0) + 1
+    # A document with no directive language at all is usually the wrong file --
+    # a supplement, an evidence table, a methods appendix. Saying so beats
+    # reporting a bare zero, which reads as a tool failure.
+    deontic = sum(1 for u in units
+                  if any(f.startswith("deontic") or f in {"imperative", "table_action"}
+                         for f in prefilter(u)[1]))
     manifest = {
         "doc_id": doc_id, "blocks": len(blocks), "blocks_by_kind": by_kind,
+        # Document-level abbreviation glossary. Handed to the binder (as query
+        # expansion) and to the formalizer (as canonical names) so one concept
+        # does not enter the registry under two labels.
+        "abbreviations": abbrevs,
+        "units_with_directive_language": deontic,
         "units": len(units), "candidates": len(candidates),
         "statements": len(stmts), "recommendations": len(kept),
         "duplicates": sum(1 for s in stmts if s.duplicate_of),
         "prefilter_threshold": threshold,
         "prefilter_rejected": len(rejected),
+        # Spans the deterministic vetoes removed before any judge saw them.
+        # Reported by reason and never silently: a veto that fires wrongly
+        # deletes a recommendation, so it has to be auditable.
+        "vetoed": len(vetoed),
+        "vetoed_by_reason": {r: sum(1 for _, x in vetoed if x == r)
+                             for r in sorted({x for _, x in vetoed})},
+        "vetoed_texts": [u.text.strip()[:120] for u, _ in vetoed[:10]],
         "labels_absorbed": len(labels),
         "classifier": "llm" if llm else "heuristic",
         # Flowcharts are PathWISE's substrate, not ours. Count them, do not
@@ -839,6 +1057,17 @@ def _pymupdf_blocks(doc, doc_id: str) -> list[Block]:
         table_rects = []
         try:
             for t in page.find_tables().tables:
+                rows = t.extract()
+                # `find_tables` over-detects: on a text-heavy PDF it reads
+                # aligned prose as a table and chops one sentence across seven
+                # "rows". Measured on a real supplement: 64 fake table_rows,
+                # each a fragment of "CPET refers to a testing method that
+                # measures:". A real table has ROWS WITH SEVERAL CELLS -- if
+                # most rows hold a single cell, it is a column of prose.
+                multi = sum(1 for r in rows
+                            if sum(1 for c in r if (c or "").strip()) >= 2)
+                if not rows or multi < max(2, len(rows) * 0.5):
+                    continue
                 table_rects.append(tuple(t.bbox))
                 headers = [h or "" for h in (getattr(t.header, "names", None) or [])]
                 for r, row in enumerate(t.extract()):

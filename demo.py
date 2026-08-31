@@ -57,28 +57,42 @@ def main(argv=None):
     ap.add_argument("--live", action="store_true",
                     help="use the real model, compiler and execution engine")
     ap.add_argument("--out", default=os.path.join(HERE, "Part B", "bundle.json"))
+    ap.add_argument("--doc", metavar="PATH_OR_PMCID",
+                    help="your own guideline: a .pdf / .xml / .html file, or a "
+                         "PubMed Central id like PMC13276589")
+    ap.add_argument("--max", type=int, default=5,
+                    help="how many recommendations to process from --doc")
     a = ap.parse_args(argv)
 
-    mention_llm = select_llm = formalize = None
+    mention_llm = select_llm = formalize = classify = None
     compiler = None
     if a.live:
         import llm, toolchain
         mention_llm, select_llm = llm.propose_mentions, llm.select_candidate
-        formalize = lambda t, r: llm.formalize(t, r, effort="medium")
+        _formalize = llm.formalize
+        classify = llm.classify_block
         if toolchain.available():
             compiler = toolchain.cql_to_elm
         else:
             print("[warn] CQL toolchain not built; compilation will be structural only")
 
     index = _build_index(a.live)
+    statements, abbrevs = (_statements_from(a.doc, a.max, classify) if a.doc
+                           else (STATEMENTS, {}))
+    if a.live:
+        # The formalizer hook keeps its (text, registry) contract; the document
+        # glossary rides in on the closure, so gate.py never has to know about it.
+        formalize = lambda t, r: _formalize(t, r, effort="medium", abbrevs=abbrevs)
+    if a.doc:
+        print(f"  source: {a.doc}  ->  {len(statements)} recommendation(s)\n")
 
     # ---- 1. triage, before anything is compiled --------------------------
     hdr(1, "TRIAGE  -- what the tool refuses to encode, and why")
     triages = []
-    for sid, text in STATEMENTS:
+    for sid, text in statements:
         t = gate.triage(text, index, statement_id=sid, mention_llm=mention_llm,
                         select_llm=select_llm, formalize=formalize,
-                        source_span=text)
+                        source_span=text, doc_abbrevs=abbrevs)
         triages.append(t)
         mark = {"encode": "ENCODE ", "partial": "PARTIAL", "refuse": "REFUSE "}[t.decision]
         print(f"  [{mark}] {sid}  {text[:62]}")
@@ -136,7 +150,15 @@ def main(argv=None):
     # ---- 6. verify: three-valued verdict over Z3 -------------------------
     hdr(4, "VERIFY  -- three-valued verdict, with the assumptions named")
     from from_dsl import load_bundle
-    loaded, loaded_refusals, _ = load_bundle(a.out)
+    loaded, loaded_refusals, _, loaded_rejected = load_bundle(a.out)
+    if loaded_rejected:
+        # Track B re-verifies what Track A wrote. A rule that reaches here and
+        # fails is OUR defect, not the guideline's residue -- report it as such
+        # and do not run it against a patient.
+        print(f"  {len(loaded_rejected)} rule(s) REJECTED BY VERIFICATION and not "
+              f"loaded:")
+        for x in loaded_rejected:
+            print(f"    [{', '.join(x['codes'])}] {x['rule_id']}: {x['why'][:60]}")
     import api
     for lr in loaded:
         for label, known in _patients_for(lr):
@@ -167,14 +189,26 @@ def main(argv=None):
                 sizes = toolchain.expand_valuesets(elm, vs)
                 for oid, n in sizes.items():
                     print(f"  expanded {oid.replace('urn:oid:','')} -> {n} codes")
+                # The library reports its own deontic force. Reading only
+                # `Violated` would print "compliant" for a permitted action
+                # that was simply not taken -- the CQL side would then contradict
+                # the Z3 side, which says OPTION-not-taken. CQL cannot express
+                # the distinction, so the executor has to honour the marker the
+                # library carries instead (RESULTS.md R18).
                 for label, path in _demo_patients(elm, vs, d):
                     out = toolchain.execute(elm, path, vs)["results"]
                     vals = next(iter(out.values()))
-                    v = vals.get("Violated")
-                    verdict = ("VIOLATED" if v is True else
-                               "compliant" if v is False else
-                               "UNKNOWN (a hole is null -- CQL propagates it)")
-                    print(f"  {label:34s} Applicable={vals.get('Applicable')!s:5s} "
+                    v, applicable = vals.get("Violated"), vals.get("Applicable")
+                    if vals.get("Deontic") == "permission":
+                        verdict = ("OPTION-not-applicable" if applicable is False else
+                                   "OPTION-taken" if vals.get("OptionTaken") is True else
+                                   "OPTION-not-taken" if vals.get("OptionNotTaken") is True
+                                   else "OPTION-available (a hole is null)")
+                    else:
+                        verdict = ("VIOLATED" if v is True else
+                                   "compliant" if v is False else
+                                   "UNKNOWN (a hole is null -- CQL propagates it)")
+                    print(f"  {label:34s} Applicable={applicable!s:5s} "
                           f"-> {verdict}")
     print()
 
@@ -212,6 +246,68 @@ def _demo_patients(elm_path, vs_path, tmpdir):
         out.append((label, p))
     return out
 
+def _statements_from(doc, limit, classify=None):
+    """Segment YOUR guideline into recommendation statements.
+
+    Accepts a local .xml / .html / .pdf, or a PubMed Central id (fetched from
+    Europe PMC). Only statements the segmenter judges to be recommendations are
+    passed on -- background prose, methods and funding sections are dropped
+    before anything is bound or encoded.
+
+    `classify` is the judge. Passing None is a WORKING mode -- the offline
+    heuristic -- which is exactly why this went unnoticed: every --live run
+    used the word-counting fallback while the model judged mentions, candidates
+    and encodings. Measured on the gold set, that fallback let 27% non-
+    recommendations through (RESULTS.md R20). The manifest recorded
+    `"classifier": "heuristic"` on every one of those runs and nothing printed
+    it, so the evidence was present and invisible; the segmenter line below now
+    says which judge ran."""
+    import segment as sg
+    if doc.upper().startswith("PMC") and not os.path.exists(doc):
+        path = sg.fetch_pmc(doc, cache_dir=os.path.join(HERE, "Part A", "corpus"))
+    else:
+        path = doc
+        if not os.path.exists(path):
+            raise SystemExit(f"no such file: {path}")
+    ext = os.path.splitext(path)[1].lower()
+    doc_id = os.path.splitext(os.path.basename(path))[0]
+    if ext == ".pdf":
+        blocks = sg.load_pdf(path, doc_id)
+    elif ext in {".html", ".htm"}:
+        blocks = sg.load_html(open(path, "rb").read(), doc_id)
+    else:
+        blocks = sg.load_jats(path, doc_id)
+    stmts, manifest = sg.segment(blocks, doc_id, llm=classify)
+    keep = [x for x in stmts if x.is_recommendation and not x.duplicate_of]
+    keep.sort(key=lambda x: -x.prefilter_score)
+    abbrevs = manifest.get("abbreviations", {})
+    print(f"  segmenter: {manifest['blocks']} blocks -> {len(keep)} recommendations"
+          f"  ({manifest['figures_uncovered']} figures/image-tables uncovered)"
+          f"  [judge: {manifest['classifier']}]")
+    if abbrevs:
+        shown = ", ".join(f"{k}={v}" for k, v in sorted(abbrevs.items())[:4])
+        print(f"  glossary : {len(abbrevs)} abbreviations defined by this document"
+              f"  ({shown}{', ...' if len(abbrevs) > 4 else ''})")
+    if not keep:
+        directive = manifest.get("units_with_directive_language", 0)
+        print(f"\n  NO RECOMMENDATIONS FOUND. {directive} of {manifest['units']} "
+              f"sentences contain any directive language\n"
+              f"  (\"we recommend\", \"should\", \"offer\", \"is indicated\").")
+        if directive == 0:
+            print("  A guideline has many. Zero usually means this is the wrong "
+                  "file -- a\n  supplement, evidence tables, a methods appendix -- "
+                  "rather than the\n  recommendations document itself.")
+        else:
+            print("  The prefilter found directive language but the classifier "
+                  "rejected it.\n  Try --max with a lower prefilter threshold, or "
+                  "check the extraction.")
+        if manifest["figures_uncovered"]:
+            print(f"  Also: {manifest['figures_uncovered']} figures/image-tables are "
+                  f"unreadable from this file.")
+        raise SystemExit(1)
+    return ([(x.statement_id, " ".join(x.text.split())) for x in keep[:limit]],
+            abbrevs)
+
 def _build_index(live):
     """Local LOINC first, then live terminology.
 
@@ -221,14 +317,21 @@ def _build_index(live):
     real UCUM units, so the right code is selected structurally."""
     if not live:
         return bind.fixture_index()
-    db = os.path.join(HERE, "Part A", "loinc.db")
-    local = bind.SqliteIndex(db)
-    if not local.search("potassium", "lab", 1):
+    local = bind.SqliteIndex(os.path.join(HERE, "Part A", "terms.db"))
+    # Load whichever licensed releases are present. Each is optional; the
+    # binder degrades to the free endpoints for anything missing, and says so.
+    for name, system, loader in [("LOINC", bind.LOINC, bind.load_loinc),
+                                 ("SNOMED", bind.SNOMED, bind.load_snomed),
+                                 ("RxNorm", bind.RXNORM, bind.load_rxnorm)]:
+        if local.version(system):
+            continue
         try:
-            n = bind.load_loinc(local)
-            print(f"[setup] loaded {n} LOINC concepts (v{local.version(bind.LOINC)})")
-        except FileNotFoundError as exc:
-            print(f"[warn] {exc}")
+            n = loader(local)
+            print(f"[setup] loaded {n:,} {name} concepts "
+                  f"(v{local.version(system)})")
+        except FileNotFoundError:
+            print(f"[warn] no local {name} release -- falling back to public "
+                  f"endpoints, which rank badly and carry no synonyms")
     return bind.CachedIndex(local, bind.RemoteIndex())
 
 def _first_quantity_unit(lib):
@@ -244,13 +347,29 @@ def _first_quantity_unit(lib):
     return found[0] if found else None
 
 def _merge_registries(triages, index, mention_llm, select_llm):
+    """Union of the registries the rules were WRITTEN AGAINST.
+
+    This used to re-bind each statement from scratch. That is wrong, and it
+    shipped a broken bundle: binding runs through a model selector, so the
+    second call can disagree with the first. On PMC13270348 "close monitoring"
+    bound during triage and did not bind on the rebuild, so the delivered rule
+    referenced a variable the delivered registry did not contain -- the
+    artifact shipped was not the artifact verified. Track B rejected it as
+    UNKNOWN_VAR, which is the safety net working, not the pipeline working.
+
+    Re-binding is kept only as the fallback for a Triage from an older run that
+    has no registry attached."""
     seen, events = {}, {}
     for t in triages:
         if not t.encodable:
             continue
-        bs, _ = bind.bind_statement(t.text, index, mention_llm, select_llm)
-        for v in bind.registry_from_bindings(bs)._v.values():
-            seen.setdefault(v.name, v)
+        if t.registry is not None:
+            for n in t.registry.names():
+                seen.setdefault(n, t.registry[n])
+        else:
+            bs, _ = bind.bind_statement(t.text, index, mention_llm, select_llm)
+            for v in bind.registry_from_bindings(bs)._v.values():
+                seen.setdefault(v.name, v)
         for h in t.open_holes:
             seen.setdefault(h, dsl.VarDef(h, "bool", None, h, unbound=True))
         if t.rule is not None:

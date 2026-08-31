@@ -407,6 +407,139 @@ def test_pdf_statements_carry_page_and_bbox():
                        for s in stmts if s.is_recommendation)
 
 
+# ---------------------------------------------------------------- glossary
+
+def _blk(text, section=("Body",)):
+    return Block(text, "section_text",
+                         Provenance("d", "/x", 0, len(text)),
+                         section_path=section)
+
+def test_glossary_finds_a_defined_abbreviation():
+    ab = sg.extract_abbreviations([
+        _blk("Patient-controlled analgesia (PCA) is widely used."),
+        _blk("We suggest that PCA should be used with caution.")])
+    assert ab["PCA"] == "Patient-controlled analgesia"
+
+def test_glossary_requires_the_short_form_to_be_reused():
+    """Defined once and never used again is a society name in an author list,
+    not a clinical concept."""
+    ab = sg.extract_abbreviations([
+        _blk("European Society of Digestive Oncology (ESDO) endorsed this.")])
+    assert "ESDO" not in ab
+
+def test_glossary_skips_the_reference_section():
+    ab = sg.extract_abbreviations([
+        _blk("Journal of Foo (JFoo) 2021.", ("References",)),
+        _blk("JFoo again. JFoo.", ("References",))])
+    assert ab == {}
+
+def test_glossary_rejects_a_match_that_ran_into_surrounding_prose():
+    """The bracket/sentence guard: without it this yields
+    `95% CI -> "...0.23-0.76). There were 246 fewer events"`."""
+    ab = sg.extract_abbreviations([
+        _blk("risk was lower (RR 0.42; 95% CI, 0.23-0.76). There were 246 "
+             "fewer events (CI). The CI was wide. CI again.")])
+    assert not any("There were" in v for v in ab.values())
+
+def test_glossary_drops_statistics_tokens():
+    ab = sg.extract_abbreviations([
+        _blk("The hazard ratio (HR) was 1.2. HR was reported. HR again.")])
+    assert "HR" not in ab
+
+def test_first_letter_of_the_short_form_must_start_a_word():
+    """Stops "AP" matching the tail of "therapy"."""
+    ab = sg.extract_abbreviations([
+        _blk("continued on this therapy (AP). AP was given. AP again.")])
+    assert ab.get("AP") != "therapy"
+
+def test_expansion_is_for_queries_and_leaves_the_original_alone():
+    ab = {"PCA": "Patient-controlled analgesia", "AP": "acute pancreatitis"}
+    src = "we suggest PCA be used with caution in AP."
+    assert sg.expand_abbreviations(src, ab) == (
+        "we suggest Patient-controlled analgesia be used with caution in "
+        "acute pancreatitis.")
+    assert src == "we suggest PCA be used with caution in AP."   # unmutated
+
+def test_expansion_does_not_fire_inside_a_longer_word():
+    ab = {"AP": "acute pancreatitis"}
+    assert sg.expand_abbreviations("APPROACH and CAPS", ab) == "APPROACH and CAPS"
+
+def test_segment_publishes_the_glossary_in_the_manifest():
+    blocks = [_blk("Patient-controlled analgesia (PCA) is common."),
+              _blk("We recommend that PCA is offered to all adults.")]
+    _, manifest = run_segment(blocks, "d")
+    assert manifest["abbreviations"]["PCA"] == "Patient-controlled analgesia"
+
+# ------------------------------------------- deterministic vetoes (R22)
+
+def test_a_list_stem_is_vetoed():
+    assert sg.not_a_statement(
+        "Once the decision has been made to proceed with surgery, the following "
+        "should be considered:") == "list_stem"
+
+def test_an_evidence_summary_is_vetoed():
+    assert sg.not_a_statement(
+        "In randomised controlled trials, deprescribing had no significant effect on "
+        "mortality (odds ratio [OR], 0.97; 95% confidence interval [CI], 0.87-1.08; "
+        "25 studies; n = 15,374; low certainty).") == "evidence_summary"
+
+def test_a_sentence_reporting_someone_elses_recommendation_is_vetoed():
+    assert sg.not_a_statement(
+        "Previous consensus statements emphasize shared decision-making, with "
+        "recommendations that parents receive nondirective counseling.") \
+        == "about_a_recommendation"
+
+def test_a_pointer_to_a_numbered_recommendation_is_vetoed():
+    assert sg.not_a_statement(
+        "EPs and EtD frameworks are available online for recommendation 6.") \
+        == "about_a_recommendation"
+
+def test_a_real_recommendation_is_never_vetoed():
+    for t in ["We recommend against intensively lowering systolic BP < 140 mmHg in "
+              "the first 24 h after successful mechanical thrombectomy.",
+              "Avoid metformin if eGFR is below 30 mL/min/1.73m2.",
+              "EUS may be considered when aetiology remains unclear."]:
+        assert sg.not_a_statement(t) is None, t
+
+def test_a_table_row_folding_evidence_grading_into_a_recommendation_survives():
+    """The reason every veto is guarded by directive language. Table rows fold
+    the recommendation together with its grading; a rule keyed on the grading
+    alone would delete the recommendation with it."""
+    assert sg.not_a_statement(
+        "We recommend epidural analgesia combined with standard care over standard "
+        "care alone; Certainty of evidence: Good practice Statement-ungraded; "
+        "Recommendation strength: Weak") is None
+
+def test_a_numbered_recommendation_label_is_not_a_pointer():
+    """"Recommendation 29: For individuals with T2D ..." is a LABEL on a real
+    statement. Numbered guidelines write them that way."""
+    assert sg.not_a_statement(
+        "Recommendation 29: For individuals with coexisting T2D and MASLD, engaging "
+        "in a minimum of 150-240 min of moderate-intensity aerobic exercise per week "
+        "is recommended.") is None
+
+def test_a_refusable_recommendation_is_refused_not_deleted():
+    """A vetoed span vanishes; a refused one is counted and explained. This
+    sentence is `defeasible` residue, and an earlier, looser noun rule deleted
+    it -- which would have understated the residue."""
+    assert sg.not_a_statement(
+        "Although the panel made a conditional recommendation for no primary "
+        "anticoagulant prophylaxis for persistently positive APLA, panel members "
+        "emphasized the importance of considering individual patient circumstances.") \
+        is None
+
+def test_the_manifest_reports_what_was_vetoed():
+    """The evidence sentence has to carry "low certainty" to reach the veto at
+    all -- that phrase is what the prefilter scores it on (`grade_certainty`),
+    and it is exactly why an evidence summary looks like a recommendation."""
+    blocks = [_blk("In trials this had no effect on mortality (OR, 0.97; 95% CI, "
+                   "0.87-1.08; 25 studies; n = 15,374; low certainty)."),
+              _blk("We recommend an ACE inhibitor in adults with diabetes.")]
+    _, man = run_segment(blocks, "d")
+    assert man["vetoed"] == 1
+    assert man["vetoed_by_reason"] == {"evidence_summary": 1}
+
+
 if __name__ == "__main__":
     tests = [(n, f) for n, f in sorted(globals().items())
              if n.startswith("test_") and callable(f)]
@@ -419,3 +552,4 @@ if __name__ == "__main__":
             print(f"FAIL {name}: {type(exc).__name__}: {exc}")
     print(f"\n{len(tests) - len(failed)}/{len(tests)} passed")
     raise SystemExit(1 if failed else 0)
+

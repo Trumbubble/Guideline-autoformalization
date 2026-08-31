@@ -286,6 +286,16 @@ def test_spectrum_separates_index_gaps_from_real_residue():
                              "vague_predicate": 1}
     assert sp["retrieval_attributable"] == 2
 
+def test_as_refusal_carries_the_concept_level_evidence():
+    """The bundle only ships statement-level refusals, so if the evidence does
+    not travel with them the residue report cannot say which concept failed."""
+    f = lambda text, reg: _refusal("vague_predicate", "no threshold stated")
+    t = triage(S_OK, IX, statement_id="s2", formalize=f, source_page=1, source_span="s")
+    r = t.as_refusal()
+    assert r is not None and r.evidence
+    assert any("model" in e or "binder" in e for e in r.evidence)
+    assert r.source_span                       # always points back at the text
+
 def test_spectrum_is_the_M1_six_bucket_table():
     ts = [Triage("a", "x", "encode", fragment="LIA"),
           Triage("b", "x", "encode", fragment="MTL"),
@@ -344,6 +354,104 @@ def test_binary_is_the_headline_not_the_fragment():
     assert Triage("a", "x", "partial", fragment=None).encodable
     assert Triage("b", "x", "encode", fragment=None).encodable
     assert not Triage("c", "x", "refuse", fragment="LIA").encodable
+
+
+# ----------------------------------------------- modal predicates (R14b)
+
+S_MODAL = ("We suggest that epidural analgesia may be considered when expertise "
+           "is available.")
+
+def test_a_modal_never_becomes_a_hole():
+    """"may be considered" reduces to `has_may`. Declaring it as a hole is
+    worse than refusing: a hole promises a data source could one day fill it,
+    and nothing will ever populate "has may"."""
+    declined = [dsl.Refusal("s", "vague_predicate", "x",
+                            undefined_predicates=("may be considered",))]
+    assert holes_from(S_MODAL, [], declined) == ()
+
+def test_a_clinical_predicate_alongside_a_modal_still_becomes_a_hole():
+    """The guard must drop the modal WITHOUT swallowing the real predicate."""
+    declined = [dsl.Refusal("s", "vague_predicate", "x",
+                            undefined_predicates=("may be considered",
+                                                  "at high risk"))]
+    assert [h.name for h in holes_from(
+        S_MODAL + " Also at high risk.", [], declined)] == ["has_high_risk"]
+
+def test_a_rule_whose_condition_is_a_modal_is_refused_as_defeasible():
+    """The whole R14b path: the model encodes `has_may` as a patient
+    predicate, the validator rejects it, and the statement is reported as
+    discretionary rather than falling through to the generic reason."""
+    def formalize(text, reg):
+        return _rule({"kind": "cmp", "var": "has_may", "op": "==", "value": True},
+                     {"kind": "cmp", "var": "on_ace_inhibitor", "op": "==", "value": True})
+    t = triage(S_OK, IX, formalize=formalize, statement_id="s", source_span=S_OK)
+    assert t.decision == "refuse"
+    assert t.reason_code == "defeasible", t.reason_code
+
+def test_a_vacuous_encoding_is_refused_not_shipped():
+    """(A AND B) -> B certifies every patient. It must never reach a bundle."""
+    def formalize(text, reg):
+        return _rule({"kind": "and", "operands": [
+                        {"kind": "cmp", "var": "has_diabetes", "op": "==", "value": True},
+                        {"kind": "cmp", "var": "on_ace_inhibitor", "op": "==", "value": True}]},
+                     {"kind": "cmp", "var": "on_ace_inhibitor", "op": "==", "value": True})
+    t = triage(S_OK, IX, formalize=formalize, statement_id="s", source_span=S_OK)
+    assert t.decision == "refuse"
+    assert "VACUOUS_RULE" in codes(t)
+
+
+# ------------------------------------- the registry the rule was written against
+
+def test_triage_carries_the_registry_the_rule_was_written_against():
+    """Re-deriving the vocabulary for the bundle shipped a rule referencing a
+    variable the shipped registry did not contain: binding goes through a model
+    selector, so the second call disagreed with the first. The registry must
+    travel WITH the rule."""
+    def f(text, reg):
+        return _rule({"kind": "cmp", "var": "has_diabetes", "op": "==", "value": True},
+                     {"kind": "cmp", "var": "on_ace_inhibitor", "op": "==", "value": True})
+    t = triage(S_OK, IX, statement_id="s1", formalize=f, source_span="s")
+    assert t.decision == "encode" and t.registry is not None
+    assert {"has_diabetes", "on_ace_inhibitor"} <= set(t.registry.names())
+
+def test_every_variable_a_rule_mentions_is_in_the_registry_it_carries():
+    """The invariant that was violated. Holds for PARTIAL too, where the
+    registry is the WIDE one including the declared holes."""
+    def f(text, reg):
+        if "has_high_risk" not in reg.names():
+            return _refusal("vague_predicate", "undefined", preds=("at high risk",))
+        return _rule({"kind": "or", "operands": [
+                        {"kind": "cmp", "var": "egfr", "op": "<", "value": 30},
+                        {"kind": "cmp", "var": "has_high_risk", "op": "==", "value": True}]},
+                     {"kind": "cmp", "var": "on_ace_inhibitor", "op": "==", "value": True})
+    t = triage(S_HOLE, IX, statement_id="s3", formalize=f, source_span="s")
+    assert t.decision == "partial" and t.registry is not None
+    used = dsl._vars_in(t.rule.when) | dsl._vars_in(t.rule.then)
+    assert used <= set(t.registry.names()), used - set(t.registry.names())
+
+
+def test_a_bound_concept_the_rule_ignores_is_reported():
+    """DROPPED_CONCEPT_RISK covers a BINDER failure. This covers the binder
+    succeeding and the model not using the result -- which is how a population
+    restriction goes missing from a rule that still typechecks."""
+    def f(text, reg):
+        return _rule({"kind": "cmp", "var": "has_diabetes", "op": "==", "value": True},
+                     {"kind": "cmp", "var": "on_ace_inhibitor", "op": "==", "value": True})
+    t = triage(S_OK, IX, statement_id="s", formalize=f, source_span="s")
+    ev = [e for e in t.evidence if e.code == "UNUSED_BOUND_CONCEPT"]
+    assert ev, [e.code for e in t.evidence]
+    # the ACR bound from this sentence and the rule never mentions it
+    assert "albumin" in ev[0].detail
+
+def test_a_rule_using_everything_bound_reports_nothing_unused():
+    def f(text, reg):
+        acr = next(n for n in reg.names() if n.startswith("albumin"))
+        return _rule({"kind": "and", "operands": [
+                        {"kind": "cmp", "var": "has_diabetes", "op": "==", "value": True},
+                        {"kind": "cmp", "var": acr, "op": ">=", "value": 30}]},
+                     {"kind": "cmp", "var": "on_ace_inhibitor", "op": "==", "value": True})
+    t = triage(S_OK, IX, statement_id="s", formalize=f, source_span="s")
+    assert not [e for e in t.evidence if e.code == "UNUSED_BOUND_CONCEPT"]
 
 
 if __name__ == "__main__":

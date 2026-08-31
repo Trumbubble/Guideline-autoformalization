@@ -34,10 +34,11 @@ strictly additive change: Since nodes get a new lowering, written rules do not
 change.
 """
 from __future__ import annotations
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import date as _date
-from typing import Any, Literal, Union
+from typing import Any, Iterable, Literal, Union
 import json
+import re
 
 # ---------------------------------------------------------------- variables
 
@@ -148,15 +149,37 @@ Expr = Union[Cmp, Between, Since, Not, And, Or]
 
 Action = Literal["recommend", "avoid", "hold", "monitor", "refer", "screen"]
 
+Deontic = Literal["obligation", "permission"]
+
 @dataclass
 class Rule:
-    """Denotes phi = (when -> then). `action`/`target` are the gloss only."""
+    """Denotes phi = (when -> then) under a DEONTIC FORCE. `action`/`target`
+    are the gloss only.
+
+    `deontic` is the operator, not a label:
+
+      obligation  O(then | when)  -- the guideline requires the action. A
+                                     patient meeting `when` without `then` is
+                                     a real deviation.
+      permission  P(then | when)  -- the guideline OFFERS the action. The same
+                                     patient violates nothing; the option was
+                                     simply not taken.
+
+    Prohibition is not a third case: F(p) = O(NOT p), which this DSL already
+    writes as `action="avoid"` with a negated consequent.
+
+    The distinction is load-bearing rather than cosmetic. Without it a
+    permissive statement lowers to the same formula as an obligation, and the
+    checker accuses a clinician of a violation for declining an option --
+    which is the false-alarm class that gets decision support switched off.
+    See RESULTS.md R17b."""
     rule_id: str
     when: Expr
     then: Expr
     action: Action
     target: str
     strength: str | None = None
+    deontic: Deontic = "obligation"
     # provenance is mandatory: page + sentence span in the source document
     source_page: int | None = None
     source_span: str | None = None
@@ -178,6 +201,11 @@ class Refusal:
     # encoding turn each one into a declared free variable instead of dropping
     # the whole statement -- and it is what a governance reader wants to see.
     undefined_predicates: tuple[str, ...] = ()
+    # WHY this statement was refused, one line per signal, naming the concept
+    # or check that failed. Without it a residue report says "unbound_concept"
+    # and a reader cannot tell whether the GUIDELINE was vague or OUR INDEX
+    # missed a code -- which is the distinction the whole measurement turns on.
+    evidence: tuple[str, ...] = ()
 
 # ---------------------------------------------------------------- fragment
 
@@ -360,6 +388,22 @@ def _action_atoms(expr: Expr, reg: Registry) -> set[str]:
         return set().union(*(_action_atoms(o, reg) for o in expr.operands)) if expr.operands else set()
     return set()
 
+# Words in a `target` gloss that carry no identity -- matching on them would
+# make the check pass on any rule mentioning a patient.
+_TARGET_STOP = {"patient", "patients", "adult", "adults", "with", "without",
+                "therapy", "treatment", "management", "care", "risk", "acute",
+                "chronic", "severe", "this", "that", "when", "from", "into"}
+
+def _vars_in(e: Expr) -> set[str]:
+    """Every variable an expression references, regardless of the registry."""
+    if isinstance(e, (Cmp, Between)):
+        return {e.var}
+    if isinstance(e, Not):
+        return _vars_in(e.operand)
+    if isinstance(e, (And, Or)):
+        return set().union(*(_vars_in(o) for o in e.operands)) if e.operands else set()
+    return set()
+
 def open_holes(rule: Rule, reg: Registry) -> tuple[str, ...]:
     """Unbound variables this rule actually mentions -- what a PARTIAL
     encoding is partial ABOUT, and what the verdict must name."""
@@ -398,6 +442,56 @@ def validate_rule(rule: Rule, reg: Registry) -> list[Issue]:
                             f"does not define",
                             "the rule is a PARTIAL encoding: verdicts that depend on "
                             "this variable are MAY, not MUST", severity="warn"))
+    # A variable whose name says only that the guideline is hedging is not a
+    # patient predicate, and no data source will ever populate it: the rule
+    # returns UNKNOWN for every patient, forever. Rule.strength is where this
+    # belongs, and on the statement that produced `has_may` it was ALREADY
+    # filled in correctly with "suggest (conditional)" -- the modal was copied
+    # into the logic as well, where it does damage.
+    for n in sorted(_vars_in(rule.when) | _vars_in(rule.then)):
+        if modal_only(n):
+            issues.append(Issue(n, "MODAL_PREDICATE",
+                                f"{n!r} encodes the recommendation's STRENGTH, not a "
+                                f"fact about the patient",
+                                "deontic force belongs in Rule.strength; a statement "
+                                "whose condition reduces to a modal is discretionary "
+                                "and should be refused as `defeasible`"))
+    # The action the sentence is ABOUT has to survive into `then`. Measured on
+    # PMC13270348: "epidural analgesia may be considered when expertise is
+    # available, and strict aseptic techniques and close monitoring are
+    # essential" encoded as
+    #     has_expertise_available -> strict_aseptic_techniques AND close_monitoring
+    # -- the epidural is absent entirely, and what survives is the PRECONDITION
+    # for doing it, promoted to be the recommendation. NO_ACTION_ATOM passed on
+    # a technicality, because aseptic technique is itself an action variable.
+    #
+    # A WARNING, not an error. The match is lexical, and `target` may name the
+    # action in a different vocabulary than the variable does
+    # ("thromboprophylaxis" vs `on_lmwh`), so a hard rejection here would
+    # discard good rules. It belongs in the report, where a human decides.
+    acts = _action_atoms(rule.then, reg)
+    if acts and rule.target:
+        want = {w for w in re.findall(r"[a-z]+", rule.target.lower())
+                if len(w) > 3 and w not in _TARGET_STOP}
+        have = set()
+        for n in acts:
+            have |= set(re.findall(r"[a-z]+", n.lower()))
+            if n in reg:
+                have |= set(re.findall(r"[a-z]+", (reg[n].description or "").lower()))
+        # Prefix matching, not equality: a `target` gloss abbreviates
+        # ("ACEi" for `on_ace_inhibitor`), and requiring exact tokens made this
+        # fire on a correct rule -- caught by test_bind, which is what that
+        # test is for. Loose on purpose; this is a warning, and a missed
+        # mismatch costs less than a false one.
+        def _related(w: str, h: str) -> bool:
+            return len(w) >= 3 and len(h) >= 3 and (w.startswith(h) or h.startswith(w))
+        if want and not any(_related(w, h) for w in want for h in have):
+            issues.append(Issue("then", "ACTION_TARGET_MISMATCH",
+                                f"`then` acts on {sorted(acts)}, but the rule is about "
+                                f"{rule.target!r}",
+                                "the action the recommendation is about may have been "
+                                "dropped, leaving only its preconditions",
+                                severity="warn"))
     if not _action_atoms(rule.then, reg):
         issues.append(Issue("then", "NO_ACTION_ATOM",
                             "the obligation mentions no action variable or event",
@@ -492,6 +586,245 @@ def rule_to_z3(rule: Rule, env: dict):
     import z3
     return z3.Implies(to_z3(rule.when, env), to_z3(rule.then, env))
 
+# ------------------------------------------------------------- canonical form
+# Two names for one concept is what a GENERATED registry produces and a
+# hand-authored one does not. Measured on PMC13270348: the formalizer wrote
+# both `pca` and `patient_controlled_intravenous_analgesia` into a single rule,
+# each bound to SNOMED 1351574007, yielding
+#
+#     (has_ap AND pca) -> patient_controlled_intravenous_analgesia
+#
+# which denotes (A AND B) -> B. Valid under every interpretation, so the rule
+# CERTIFIES every patient and can never fail. check_nondegenerate had a
+# VACUOUS_RULE check and did not fire, because it compares variable SYMBOLS and
+# these are two symbols. The identity lives in the terminology layer.
+#
+# Canonicalising first is what turns that into the vacuity the existing check
+# already knows how to report. Only two signals are trusted to merge concepts,
+# both ground truth: a shared terminology binding, and a bound variable that an
+# unbound one is a `has_`-prefixed restatement of. Never a judgement call.
+
+_HOLE_PREFIXES = ("has_", "is_", "on_", "receives_", "receiving_")
+
+def _stem(name: str) -> str:
+    for p in _HOLE_PREFIXES:
+        if name.startswith(p):
+            return name[len(p):]
+    return name
+
+def canonical_aliases(reg: Registry) -> dict[str, str]:
+    """{alias -> canonical name} for variables that denote one concept.
+
+    Case 1 -- same binding. Two bound variables carrying the identical
+    system|code|version ARE the same concept; the terminology server said so.
+
+    Case 2 -- a hole restating a bound variable. `has_close_monitoring`
+    (unbound) alongside `close_monitoring` (bound to SNOMED 182777000) is the
+    formalizer inventing a free variable for a concept that already resolved.
+    The bound one wins: it has the code, and a hole with a real binding
+    available is not residue, it is a duplicate.
+
+    Merging across roles is deliberate and safe: if an observation and an
+    action really were distinct here, the merged rule says "if monitored, then
+    monitor", and the vacuity check below rejects it. Either the merge is
+    right or its consequence is caught."""
+    alias: dict[str, str] = {}
+
+    by_binding: dict[str, list[str]] = {}
+    for n in reg.names():
+        v = reg[n]
+        if v.binding and not v.unbound:
+            by_binding.setdefault(v.binding, []).append(n)
+    for names in by_binding.values():
+        if len(names) < 2:
+            continue
+        # Deterministic, and prefers the descriptive name: a governance report
+        # reading `patient_controlled_intravenous_analgesia` beats one reading
+        # `pca`.
+        keep = max(names, key=lambda n: (len(n), n))
+        for n in names:
+            if n != keep:
+                alias[n] = keep
+
+    bound_stems = {_stem(n): n for n in reg.names()
+                   if not reg[n].unbound and reg[n].binding}
+    for n in reg.names():
+        if reg[n].unbound and _stem(n) in bound_stems:
+            target = bound_stems[_stem(n)]
+            if target != n:
+                alias[n] = alias.get(target, target)
+    return alias
+
+def rename_vars(e: Expr, alias: dict[str, str]) -> Expr:
+    """Rewrite variable references. Events are untouched -- Since() names an
+    EventDef, which lives in a separate namespace."""
+    if not alias:
+        return e
+    if isinstance(e, Cmp):
+        return replace(e, var=alias.get(e.var, e.var))
+    if isinstance(e, Between):
+        return replace(e, var=alias.get(e.var, e.var))
+    if isinstance(e, Not):
+        return replace(e, operand=rename_vars(e.operand, alias))
+    if isinstance(e, (And, Or)):
+        return replace(e, operands=[rename_vars(o, alias) for o in e.operands])
+    return e
+
+def canonicalize(reg: Registry, rules: Iterable[Rule]
+                 ) -> tuple[Registry, list[Rule], dict[str, str]]:
+    """Collapse duplicate concepts across a whole bundle. Returns the reduced
+    registry, the rewritten rules, and the alias map -- the map is REPORTED,
+    not silently applied, because a merge is a claim about the guideline."""
+    alias = canonical_aliases(reg)
+    kept = [reg[n] for n in reg.names() if n not in alias]
+    out = [replace(r, when=rename_vars(r.when, alias),
+                   then=rename_vars(r.then, alias)) for r in rules]
+    return (Registry(kept, [reg.event(e) for e in reg.event_names()]), out, alias)
+
+# ---------------------------------------------------------------- deontic force
+# A guideline sentence is either an OBLIGATION ("we recommend prophylaxis" --
+# not doing it is a real deviation) or a PERMISSION ("epidural may be
+# considered" -- not doing it violates nothing). Rule denotes phi = when ->
+# then, which IS an obligation; there is no permission operator. So a
+# permissive statement cannot be faithfully encoded here at all, and encoding
+# one anyway lets the checker report MUST-violate against a clinician who
+# merely declined an option. False alarms are the main reason clinical decision
+# support gets switched off, so this is the expensive kind of wrong.
+#
+# Until the DSL can express permission, the honest mitigation is to make the
+# VERDICT respect what `strength` already records: a permissive rule may inform,
+# but it may never accuse. See RESULTS.md R17b.
+#
+# GRADE "conditional"/"weak" is deliberately NOT treated as permission. "We
+# suggest anticoagulant prophylaxis" still recommends the action -- the
+# weakness is in the evidence, not in the obligation. Only explicit permission
+# language counts, which keeps this conservative: it downgrades a verdict only
+# where the source says the action is optional.
+PERMISSIVE_MARKERS = (
+    "may be considered", "may be offered", "may be used", "may be given",
+    "can be considered", "can be offered", "might be considered",
+    "could be considered", "is an option", "are an option", "as an option",
+    "at the discretion", "optional", "if desired", "may be reasonable",
+    "is reasonable to consider",
+)
+
+def deontic_of(rule: "Rule") -> str:
+    """The rule's deontic force. The explicit operator wins; the wording is the
+    backstop for a rule written before the field existed, or by a model that
+    left it at the default while the source plainly says "may be considered".
+    The fallback only ever moves obligation -> permission, never the reverse:
+    a wrong guess in that direction silences an alert, which is recoverable; a
+    wrong guess the other way accuses a clinician, which is not."""
+    if getattr(rule, "deontic", "obligation") == "permission":
+        return "permission"
+    if is_permissive(rule.strength, rule.source_span):
+        return "permission"
+    return "obligation"
+
+def violation_condition(rule: "Rule", env: dict):
+    """What it takes to VIOLATE this rule -- the formula Track B negates.
+
+    For an obligation that is `when AND NOT then`. For a permission it is
+    FALSE, unconditionally: a permitted action that was not taken is not a
+    violation, and no patient data can make it one. This is where the operator
+    earns its place. The guarantee is structural rather than a guard on the
+    verdict string -- there is no patient, and no completion of the unknowns,
+    for which a permission yields MUST-violate."""
+    import z3
+    if deontic_of(rule) == "permission":
+        return z3.BoolVal(False)
+    return z3.And(to_z3(rule.when, env), z3.Not(to_z3(rule.then, env)))
+
+def conflicts(rules: "Iterable[Rule]", reg: Registry) -> list[dict]:
+    """Statements that PERMIT and FORBID the same action for the same patient.
+
+    This is the check the operator buys, and it cannot be written without it:
+    with permission collapsed into obligation, "X may be considered" and "avoid
+    X" are just two obligations about X, and their disagreement is invisible.
+    With the distinction, the question is decidable -- is there a patient
+    satisfying both antecedents, for whom one rule permits the action and the
+    other requires its absence?
+
+    Reported, never auto-resolved. A guideline that contradicts itself is a
+    finding for the committee, not something a compiler should quietly pick a
+    side on."""
+    import z3
+    env = make_env(reg)
+    for src, dst in canonical_aliases(reg).items():
+        env[src] = env[dst]
+    D = domain_axioms(reg, env)
+    rules = list(rules)
+    out: list[dict] = []
+    for i, a in enumerate(rules):
+        if deontic_of(a) != "permission":
+            continue
+        for b in rules:
+            if b is a or deontic_of(b) != "obligation":
+                continue
+            shared = _vars_in(a.then) & _vars_in(b.then)
+            if not shared:
+                continue
+            try:
+                s = z3.Solver()
+                s.add(*D)
+                s.add(to_z3(a.when, env), to_z3(b.when, env),
+                      to_z3(a.then, env), z3.Not(to_z3(b.then, env)))
+                # Satisfiable = a patient for whom the permitted action is
+                # taken and the obligation is thereby broken.
+                if s.check() != z3.sat:
+                    continue
+            except (TypeError, ValueError, KeyError):
+                continue
+            out.append({"permits": a.rule_id, "requires": b.rule_id,
+                        "shared_variables": sorted(shared),
+                        "detail": f"{a.rule_id} permits an action that "
+                                  f"{b.rule_id} requires be absent, and a patient "
+                                  f"can satisfy both antecedents"})
+    return out
+
+def is_permissive(strength: str | None, source_span: str | None = None) -> bool:
+    """True when the source frames the action as permitted rather than owed.
+
+    Both fields are consulted: `strength` is the model's own summary, and
+    `source_span` is verbatim from the document, so a run where the model
+    recorded the strength loosely is still caught by the sentence itself."""
+    for text in (strength, source_span):
+        low = (text or "").lower()
+        if any(m in low for m in PERMISSIVE_MARKERS):
+            return True
+    return False
+
+# ------------------------------------------------------------- modal predicates
+# A recommendation carries two separable things: facts about the PATIENT, and
+# how hard the guideline is pushing. The second is a property of the document,
+# identical for every patient, and this DSL already has a slot for it --
+# Rule.strength. On PMC13270348 the formalizer filled that slot correctly with
+# "suggest (conditional)" AND ALSO put the modal into the antecedent, as a
+# variable named `has_may` distilled from "may be considered".
+#
+# That rule cannot run: no FHIR resource populates "has may", so it is UNKNOWN
+# for every patient forever. GEM and BRIDGE-Wiz avoid this structurally by
+# giving a human author a fixed deontic slot; machine extraction reintroduces
+# it, because nothing in the decoding grammar forbids the name.
+#
+# A closed word list is the right tool here and is not the brittle choice it
+# looks like: English modals are a CLOSED class -- about a dozen, no new ones
+# being coined. Clinical concepts are open-ended, which is why abbreviations
+# needed a document-derived pass instead.
+MODAL_PREDICATES = frozenset({
+    "may", "might", "could", "would", "should", "shall", "must", "can",
+    "consider", "considered", "considering", "consideration",
+    "optional", "optionally", "discretion", "discretionary", "elective",
+    "appropriate", "appropriately", "indicated", "warranted", "necessary",
+    "needed", "required", "recommended", "suggested", "advised", "advisable",
+    "preferred", "possible", "permitted", "allowed", "reasonable",
+})
+
+def modal_only(name: str) -> bool:
+    """True if a variable name says nothing but 'the guideline is hedging'."""
+    toks = [t for t in _stem(name).split("_") if t]
+    return bool(toks) and all(t in MODAL_PREDICATES for t in toks)
+
 # ---------------------------------------------------------------- degeneracy
 
 def check_nondegenerate(rule: Rule, reg: Registry) -> list[Issue]:
@@ -500,6 +833,14 @@ def check_nondegenerate(rule: Rule, reg: Registry) -> list[Issue]:
     that validate() stays dependency-free."""
     import z3
     env = make_env(reg)
+    # Alias duplicate concepts onto ONE solver symbol before asking the solver
+    # anything. Two names for one code are two symbols to Z3, and a rule that is
+    # a tautology through that identity looks contingent -- which is exactly how
+    # (has_ap AND pca) -> patient_controlled_intravenous_analgesia passed as a
+    # sound encoding on PMC13270348. Rebinding the env is enough; the rule need
+    # not be rewritten, and every existing caller gets the check for free.
+    for src, dst in canonical_aliases(reg).items():
+        env[src] = env[dst]
     D = domain_axioms(reg, env)
     try:
         when, then = to_z3(rule.when, env), to_z3(rule.then, env)
@@ -530,9 +871,15 @@ def check_nondegenerate(rule: Rule, reg: Registry) -> list[Issue]:
                          "the rule applies to everyone; a disjunction that should have "
                          "been a conjunction is the usual cause", severity="warn"))
     if not sat(z3.Not(phi)):
+        merged = canonical_aliases(reg)
+        why = ("a spec no patient can violate is not a spec")
+        if merged:
+            why += (f"; note {len(merged)} variable(s) denote one concept and were "
+                    f"merged before this check: "
+                    + ", ".join(f"{k}={v}" for k, v in sorted(merged.items())))
         out.append(Issue("rule", "VACUOUS_RULE",
                          "NOT(when -> then) is unsatisfiable: the rule forbids nothing",
-                         "a spec no patient can violate is not a spec"))
+                         why))
     if not sat(when, then):
         out.append(Issue("then", "UNSATISFIABLE_OBLIGATION",
                          "no patient satisfying `when` can also satisfy `then`",
@@ -616,22 +963,25 @@ def to_dict(obj: Rule | Refusal) -> dict:
     if isinstance(obj, Rule):
         return {"rule_id": obj.rule_id, "when": expr_to_dict(obj.when),
                 "then": expr_to_dict(obj.then), "action": obj.action, "target": obj.target,
-                "strength": obj.strength, "source_page": obj.source_page,
-                "source_span": obj.source_span}
+                "strength": obj.strength, "deontic": deontic_of(obj),
+                "source_page": obj.source_page, "source_span": obj.source_span}
     if isinstance(obj, Refusal):
         return {"rule_id": obj.rule_id, "reason_code": obj.reason_code,
                 "reason_text": obj.reason_text, "source_page": obj.source_page,
                 "source_span": obj.source_span, "confidence": obj.confidence,
-                "undefined_predicates": list(obj.undefined_predicates)}
+                "undefined_predicates": list(obj.undefined_predicates),
+                "evidence": list(obj.evidence)}
     raise TypeError(obj)
 
 def from_dict(d: dict) -> Rule | Refusal:
     if "reason_code" in d:
         return Refusal(d["rule_id"], d["reason_code"], d["reason_text"],
                        d.get("source_page"), d.get("source_span"), d.get("confidence"),
-                       tuple(d.get("undefined_predicates") or ()))
+                       tuple(d.get("undefined_predicates") or ()),
+                       tuple(d.get("evidence") or ()))
     return Rule(d["rule_id"], expr_from_dict(d["when"]), expr_from_dict(d["then"]),
                 d["action"], d["target"], d.get("strength"),
+                d.get("deontic") or "obligation",
                 d.get("source_page"), d.get("source_span"))
 
 def dumps(objs: list[Rule | Refusal], **kw) -> str:
@@ -684,10 +1034,18 @@ def bundle_to_dict(reg: Registry, rules: Iterable[Rule],
     statements that were refused. The refusals travel WITH the rules on
     purpose -- a consumer that sees only what compiled cannot report the
     residue, and the residue is a deliverable."""
-    return {"bundle_version": BUNDLE_VERSION,
-            "registry": registry_to_dict(reg),
-            "rules": [to_dict(r) for r in rules],
-            "refusals": [to_dict(r) for r in refusals]}
+    # Canonicalise at the serialisation boundary, so Track B is never handed a
+    # registry in which one concept appears twice. `merged_concepts` records
+    # what was collapsed: a merge is a claim about the guideline, and a claim a
+    # governance committee cannot see is a claim it cannot check.
+    reg, rules, alias = canonicalize(reg, rules)
+    out = {"bundle_version": BUNDLE_VERSION,
+           "registry": registry_to_dict(reg),
+           "rules": [to_dict(r) for r in rules],
+           "refusals": [to_dict(r) for r in refusals]}
+    if alias:
+        out["merged_concepts"] = alias
+    return out
 
 def bundle_from_dict(d: dict) -> tuple[Registry, list[Rule], list[Refusal]]:
     if str(d.get("bundle_version", BUNDLE_VERSION)) != BUNDLE_VERSION:
@@ -739,11 +1097,13 @@ def json_schema(reg: Registry) -> dict:
            "properties":{"kind":{"const":"or"},
                          "operands":{"type":"array","minItems":2,"items":expr_ref}}}]},
         "rule": {"type":"object",
-          "required":["rule_id","when","then","action","target","source_page","source_span"],
+          "required":["rule_id","when","then","action","target","deontic",
+                      "source_page","source_span"],
           "additionalProperties":False,
           "properties":{"rule_id":{"type":"string"},"when":expr_ref,"then":expr_ref,
             "action":{"enum":["recommend","avoid","hold","monitor","refer","screen"]},
             "target":{"type":"string"},"strength":{"type":["string","null"]},
+            "deontic":{"enum":["obligation","permission"]},
             "source_page":{"type":"integer"},"source_span":{"type":"string"}}},
         "refusal": {"type":"object","required":["rule_id","reason_code","reason_text"],
           "additionalProperties":False,
@@ -865,10 +1225,14 @@ def decoding_schema(reg: Registry, max_depth: int = MAX_DECODING_DEPTH) -> dict:
     top = {"$ref": f"#/$defs/expr{max_depth}"}
 
     defs["rule"] = obj(
-        ["rule_id", "when", "then", "action", "target", "source_page", "source_span"],
+        ["rule_id", "when", "then", "action", "target", "deontic",
+         "source_page", "source_span"],
         {"rule_id": {"type": "string"}, "when": top, "then": top,
          "action": {"enum": ["recommend", "avoid", "hold", "monitor", "refer", "screen"]},
          "target": {"type": "string"}, "strength": {"type": ["string", "null"]},
+         # Required, so the model must COMMIT to a reading rather than letting
+         # the default silently promote a permission into an obligation.
+         "deontic": {"enum": ["obligation", "permission"]},
          "source_page": {"type": ["integer", "null"]},
          "source_span": {"type": ["string", "null"]}})
     defs["refusal"] = obj(
@@ -880,7 +1244,8 @@ def decoding_schema(reg: Registry, max_depth: int = MAX_DECODING_DEPTH) -> dict:
          "source_page": {"type": ["integer", "null"]},
          "source_span": {"type": ["string", "null"]},
          "confidence": {"type": ["number", "null"]},
-         "undefined_predicates": {"type": "array", "items": {"type": "string"}}})
+         "undefined_predicates": {"type": "array", "items": {"type": "string"}},
+         "evidence": {"type": "array", "items": {"type": "string"}}})
     # The root has to be an object for `$defs` to be legal, so the rule/refusal
     # choice becomes a discriminator rather than a top-level anyOf. The model
     # still has to commit to one or the other, which is the point: refusal is a

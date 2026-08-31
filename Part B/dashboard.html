@@ -257,6 +257,7 @@ function renderCard(g) {
   const pills = [pill("rules", `${g.rule_count} rule${g.rule_count === 1 ? "" : "s"}`)];
   if (g.refusal_count) pills.push(pill("refused", `${g.refusal_count} refused`));
   if (g.needs_model_count) pills.push(pill("pending", `${g.needs_model_count} awaiting model`));
+  if (g.rejected_count) pills.push(pill("refused", `${g.rejected_count} rejected on verification`));
   if (g.builtin) pills.push(pill("builtin", "built in"));
   return `
     <a class="g-card" href="/check?guideline=${encodeURIComponent(g.id)}">

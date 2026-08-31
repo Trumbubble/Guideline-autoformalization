@@ -623,3 +623,705 @@ so only the per-call content is billed at full rate.
 - **P4** decorrelation. Note the axis "CQL vs typed Python" collapses if both
   encoders target this DSL; the available axes are decomposition and model
   family.
+
+# R14 · Coverage is not a safety metric: two of two "encoded" rules were unsound
+
+Run: `python3 demo.py --live --doc PMC13270348 --max 4` (European
+Interdisciplinary Guidelines on Pain Management in Acute Pancreatitis — UEG,
+EPC, ESPGHAN et al.). Reported result: **2 encoded, 2 refused, coverage 50%,
+0 refusals attributable to retrieval.** Reading the bundle by hand, the true
+figure is **0 of 4 faithfully encoded**. Both rules are defective, and each
+fails in a different way.
+
+## R14a · A binding collision produced a tautology that certifies every patient
+
+`PMC13270348:0110` lowered to
+
+```
+when: has_ap == true AND pca == true
+then: patient_controlled_intravenous_analgesia == true
+```
+
+`pca` and `patient_controlled_intravenous_analgesia` are two DSL variables
+bound to the **same** code, SNOMED `1351574007`. The rule therefore denotes
+`(A ∧ B) → B`: valid under every interpretation, unfalsifiable, and it returns
+CERTIFIED-compliant for every patient ever tested against it.
+
+`check_nondegenerate` returned `[]`. That is not a solver failure —
+`VACUOUS_RULE` compares variable *symbols*, and these are two distinct symbols.
+The identity exists only in the terminology layer, and nothing was checking
+there. **The degeneracy check must run after binding, over codes, not over
+names.**
+
+This is worse than a refusal. A refusal is a true statement about the tool's
+limits; a tautology is a false statement about the patient.
+
+## R14b · A deontic modal was reified into a patient-level predicate
+
+`PMC13270348:0143` put `has_may` in its antecedent, manufactured from the
+phrase *"may be considered"*. "May" quantifies the **recommendation's own
+force**; it is not a proposition about a patient, and no FHIR resource can ever
+populate it. The rule is unsatisfiable in practice and returns UNKNOWN for
+every input. `HOLE_FILLER`'s population-word stripping (GATE.md) has no notion
+that modal verbs are a different category from clinical predicates.
+
+## R14c · Two further defects visible in the same bundle
+
+- `has_close_monitoring` (a hole) coexists with `close_monitoring` (bound to
+  SNOMED `182777000`). One concept, two registry entries, and the rule used the
+  unbound one — so the rule is reported PARTIAL despite the binding having
+  succeeded.
+- `close_monitoring` expands to **374 codes**. The descendants of "Monitoring
+  of patient" sweep in most of the SNOMED procedure hierarchy, so the predicate
+  is satisfied by almost any recorded procedure. Coverage counts this as a
+  successful binding; precision is not measured anywhere.
+
+## R14d · The finding for the paper
+
+Every one of the four statements in this guideline is of the form *"we suggest
+X may be considered"* — permissive, unquantified, no threshold anywhere. The
+correct output is 0/4 or 1/4 encoded. **A guideline can be essentially
+100% defeasible, and that is a reportable property of the guideline**, but only
+a system willing to return zero can report it. The observed failure mode is a
+formalizer that manufactures vacuous rules rather than emitting a refusal.
+
+Two consequences:
+
+1. **`attributable_to_retrieval` is uninterpretable on a run with false
+   encodes.** It read 0 here, not because retrieval succeeded but because the
+   retrieval channel was never exercised.
+2. **The evaluation is missing an axis.** Refusal quality is measured (R9);
+   the *faithfulness of the rules actually emitted* is not measured at all, and
+   coverage alone strictly rewards false encodes. A hand-audited faithfulness
+   rate over encoded rules belongs next to coverage, and probably above it.
+
+# R15 · A document-derived abbreviation glossary, and what it costs
+
+The collision in R14a is upstream-preventable: this document defines
+*"Patient-controlled analgesia (PCA)"* in its own prose. `segment.py` now runs
+one Schwartz & Hearst (2003) pass over the whole document before any statement
+is triaged, and publishes the result in the manifest.
+
+Measured over the 9-document PMC corpus:
+
+| Document | Abbreviations |
+|---|---|
+| PMC12355350 (CKD) | 4 |
+| PMC12948374 (ADPKD) | 6 |
+| PMC13054209 (deprescribing) | 10 |
+| PMC13074134 (diabetes/bariatric) | 8 |
+| PMC13090725 (T2D exercise) | 60 |
+| PMC13131131 (uveal melanoma) | 46 |
+| PMC13151662 (stroke BP) | 34 |
+| PMC13270348 (pancreatitis pain) | 20 |
+| PMC13276589 (ASH/ISTH) | 27 |
+| **total** | **215** |
+
+Hand-audited: the first pass produced **3 false definitions in 221**
+(1.4%) — two where the matcher walked out of the phrase into surrounding prose
+(`95% CI → "…0.23-0.76). There were 246 fewer recurrent thrombotic events"`,
+`Ovid → "Ovid), Embase"`) and one wrong expansion of a statistics token
+(`RR → "received anticoagulant prophylaxis"`; RR is risk ratio). All three are
+removed by two guards — reject an expansion containing a bracket or a sentence
+boundary, and stoplist measurement vocabulary (RR, OR, CI, HR, SD, IQR, …),
+which is never a clinical concept and whose document-local definition is
+actively misleading (`HR` is *heart rate* in a cardiology guideline whatever
+this document defined). Residual audited errors after the guards: **0 of 215**.
+
+Three design points worth stating, because each was a choice:
+
+- **The glossary never rewrites statement text.** `Statement.text` is verbatim
+  and its character offsets index the source document (R1); rewriting would
+  break provenance and the classifier's verbatim-quote check. Expansion applies
+  to *retrieval queries only*.
+- **Only two signals are trusted to merge two concepts**: a definition stated
+  in the document, and a shared terminology code. Both are ground truth. An
+  LLM synonym pass was rejected — asked whether "acute pancreatitis" and
+  "severe acute pancreatitis" mean the same thing, a model will say yes, and
+  that distinction is the entire content of several recommendations.
+- **Requiring one reuse after the definition** drops society acronyms defined
+  once in an author list (ESDO, EAGEN) without a hand-written stoplist.
+
+One pass suffices because abbreviations are defined once, on first use, before
+every use — there is nothing a second pass would find. Segment is the only
+stage that sees the whole document; every later stage works one statement at a
+time, which is why the sweep has to live there.
+
+**This is prevention, not detection.** It stops bad names being generated and
+improves retrieval precision, but it cannot catch two *unbound* concepts that
+mean the same thing (no code to compare), nor a model that simply picks
+different wording than the document used. The post-binding degeneracy check of
+R14a is still required, and it is the sound half of the fix.
+
+# R16 · The fix: canonicalise, then re-use the vacuity check you already have
+
+R14 is repaired by one pass plus one check that already existed. Nothing here
+is novel — vacuity detection is standard in hardware model checking (Beer et
+al. 1997; Kupferman & Vardi 1999), concept normalisation is what UMLS CUIs are
+for, and GEM/BRIDGE-Wiz separate deontic force from the condition by schema
+design. The contribution is *where* they now have to run: these are all
+**authoring-time** controls in the classical systems, and machine generation
+removes the authoring step, so they must be re-imposed as **verification over
+the generated artifact**.
+
+## What was added
+
+`dsl.canonical_aliases(reg)` merges two variables into one concept on exactly
+two ground-truth signals — never a judgement call:
+
+1. **A shared terminology binding.** Two bound variables carrying the identical
+   `system|code|version` are the same concept; the terminology server said so.
+2. **A hole restating a bound variable.** `has_close_monitoring` (unbound)
+   beside `close_monitoring` (bound) is a duplicate, not residue.
+
+`check_nondegenerate` now aliases the solver environment before asking Z3
+anything, so **every existing call site** gets the check with no signature
+change. `bundle_to_dict` canonicalises at the serialisation boundary and
+records what it merged in a `merged_concepts` field — a merge is a claim about
+the guideline, and a claim a committee cannot see is a claim it cannot check.
+
+`dsl.MODAL_PREDICATES` / `modal_only()` reject a variable whose name says only
+that the guideline is hedging. A closed word list is defensible here precisely
+because English modals are a **closed class**; clinical concepts are open-ended,
+which is why abbreviations needed a document-derived pass instead (R15).
+`gate.holes_from` will no longer mint a modal hole — a hole promises that some
+data source could one day fill it, and nothing will ever populate `has_may` —
+and a rule rejected for `MODAL_PREDICATE` is now reported as `defeasible`
+rather than falling through to the generic reason.
+
+## Track B re-verifies rather than trusting the file
+
+`from_dsl.load_bundle` re-runs `validate_rule` and `check_nondegenerate` on
+every rule it loads and returns the failures **separately** from the
+guideline's refusals. A bundle is a file: it can be written by an older Track
+A, hand-edited, or produced by a formalizer whose checks have since been
+strengthened. Folding these into the residue would corrupt the one number the
+residue report exists to make readable — they are our defect, not the
+document's.
+
+## Before and after on PMC13270348
+
+| | before | after |
+|---|---|---|
+| reported coverage | 2/4 = 50% | **0/4 = 0%** |
+| faithfully encoded (hand-audited) | 0/4 | 0/4 |
+| unsound rules shipped to Track B | **2** | **0** |
+| registry variables | 9 | 7 |
+
+The tool's reported number now equals the audited number. The two defective
+rules are reported under REJECTED BY VERIFICATION, with `VACUOUS_RULE` and
+`MODAL_PREDICATE` named, and are not loaded into the checker.
+
+**0% coverage is the correct result for this document.** All four statements
+are of the form *"we suggest X may be considered"*. The finding is a property
+of the guideline, and only a system willing to return zero can report it.
+
+## The contrast worth stating in the paper
+
+Stubbing an unbindable predicate to `false` (PathWISE) and shipping a vacuous
+rule are **opposite unsoundnesses**: stubbing makes a rule silently *fail*, a
+vacuity bug makes it silently *pass*. Neither system checks for the other's
+failure mode. Both are invisible without a solver query that nobody currently
+runs.
+
+Test coverage: 192 (16 added).
+
+# R17 · Second live run: the net held, and exposed a worse bug than R14
+
+Re-running `--live --doc PMC13270348 --max 4` after the R16 fixes. The R14
+tautology is gone: *"PCA should be used with caution"* now comes back refused
+as `vague_predicate` rather than encoded as `(A AND B) -> B`.
+
+## R17a · The artifact shipped was not the artifact verified
+
+Rule `PMC13270348:0143` referenced `close_monitoring`; the registry shipped
+beside it did not contain that variable. Cause: `demo._merge_registries`
+**re-bound every statement from scratch** to build the bundle vocabulary
+instead of carrying forward the registry the rule was written against. Binding
+runs through a model selector, so the second call disagreed with the first --
+"close monitoring" bound at triage and did not bind on the rebuild.
+
+Two things worth recording:
+
+- **The surface symptom was a CQL translator error**
+  (`Could not resolve identifier close_monitoring`). The translator was right;
+  the defect was three stages upstream.
+- **Track B's load-time verification caught it** as `UNKNOWN_VAR` +
+  `NOT_LOWERABLE` and refused to load the rule -- a failure mode nobody
+  anticipated, stopped by a check added for a different reason. That is the
+  argument for verifying the generated artifact rather than trusting the
+  generator, stated by an accident rather than by design.
+
+Fixed by adding `Triage.registry`: the vocabulary now travels with the rule.
+Re-binding survives only as a fallback for a Triage with no registry attached.
+
+## R17b · Permission encoded as obligation -- a missing OPERATOR, not a missing check
+
+Both rules this run encode a permissive recommendation as an obligation:
+
+| Rule | Source | `strength` recorded | Encoded as |
+|---|---|---|---|
+| `:0143` | "epidural analgesia **may be considered** when expertise is available" | `weak (suggest); may be considered` | `recommend` |
+| `:0160` | "acupuncture ... **may be considered**" | `weak (suggestion; may be considered)` | `recommend` |
+
+`Rule` denotes phi = `when -> then`, which **is** an obligation. The DSL has no
+permission operator, so a permissive recommendation cannot be faithfully
+encoded in it at all -- and encoding one anyway lets the checker report
+MUST-violate against a patient who merely declined an optional intervention.
+`:0160` escapes that only by accident: its hole forces MAY-violate.
+
+`strength` is currently **carried, not honoured** -- populated by the model,
+serialised into the bundle, copied into `LoadedRule`, and read by nothing. A
+field is not a mechanism.
+
+This is the deeper form of R14b. The `MODAL_PREDICATE` check catches a modal
+that becomes a VARIABLE (`has_may`); it cannot catch a modal that is silently
+DROPPED, leaving a permission dressed as an obligation. Distinguishing them
+matters for the paper: R14b is a bug, R17b is an expressiveness limit.
+
+## R17c · Single-run numbers on n=4 are not stable
+
+The two live runs on the same four statements disagreed: `:0110` went
+encode -> refuse, the acupuncture statement went refuse -> encode. Both runs
+scored 0/4 hand-audited faithful, by entirely different failure modes. Report
+repeated runs or the union of failure modes; do not quote one run.
+
+# R17d · Mitigation: deontic force caps the verdict
+
+`Rule` cannot express permission, so the verdict layer now honours what
+`strength` already recorded. `dsl.is_permissive(strength, source_span)` reads
+both the model's summary and the verbatim source span; when it fires, a rule
+that would have returned MUST-violate returns **`OPTION-not-taken`** instead,
+and the API response carries `deontic: "permission" | "obligation"`.
+
+Demonstrated on the same predicate and the same patient (conditions met,
+action absent):
+
+| Source | verdict |
+|---|---|
+| "We recommend anticoagulant prophylaxis" | `MUST-violate` |
+| "epidural analgesia **may be considered** when expertise is available" | `OPTION-not-taken` |
+
+**GRADE conditional is deliberately not treated as permission.** "We suggest
+anticoagulant prophylaxis" still recommends the action; the weakness is in the
+evidence, not in the obligation. Only explicit permission language counts
+("may be considered", "is an option", "at the discretion of"), which keeps the
+downgrade conservative -- treating every weak recommendation as optional would
+silence most of a guideline.
+
+This is a mitigation, not a fix. The soundness property it buys is worth
+stating precisely, because it is checkable: **no permissive rule can return
+MUST-violate.** The remaining limitation is unchanged -- the DSL has no
+permission operator, so the distinction lives in a guard at the verdict layer
+rather than in the logic. Note that CQL carries no deontic content either, so
+this can only ever live at the verdict layer; the CQL lowering cannot express it.
+
+On novelty: the operator itself would not be new. Obligation/permission/
+prohibition is von Wright (1951), standardised in LegalRuleML, and already
+present in guideline systems -- PROforma represents recommendations as
+candidates with arguments rather than obligations, Asbru models preferences
+among plans, GEM carries an explicit deontic-modality element. What is
+reportable here is the MEASUREMENT (how much of a real guideline is permissive
+rather than obligatory) and the soundness property above.
+
+# R18 · Permission as an operator, not a guard
+
+R17d capped the verdict by inspecting the strength string. `Rule.deontic` now
+carries the operator itself, and the guarantee becomes structural.
+
+```
+obligation   O(then | when)   violation = when AND NOT then
+permission   P(then | when)   violation = FALSE, unconditionally
+```
+
+Prohibition is not a third case: `F(p) = O(NOT p)`, which the DSL already
+writes as `action="avoid"` with a negated consequent.
+
+## What changed, and why each piece
+
+**`violation_condition(rule, env)`** is the formula Track B negates. For a
+permission it is `false`, so the soundness property is checkable directly on
+the formula rather than asserted about a verdict string: *there is no patient,
+and no completion of the unknowns, for which a permission is violated.* Test:
+`z3.Solver().add(violation_condition(permission)) == unsat`.
+
+**`deontic` is REQUIRED in the decoding schema**, so the model must commit to a
+reading rather than letting a default quietly promote a permission into an
+obligation. `check_decoding_schema` passes clean.
+
+**The wording is a backstop, and only in one direction.** `deontic_of()` takes
+the explicit operator, but promotes obligation → permission when the source
+says "may be considered". It never demotes. Guessing permission wrongly
+silences an alert, which is recoverable; guessing obligation wrongly accuses a
+clinician, which is not.
+
+**A permission gets its own verdict lattice**, because compliance is the wrong
+question for it. Same rule, same patient, dispatched on the operator:
+
+| known | obligation | permission |
+|---|---|---|
+| conditions met, action absent | `MUST-violate` | `OPTION-not-taken` |
+| conditions met, action present | `CERTIFIED-compliant` | `OPTION-taken` |
+| conditions not met | `CERTIFIED-compliant` | `OPTION-not-applicable` |
+| nothing specified | `MAY-violate` | `OPTION-available` |
+
+None of the four permission outcomes is an accusation. That is the point.
+
+## What the operator BUYS: deontic conflict detection
+
+`dsl.conflicts(rules, reg)` finds statements that **permit an action another
+rule requires be absent, for a patient who satisfies both antecedents**. This
+check cannot be written without the distinction: collapse permission into
+obligation and "epidural may be considered" and "avoid epidural in
+coagulopathy" are simply two obligations about the same variable, and their
+disagreement is invisible. With the operator it is a decidable query.
+
+Reported through Track B's rejection channel as `DEONTIC_CONFLICT`, never
+auto-resolved — a guideline that contradicts itself is a finding for the
+committee, not something a compiler should quietly pick a side on.
+
+## CQL cannot carry this, and that is a finding about CQL
+
+CQL is an expression language with no deontic content: `Violated` means the
+same thing whether the source required the action or merely offered it. So the
+distinction **cannot live in the lowering** — only at the verdict layer. What
+the library can do is refuse to lie: it emits `define "Deontic": 'permission'`
+and defines `Violated` as `false`, plus `OptionTaken` / `OptionNotTaken`, so
+even a consumer reading only `Violated` cannot turn a declined option into a
+violation. Both variants compile clean through the real HL7 `cql-to-elm`
+translator (0 errors).
+
+## On novelty, stated plainly
+
+The operator is not new. Obligation/permission/prohibition is von Wright
+(1951), standardised in LegalRuleML, and already present in guideline systems:
+PROforma represents recommendations as candidates with arguments rather than
+obligations, Asbru models preferences among plans, GEM carries an explicit
+deontic-modality element. Do not claim it.
+
+Three things here are reportable:
+
+1. **The measurement** — what fraction of a real guideline is permissive rather
+   than obligatory. Asserted qualitatively by the classical systems; not, as far
+   as we can tell, quantified on modern guidelines.
+2. **The soundness property** — no permissive rule can yield MUST-violate,
+   checked on the formula.
+3. **The target-language limit** — CQL cannot express deontic force at all, so
+   any pipeline that lowers to CQL and reports violations from it will
+   misreport permissive recommendations. That is a property of the ecosystem,
+   not of this implementation.
+
+Test coverage: 208 (11 added).
+
+# R19 · The gold standard, and two checks that report rather than reject
+
+## R19a · GOLD.md was written before any tool output was consulted
+
+45 statements, 5 per document across the 9-document corpus, sampled
+deterministically (`goldset.py --seed 0`) rather than taken from the top of the
+prefilter ranking — the high-scoring statements are the easy ones, and a gold
+set of easy statements measures nothing.
+
+The criteria fix a decision order, four labels (`ENCODE` / `PARTIAL` /
+`REFUSE` / `NOT_A_RECOMMENDATION`) plus an independent `deontic` label, and the
+rules of thumb that resolve the disagreements we actually hit:
+
+- the recommended **action must survive** into `then`;
+- **outcomes are not conditions** ("acupuncture relieves abdominal pain **in
+  patients with AP**" — AP is the population, pain is the effect);
+- do not supply a threshold the document does not state;
+- population restrictions are load-bearing.
+
+`NOT_A_RECOMMENDATION` is labelled rather than discarded, because it is the
+segmenter's false-positive rate and belongs in its own denominator. The sample
+already contains obvious instances ("EPs and EtD frameworks are available
+online for recommendation 6"), so that rate is not zero and has never been
+measured.
+
+`goldset.py --score` validates a labelled sheet before any agreement figure is
+computed: reason codes present only on REFUSE rows, hole phrases verbatim in
+the statement, deontic set. An agreement number over a malformed sheet means
+nothing.
+
+**The pre-registered outcome**: report Cohen's κ on the four labels and on
+`deontic`, whatever it is. A κ below ~0.6 would itself be the finding —
+formalizability would not be a well-defined property of a statement, which is a
+stronger claim than any accuracy number.
+
+## R19b · Two faithfulness checks, deliberately non-blocking
+
+`ACTION_TARGET_MISMATCH` (warn) fires when no action atom in `then` is
+lexically related to `Rule.target`. It catches the real `:0143`:
+
+```
+"epidural analgesia may be considered when expertise is available, and strict
+ aseptic techniques and close monitoring are essential"
+  ->  has_expertise_available -> strict_aseptic_techniques AND close_monitoring
+```
+
+The epidural is absent; its **precondition** was promoted to be the
+recommendation. `NO_ACTION_ATOM` passed on a technicality, because aseptic
+technique is itself an action variable.
+
+`UNUSED_BOUND_CONCEPT` (evidence) reports concepts that bound and were then not
+used. `DROPPED_CONCEPT_RISK` covers only the case where the *binder* failed;
+this covers the binder succeeding and the model not using the result — which is
+how a population restriction goes missing from a rule that still typechecks.
+
+**Both report; neither rejects.** That is a reversal of what we first proposed,
+and the reason is worth recording: on review, the "dropped concept" in
+`PMC13270348:0160` was not dropped in error. `has_abdominal_pain` is the
+**outcome** of the intervention, not its indication, and forcing it into `when`
+would have been the wrong encoding. A check that blocks on it would have made
+the output worse.
+
+Matching is by prefix, not token equality: `target` is a human gloss and
+abbreviates. Exact matching fired on a correct rule ("ACEi" vs
+`on_ace_inhibitor`) and was caught by an existing test.
+
+The general principle, and it is the same one behind the gold standard:
+**soundness properties may block; faithfulness judgements may only report.**
+A vacuous rule is wrong under every reading, so `VACUOUS_RULE` rejects. Whether
+a concept belongs in `when` needs judgement — so it goes in the report, where a
+human decides.
+
+## R19c · The executor now reads the deontic marker
+
+Stage 5 printed `Applicable=None -> compliant` for a permission while Z3 said
+`OPTION-available`. The two lowerings disagreed in vocabulary, so the 6/6
+cross-check figure did not cover permissive rules. The executor now reads the
+`Deontic` / `OptionTaken` / `OptionNotTaken` defines the library carries.
+
+Test coverage: 214 (6 added).
+
+# R20 · First pass over the gold set: a 36% ceiling and a 27% segmenter error
+
+45 statements, 5 per document across the 9-document corpus, labelled against
+GOLD.md's decision order.
+
+**Provenance caveat, stated first.** This pass was labelled by the same model
+family that produces the encodings. It is therefore **not independent**, and
+agreement between these labels and the tool's output is inflated by an unknown
+amount. It is a sanity check, not the paper's gold standard — that needs two
+human annotators and a κ. Every number below should be read as
+order-of-magnitude.
+
+## What is in the segmenter's output
+
+| | n | share |
+|---|---|---|
+| **Not a recommendation at all** | 12 | **27%** |
+| Real recommendations | 33 | 73% |
+
+**27% of what the segmenter hands downstream is not a recommendation.** Rationale
+prose ("Understanding the recommendation—Given the benefit…"), evidence
+summaries with odds ratios, list stems ("the following should be considered:"),
+regulatory facts, and one pure administrative note ("EPs and EtD frameworks are
+available online for recommendation 6").
+
+This number has never been measured, and it sits upstream of everything else —
+every formalizability fraction previously reported has been computed over a
+denominator that is a quarter noise.
+
+Add the five statements that are directive but not about a patient (guideline
+process, health-system access, research recommendations) and **17 of 45 = 38%
+of extracted spans are not actionable patient content.**
+
+## The formalizability ceiling
+
+Of the 33 real recommendations:
+
+| label | n |
+|---|---|
+| ENCODE | 7 |
+| PARTIAL | 5 |
+| REFUSE | 21 |
+
+**Ceiling = 12/33 = 36%.** A perfect formalizer, with perfect retrieval and no
+bugs, encodes about a third of the recommendations in this corpus. The other
+64% is a property of the guidelines.
+
+Refusal reasons, and note that the largest bucket is not the one the DSL is
+usually criticised for:
+
+| reason | n |
+|---|---|
+| `vague_predicate` | 7 |
+| `not_patient_level` | 5 |
+| `unbound_concept` | 4 |
+| `defeasible` | 3 |
+| `unsupported_temporal` | 1 |
+| `beyond_dsl` | 1 |
+
+Only **1 of 21** refusals is `beyond_dsl` — expressiveness of the fragment is
+almost never the binding constraint. Vagueness and non-patient-level content
+are. Adding operators to the DSL would buy almost nothing; the residue is in the
+prose.
+
+## The deontic measurement (R18's reportable number)
+
+**5 of 33 = 15% of real recommendations are permissive** rather than
+obligatory. Small, but not negligible — and every one of them would be
+misreported as a violation by a pipeline that lowers to CQL and reads
+`Violated`, because CQL cannot express the distinction.
+
+## Boundary cases the criteria did not settle
+
+Recorded because they are where a second annotator will disagree, and because
+they are how GOLD.md gets sharpened:
+
+- **Institutional capability as a proviso.** *"We recommend epidural analgesia …
+  provided local expertise is available"* (`PMC13270348:0024`). GOLD.md files
+  institutional capability under `not_patient_level`, but here the statement IS
+  patient-level and only the proviso is not. Labelled PARTIAL with the proviso
+  as a hole; a second annotator could defensibly call it REFUSE.
+- **"should be considered" vs "may be considered".** Ruled: the modal governs —
+  `should` is obligation, `may` is permission. Applied consistently, but it is a
+  convention, not a discovery.
+- **Statements carrying two recommendations.** Four of the 45. Labelled on the
+  first clause with the split noted. The segmenter should be splitting these.
+- **`unbound_concept` vs genuine residue.** `PMC13074134:0007` turns on "start
+  of LRD (liver reduction diet)", which probably has no code anywhere — but that
+  is a guess, and GOLD.md asks for it to be flagged for checking rather than
+  assumed.
+
+## What this changes
+
+1. **Segmenter precision is now the biggest single lever**, and it was not on
+   the list. Fixing a quarter of the input being noise is worth more than any
+   further work on the formalizer.
+2. **Coverage must be reported over real recommendations**, with the
+   not-a-recommendation count published beside it. A "coverage" figure over raw
+   extracted spans is not comparable to anything.
+3. **36% is the number to beat, and 100% is not the target.** A tool reporting
+   much above 36% on this corpus is either encoding things it should refuse or
+   inventing thresholds.
+
+# R21 · The model classifier had never been switched on
+
+`llm.classify_block` has existed since the segmenter was written. Its docstring
+is the instruction for using it — `segment.segment(..., llm=llm.classify_block)`
+— and **no caller ever passed it**. Both `demo.py` and `goldset.py` called
+`sg.segment(blocks, doc_id)`, so every run, `--live` included, judged candidates
+with the offline word-counting heuristic while the model judged mentions,
+candidate codes and encodings. Three of four model hooks were wired; the first
+one was not.
+
+## Why it hid
+
+- **`llm=None` is a valid, working mode, not an error.** The heuristic runs, the
+  pipeline completes, statements come out. A silent fallback is
+  indistinguishable from success — the same failure shape as the
+  `MENTION_SCHEMA` bug (R7), where a missing `additionalProperties` meant the
+  model path never ran at all.
+- **The tests pass identically either way.** `test_segment` deliberately runs
+  offline with no key, so it exercises the heuristic by design and can never
+  notice that production does too.
+- **Nobody had measured segmenter precision**, so no number looked wrong. It
+  took building the gold set to produce a figure that did.
+- **The manifest recorded the truth on every single run**
+  (`"classifier": "heuristic"`) and nothing printed it. The evidence was present
+  and invisible. The segmenter line now ends `[judge: heuristic|llm]`.
+
+## Measured effect
+
+The model classifier, run over the same 45 gold statements:
+
+| | n |
+|---|---|
+| non-recommendations correctly rejected | **11 of 12** |
+| real recommendations kept | 29 of 33 |
+| false positives remaining | 1 |
+
+The single remaining false positive — *"A deprescribing approach encourages
+prescribers to consider the need for a medicine each time a prescription is
+re-issued"* — was flagged as borderline when the gold label was assigned. It
+reads as directive and as descriptive, and the disagreement is honest.
+
+**All four "false negatives" are statements neither judge would encode.** Three
+are ones the gold set called `REFUSE / not_patient_level` (guideline
+methodology, meta-guidance to readers, a research agenda item) and one
+`REFUSE / defeasible`. The model files them as "not a recommendation"; the gold
+criteria file them as refusals. **The same decision, recorded in two different
+places** — and it is a real gap in GOLD.md, because the two land in different
+denominators.
+
+## The denominator, before and after
+
+| | heuristic | model |
+|---|---|---|
+| spans reaching the pipeline | 45 | 30 |
+| of those, not a recommendation | 12 (27%) | 1 (3%) |
+| encodable (ENCODE + PARTIAL) | 12 | 12 |
+| **coverage over what reaches the pipeline** | **27%** | **40%** |
+
+No encodable statement is lost — all 12 survive. The gain is entirely from not
+passing noise downstream.
+
+## The lesson worth generalising
+
+Three of this project's most expensive bugs share one shape: **a fallback that
+works.** `MENTION_SCHEMA` fell back to a heuristic; `_merge_registries` fell
+back to re-binding; the classifier fell back to word-counting. None raised, none
+failed a test, and each produced plausible output for weeks.
+
+The countermeasure that would have caught all three is the same: **make the
+artifact state which path produced it, and print it.** The manifest already knew.
+
+# R22 · Three deterministic vetoes: 7 of 12 for free, 0 real statements lost
+
+Rules applied before any judge sees a candidate, so the model is only asked
+about spans that genuinely need judgement:
+
+| veto | catches |
+|---|---|
+| `list_stem` | ends in a colon — a lead-in to a list, whose items are separate blocks |
+| `evidence_summary` | odds/hazard ratios, `95% CI`, `n =`, p-values, "certainty of evidence" |
+| `about_a_recommendation` | "recommendations **that** …" reports one; "recommendation 6" names one |
+
+**Every rule is guarded by directive language.** A span that also states a real
+obligation is never vetoed, because table rows fold the recommendation together
+with its evidence grading — *"We recommend epidural analgesia …; Certainty of
+evidence: Good practice Statement-ungraded"* — and a rule keyed on the grading
+alone would delete the recommendation with it.
+
+## Measured on the gold set
+
+| | |
+|---|---|
+| non-recommendations vetoed for free | **7 of 12** |
+| left for the model to judge | 5 |
+| **real recommendations wrongly deleted** | **0** |
+
+Across the full 9-document corpus: 166 spans vetoed (121 evidence summaries,
+31 list stems, 14 pointers), against 395 recommendations kept.
+
+## What the first version got wrong, and why the rule gave up yield
+
+A looser `about_a_recommendation` — "a / the / this / conditional
+recommendation" — caught 8 of 12 but deleted a real statement:
+
+> *"Although the panel made a conditional recommendation for no primary
+> anticoagulant prophylaxis for persistently positive APLA, panel members
+> emphasized the importance of considering individual patient circumstances …"*
+
+That is `defeasible` **residue**, not noise. And the asymmetry is the point:
+**a vetoed span vanishes; a refused one is counted and explained.** Deleting it
+removes it from the denominator and understates the residue, which is the one
+number the refusal report exists to make readable. The rule was narrowed to the
+two constructions that cannot introduce a clinical action, trading one catch for
+zero false vetoes.
+
+The prefilter score explains why these get in at all: the evidence sentences
+score 3.00 on `grade_certainty`, because "low certainty" is exactly the
+vocabulary a graded recommendation uses. The trap is structural, not incidental.
+
+## Combined effect
+
+| stage | non-recommendations passed |
+|---|---|
+| heuristic prefilter alone | 12 of 45 (27%) |
+| + deterministic vetoes | 5 |
+| + model classifier | ~1 |
+
+Test coverage: 223 (9 added).

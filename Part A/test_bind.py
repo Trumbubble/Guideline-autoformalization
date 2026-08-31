@@ -164,6 +164,21 @@ def test_abbreviations_are_expanded():
     assert "angiotensin converting enzyme inhibitor" in expand_query("ACE inhibitor")
     assert expand_query("diabetes") == ["diabetes"]
 
+def test_a_slash_compound_is_also_searched_as_its_halves():
+    """Guideline prose joins concepts with a slash --
+    "leukemia/lymphoblastic lymphoma" is two diseases, and no terminology has a
+    concept for the pair. Splitting is ADDITIVE, so a meaningful slash keeps
+    working."""
+    qs = b.expand_query("leukemia/lymphoblastic lymphoma")
+    assert "leukemia" in qs and "lymphoblastic lymphoma" in qs
+    assert "leukemia/lymphoblastic lymphoma" in qs      # the compound survives
+
+def test_a_unit_slash_is_not_split():
+    """mg/g is division, not a compound -- splitting it would search for "mg"."""
+    assert b.split_compound("mg/g") == []
+    assert b.split_compound("mL/min") == []
+    assert "Albumin/Creatinine" in b.expand_query("Albumin/Creatinine")
+
 def test_plurals_do_not_block_a_match():
     """Guideline prose: 'an ACE inhibitor'. ATC: 'ACE INHIBITORS, PLAIN'."""
     r = b.bind(Mention("ACE inhibitor", "drug_class"), SENT, IX)

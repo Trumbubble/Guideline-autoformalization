@@ -16,6 +16,7 @@ cannot report the residue, and the residue is a deliverable, not a log.
 """
 from __future__ import annotations
 
+import json
 import os
 import sys
 from dataclasses import dataclass, field
@@ -49,6 +50,10 @@ class LoadedRule:
     source_page: int | None = None
     source_span: str | None = None
     strength: str | None = None
+    deontic: str = "obligation"
+    violation: object = None             # z3 BoolRef -- when the rule is broken
+    applies: object = None               # z3 BoolRef -- `when`
+    taken: object = None                 # z3 BoolRef -- `then`
     threshold: tuple = ()
     variables: tuple = ()
     boundaries: tuple = ()
@@ -56,6 +61,12 @@ class LoadedRule:
     @property
     def is_partial(self) -> bool:
         return bool(self.holes)
+
+    @property
+    def is_permissive(self) -> bool:
+        """The source permits the action rather than requiring it. Such a rule
+        may inform, but it must never accuse."""
+        return self.deontic == "permission"
 
 
 # `action` is a UI gloss in the DSL, but the checker groups by category, so map
@@ -67,14 +78,39 @@ ACTION_CATEGORY = {
 }
 
 
-def load_bundle(path: str) -> tuple[list[LoadedRule], list, "dsl.Registry"]:
-    """bundle.json -> (rules the checker can run, refusals, registry)."""
+def load_bundle(path: str) -> tuple[list[LoadedRule], list, "dsl.Registry", list]:
+    """bundle.json -> (rules the checker can run, refusals, registry, rejected).
+
+    Track B re-verifies before it loads. A bundle is a file: it can be written
+    by an older Track A, hand-edited, or produced by a formalizer whose checks
+    have since been strengthened, so trusting it because it parsed is the same
+    mistake as trusting a rule because it typechecked.
+
+    The rejection that matters is VACUOUS_RULE. A rule that no patient can
+    violate does not fail loudly -- it reports CERTIFIED-compliant for
+    everyone, which is indistinguishable from a rule that is working. Measured
+    on PMC13270348, one of two shipped rules was of this kind (RESULTS.md R14).
+    Rejected rules are returned SEPARATELY from the guideline's refusals: they
+    are our defect, not the document's residue, and folding them together
+    would corrupt the one number the residue report exists to make readable."""
     reg, rules, refusals = dsl.read_bundle(path)
     env = dsl.make_env(reg)
     axioms = dsl.domain_axioms(reg, env)
+    for src, dst in dsl.canonical_aliases(reg).items():
+        env[src] = env[dst]
 
-    loaded = []
+    loaded, rejected = [], []
     for r in rules:
+        defects = [i for i in dsl.validate_rule(r, reg) + dsl.check_nondegenerate(r, reg)
+                   if i.severity == "error"]
+        if defects:
+            rejected.append({
+                "rule_id": r.rule_id,
+                "codes": sorted({i.code for i in defects}),
+                "why": defects[0].message,
+                "source_span": r.source_span or "",
+            })
+            continue
         # Only the variables THIS rule mentions are exposed as var_refs: the
         # checker pins what the caller supplies and leaves the rest free, and
         # offering unrelated variables would inflate the free-variable space
@@ -86,6 +122,17 @@ def load_bundle(path: str) -> tuple[list[LoadedRule], list, "dsl.Registry"]:
             category=ACTION_CATEGORY.get(r.action, r.action),
             drug=r.target,
             predicate=dsl.rule_to_z3(r, env),
+            # What it takes to VIOLATE the rule. For a permission this is
+            # FALSE unconditionally, so no patient and no completion of the
+            # unknowns can yield MUST-violate -- the guarantee is structural,
+            # not a guard on the verdict string.
+            violation=dsl.violation_condition(r, env),
+            deontic=dsl.deontic_of(r),
+            # Kept separately because a PERMISSION is not judged by compliance
+            # but by applicability: does this patient meet the conditions under
+            # which the option exists, and was it taken?
+            applies=dsl.to_z3(r.when, env),
+            taken=dsl.to_z3(r.then, env),
             var_refs={n: env[n] for n in names if n in env},
             source_sentence=r.source_span or "",
             source=f"Track A · {r.rule_id}"
@@ -96,7 +143,14 @@ def load_bundle(path: str) -> tuple[list[LoadedRule], list, "dsl.Registry"]:
             strength=r.strength,
             variables=tuple(sorted(names)),
         ))
-    return loaded, refusals, reg
+    # A guideline that permits an action one rule requires be absent is
+    # contradicting itself. Reported, never resolved: picking a side is a
+    # committee's call, not a compiler's.
+    for c in dsl.conflicts(rules, reg):
+        rejected.append({"rule_id": f"{c['permits']} vs {c['requires']}",
+                         "codes": ["DEONTIC_CONFLICT"], "why": c["detail"],
+                         "source_span": ", ".join(c["shared_variables"])})
+    return loaded, refusals, reg, rejected
 
 
 def _mentioned(rule: "dsl.Rule", reg: "dsl.Registry") -> set:
@@ -120,29 +174,96 @@ def _mentioned(rule: "dsl.Rule", reg: "dsl.Registry") -> set:
     return out
 
 
+# Evidence lines are tagged by where the signal came from. Only the binder ones
+# are OUR failure; the rest are properties of the statement.
+_OUR_FAULT = ("unbound_index_gap", "unbound_unselected", "NO_BOUND_VOCABULARY")
+
+
 def residue_report(refusals) -> dict:
-    """The governance half of the deliverable: what was NOT encoded, and why."""
+    """The governance half of the deliverable: what was NOT encoded, and why.
+
+    Each refusal carries the concept-level evidence beneath it, and the report
+    separates refusals ATTRIBUTABLE TO RETRIEVAL from those that are properties
+    of the guideline. A reader who cannot make that split cannot tell whether to
+    fix the index or accept the residue -- and a formalizability fraction quoted
+    without it is not interpretable.
+    """
     by_reason: dict = {}
+    retrieval = 0
     for r in refusals:
+        ev = list(getattr(r, "evidence", ()) or ())
+        ours = any(tag in line for line in ev for tag in _OUR_FAULT)
+        retrieval += bool(ours)
         by_reason.setdefault(r.reason_code, []).append({
-            "rule_id": r.rule_id, "reason": r.reason_text,
+            "rule_id": r.rule_id,
+            "reason": r.reason_text,
             "source_span": r.source_span,
             "undefined_predicates": list(getattr(r, "undefined_predicates", ()) or ()),
+            "evidence": ev,
+            "attributable_to_retrieval": ours,
         })
     return {"total": len(refusals),
             "by_reason": {k: len(v) for k, v in sorted(by_reason.items())},
+            "attributable_to_retrieval": retrieval,
+            "attributable_to_guideline": len(refusals) - retrieval,
             "detail": by_reason}
 
 
 if __name__ == "__main__":
-    import json
-    path = sys.argv[1] if len(sys.argv) > 1 else "bundle.json"
-    rules, refusals, reg = load_bundle(path)
-    print(f"{len(rules)} rules, {len(refusals)} refusals, "
-          f"{len(reg.names())} registry variables\n")
-    for r in rules:
-        flag = f"  PARTIAL holes={list(r.holes)}" if r.is_partial else ""
-        print(f"  [{r.category:15s}] {r.rule_id:14s} {r.title[:46]}{flag}")
-        print(f"      vars: {', '.join(r.variables)}")
-    if refusals:
-        print("\nresidue:", json.dumps(residue_report(refusals)["by_reason"]))
+    import argparse
+
+    ap = argparse.ArgumentParser(
+        description="Inspect a Track A bundle: the rules, and the residue.")
+    ap.add_argument("bundle", nargs="?", default="bundle.json")
+    ap.add_argument("--residue", action="store_true",
+                    help="show only what was refused, and why")
+    a = ap.parse_args()
+
+    rules, refusals, reg, rejected = load_bundle(a.bundle)
+    rep = residue_report(refusals)
+    total = len(rules) + len(refusals) + len(rejected)
+
+    if not a.residue:
+        print(f"{len(rules)} encoded, {len(refusals)} refused, "
+              f"{len(reg.names())} bound variables\n")
+        for r in rules:
+            flag = f"   PARTIAL holes={list(r.holes)}" if r.is_partial else ""
+            print(f"  [{r.category:14s}] {r.rule_id:20s} {r.title[:40]}{flag}")
+            print(f"        {(r.source_sentence or '')[:88]}")
+        print()
+
+    if rejected:
+        print("=" * 74)
+        print(f" REJECTED BY VERIFICATION -- {len(rejected)} rule(s) in this bundle "
+              f"are unsound")
+        print("=" * 74)
+        print("  These are OUR defect, not the guideline's residue, and they are not")
+        print("  loaded into the checker. A VACUOUS_RULE is the dangerous one: it")
+        print("  reports every patient COMPLIANT instead of failing visibly.\n")
+        for x in rejected:
+            print(f"  [{', '.join(x['codes'])}]  {x['rule_id']}")
+            print(f"     {x['why'][:86]}")
+            print(f"     {x['source_span'][:86]}")
+        print()
+
+    print("=" * 74)
+    print(f" RESIDUE -- {len(refusals)} of {total} statements were NOT encoded")
+    print("=" * 74)
+    if total:
+        print(f"  coverage: {len(rules)}/{total} = {len(rules)/total:.0%}")
+    print(f"  attributable to the GUIDELINE : {rep['attributable_to_guideline']}"
+          "   (vague, defeasible, not patient-level -- real residue)")
+    print(f"  attributable to OUR RETRIEVAL : {rep['attributable_to_retrieval']}"
+          "   (a code exists and we did not find it -- fixable)")
+    print(f"  by reason: {json.dumps(rep['by_reason'])}\n")
+
+    for reason, items in sorted(rep["detail"].items()):
+        for it in items:
+            who = "OURS" if it["attributable_to_retrieval"] else "guideline"
+            print(f"  [{reason}]  {it['rule_id']}   ({who})")
+            print(f"     {(it['source_span'] or '')[:84]}")
+            for p in it["undefined_predicates"]:
+                print(f"     undefined predicate: {p!r}")
+            for e in it["evidence"][:3]:
+                print(f"     · {e[:84]}")
+            print()

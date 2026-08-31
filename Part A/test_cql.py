@@ -36,6 +36,19 @@ def test_a_rule_lowers_to_a_structurally_clean_library():
     for d in ('"Applicable"', '"Satisfied"', '"Compliant"', '"Violated"'):
         assert f"define {d}:" in lib.text
 
+def test_a_library_name_is_always_a_valid_identifier():
+    """Statement ids carry their document -- `PMC12355350:0129` -- and a colon
+    is illegal in a CQL identifier. An unsanitised name produced
+    `library DemoPMC12355350:0129`, which the official translator rejected with
+    "Syntax error at :", losing the statement."""
+    import re as _re
+    for raw in ["PMC12355350:0129", "Demo PMC1235:0129", "0129-abc", "!!!", "ash:0042"]:
+        lib = rule_to_cql(RULE, REG, library_name=raw)
+        first = lib.text.splitlines()[0]
+        name = first.split()[1]
+        assert _re.fullmatch(r"[A-Za-z][A-Za-z0-9]*", name), (raw, first)
+        assert check_cql(lib.text) == [], (raw, check_cql(lib.text))
+
 def test_terminology_names_differ_from_define_names():
     """`[Condition: X]` needs X to be a valueset or code. Reusing the define's
     name produces a self-referential library that looks plausible and is not
@@ -206,6 +219,32 @@ def test_a_decoder_exception_becomes_a_refusal_not_a_crash():
     out = synthesize("...", REG, boom, statement_id="s1")
     assert not out.ok and out.refusal.reason_code == "beyond_dsl"
     assert "429" in out.refusal.reason_text
+
+
+def test_a_permission_lowers_to_a_library_that_cannot_report_a_violation():
+    """CQL has no deontic content -- "Violated" means the same thing whether
+    the source required the action or offered it. The lowering therefore cannot
+    carry the distinction in its LOGIC, so it carries it in the definitions:
+    `Deontic` names the operator and `Violated` is false outright."""
+    reg = dsl.Registry([dsl.VarDef("has_ap", "bool", binding="http://snomed.info/sct|1|x"),
+                        dsl.VarDef("epidural", "bool", binding="http://snomed.info/sct|2|x",
+                                   role="action")])
+    r = dsl.Rule("r", dsl.Cmp("has_ap", "==", True), dsl.Cmp("epidural", "==", True),
+                 "recommend", "epidural", deontic="permission", source_span="x")
+    text = cql.rule_to_cql(r, reg).text
+    assert "'permission'" in text
+    assert 'define "Violated":\n  false' in text
+    assert 'define "OptionNotTaken"' in text
+
+def test_an_obligation_still_lowers_to_a_real_violation_define():
+    reg = dsl.Registry([dsl.VarDef("has_ap", "bool", binding="http://snomed.info/sct|1|x"),
+                        dsl.VarDef("epidural", "bool", binding="http://snomed.info/sct|2|x",
+                                   role="action")])
+    r = dsl.Rule("r", dsl.Cmp("has_ap", "==", True), dsl.Cmp("epidural", "==", True),
+                 "recommend", "epidural", deontic="obligation", source_span="x")
+    text = cql.rule_to_cql(r, reg).text
+    assert "'obligation'" in text
+    assert 'define "Violated":\n  "Applicable" and not "Satisfied"' in text
 
 
 if __name__ == "__main__":

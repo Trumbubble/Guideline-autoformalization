@@ -271,6 +271,13 @@ def ingest(title: str, *, file_bytes=None, filename=None, text=None,
     bundle_path = STORE_DIR / f"{guideline_id}.json"
     dsl.write_bundle(str(bundle_path), reg, rules, refusals)
 
+    # Re-load through the same path get_guideline() uses, so the stored
+    # counts match what /guidelines/<id>/rules will actually serve -- a rule
+    # that writes clean can still be rejected as VACUOUS_RULE on reload.
+    from from_dsl import load_bundle
+
+    loaded_rules, _loaded_refusals, _reg, rejected = load_bundle(str(bundle_path))
+
     entry = {
         "id": guideline_id,
         "title": title,
@@ -278,9 +285,10 @@ def ingest(title: str, *, file_bytes=None, filename=None, text=None,
         "source_filename": filename,
         "live": live,
         "statements": manifest.get("statements", 0),
-        "rule_count": len(rules),
+        "rule_count": len(loaded_rules),
         "refusal_count": len(refusals),
         "needs_model_count": needs_model,
+        "rejected_count": len(rejected),
     }
     entries = _load_index()
     entries.append(entry)
@@ -299,6 +307,7 @@ def list_guidelines() -> list:
         "rule_count": len(REAL_RULES),
         "refusal_count": 0,
         "needs_model_count": 0,
+        "rejected_count": 0,
         "builtin": True,
     }
     return [fixture_entry] + [dict(e, builtin=False) for e in _load_index()]
@@ -320,5 +329,10 @@ def get_guideline(guideline_id: str):
     from from_dsl import load_bundle
 
     bundle_path = STORE_DIR / f"{guideline_id}.json"
-    rules, refusals, reg = load_bundle(str(bundle_path))
-    return rules, refusals, reg, dict(meta, builtin=False)
+    # Track B re-verifies before it loads: a bundle can be written by an
+    # older Track A or hand-edited, and a VACUOUS_RULE that survived doesn't
+    # fail loudly -- it reports CERTIFIED-compliant for everyone. Rejects
+    # are OUR defect, not the guideline's residue, so they travel separately
+    # from refusals rather than being folded into that count.
+    rules, refusals, reg, rejected = load_bundle(str(bundle_path))
+    return rules, refusals, reg, dict(meta, builtin=False, rejected=rejected)

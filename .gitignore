@@ -231,3 +231,8 @@ Part B/engine/*.json
 
 # Uploaded guidelines are runtime data, not source.
 Part B/guidelines/
+
+# Licensed terminology releases -- load locally, never redistribute.
+SnomedCT_*/
+RxNorm_*/
+Part A/terms.db
