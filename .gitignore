@@ -229,6 +229,9 @@ Part B/engine/cp.txt
 Part B/engine/*.json
 !Part B/engine/package.json
 
+# Uploaded guidelines are runtime data, not source.
+Part B/guidelines/
+
 # Licensed terminology releases -- load locally, never redistribute.
 SnomedCT_*/
 RxNorm_*/

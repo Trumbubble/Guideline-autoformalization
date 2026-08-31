@@ -127,19 +127,34 @@
   th, td { text-align: left; padding: 0.3rem 0.4rem; border-bottom: 1px solid var(--border); vertical-align: top; }
   th { color: var(--muted); font-weight: 600; }
   code { font-size: 0.78rem; background: var(--bg); padding: 0.05rem 0.3rem; border-radius: 4px; }
+  .back-link { color: var(--accent); text-decoration: none; font-size: 0.85rem; font-weight: 600; }
+  .back-link:hover { text-decoration: underline; }
+  .meta { color: var(--muted); font-size: 0.85rem; margin: 0.15rem 0 0; }
+  .residue-note {
+    font-size: 0.85rem; color: var(--may); background: var(--may-bg);
+    border-radius: 6px; padding: 0.5rem 0.7rem; margin: 0.6rem 2rem 0;
+  }
+  .residue-note a { color: inherit; }
+  .hole-badge {
+    display: inline-block; font-size: 0.7rem; font-weight: 700; color: var(--may);
+    background: var(--may-bg); border-radius: 999px; padding: 0.1rem 0.5rem;
+    margin-left: 0.4rem; vertical-align: middle;
+  }
 </style>
 </head>
 <body>
 
 <header>
-  <h1>Guideline compliance checker</h1>
-  <p>Paste a patient + plan, or load an example, and check it against the Track&nbsp;B rule library.</p>
+  <a class="back-link" href="/">&larr; Dashboard</a>
+  <h1 id="guideline-title">Guideline compliance checker</h1>
+  <p class="meta" id="guideline-meta">Loading&hellip;</p>
 </header>
+<div id="residue-note"></div>
 
 <main>
   <section class="panel">
     <h2>Check a case</h2>
-    <label for="example">Load an example</label>
+    <label for="example" id="example-label">Load an example</label>
     <select id="example"></select>
 
     <label for="patient">Patient (JSON: lab values)</label>
@@ -216,22 +231,56 @@ const EXAMPLES = [
   },
 ];
 
+const GUIDELINE_ID = new URLSearchParams(window.location.search).get("guideline") || "fixtures";
+const HAS_BUILTIN_EXAMPLES = GUIDELINE_ID === "fixtures";
+
 const patientEl = document.getElementById("patient");
 const planEl = document.getElementById("plan");
 const resultsEl = document.getElementById("results");
 const exampleEl = document.getElementById("example");
 
 function populateExamples() {
+  if (!HAS_BUILTIN_EXAMPLES) {
+    document.getElementById("example-label").textContent =
+      "Example scenarios (fixtures only -- see the rules table below for this guideline's variables)";
+    exampleEl.innerHTML = "";
+    exampleEl.disabled = true;
+    return;
+  }
   exampleEl.innerHTML = EXAMPLES
     .map((ex, i) => `<option value="${i}">${ex.label}</option>`)
     .join("");
 }
 
-function loadExample(index) {
+async function loadExample(index) {
+  if (!HAS_BUILTIN_EXAMPLES) return;
   const ex = EXAMPLES[index];
   patientEl.value = JSON.stringify(ex.patient, null, 2);
   planEl.value = JSON.stringify(ex.plan, null, 2);
-  runCheck();
+  await runCheck();
+}
+
+async function loadGuidelineHeader() {
+  const titleEl = document.getElementById("guideline-title");
+  const metaEl = document.getElementById("guideline-meta");
+  const residueEl = document.getElementById("residue-note");
+  try {
+    const response = await fetch(`/guidelines/${encodeURIComponent(GUIDELINE_ID)}`);
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || "not found");
+    titleEl.textContent = data.title;
+    const bits = [`${data.rule_count} rule${data.rule_count === 1 ? "" : "s"}`];
+    if (data.refusal_count) bits.push(`${data.refusal_count} refused`);
+    if (data.needs_model_count) bits.push(`${data.needs_model_count} awaiting formalization`);
+    metaEl.textContent = bits.join(" · ");
+    if (data.refusal_count) {
+      residueEl.innerHTML = `<div class="residue-note">${data.refusal_count} statement(s) in this guideline could not be encoded -- ` +
+        `<a href="/guidelines/${encodeURIComponent(GUIDELINE_ID)}/residue" target="_blank">see the residue report</a>.</div>`;
+    }
+  } catch (err) {
+    titleEl.textContent = "Unknown guideline";
+    metaEl.textContent = err.message;
+  }
 }
 
 function humanize(name) {
@@ -284,10 +333,13 @@ function renderResult(result) {
   const known = Object.entries(result.known_variables || {})
     .map(([k, v]) => `${humanize(k)}=${humanizeValue(v)}`)
     .join(", ") || "(none)";
+  const holeBadge = result.partial
+    ? `<span class="hole-badge">PARTIAL: ${result.open_holes.map(humanize).join(", ")} left undefined</span>`
+    : "";
 
   return `
     <div class="card">
-      <span class="badge ${badgeClass}">${result.verdict}</span>
+      <span class="badge ${badgeClass}">${result.verdict}</span>${holeBadge}
       <h3>${result.title}</h3>
       <p class="source">&ldquo;${result.source_sentence}&rdquo;</p>
       <p class="explanation">${explanation}</p>
@@ -311,7 +363,7 @@ async function runCheck() {
 
   resultsEl.innerHTML = '<p class="loading">Checking&hellip;</p>';
   try {
-    const response = await fetch("/check", {
+    const response = await fetch(`/guidelines/${encodeURIComponent(GUIDELINE_ID)}/check`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ patient, plan }),
@@ -330,7 +382,7 @@ async function runCheck() {
 async function loadRulesTable() {
   const el = document.getElementById("rules-table");
   try {
-    const response = await fetch("/rules");
+    const response = await fetch(`/guidelines/${encodeURIComponent(GUIDELINE_ID)}/rules`);
     const rules = await response.json();
     const rows = rules
       .map(
@@ -349,7 +401,7 @@ async function loadRulesTable() {
         <tbody>${rows}</tbody>
       </table>`;
   } catch (err) {
-    el.innerHTML = `<div class="error">Could not load /rules: ${err.message}</div>`;
+    el.innerHTML = `<div class="error">Could not load the rule list: ${err.message}</div>`;
   }
 }
 
@@ -357,8 +409,18 @@ document.getElementById("check-btn").addEventListener("click", runCheck);
 exampleEl.addEventListener("change", (e) => loadExample(Number(e.target.value)));
 
 populateExamples();
-loadExample(0);
-loadRulesTable();
+// Sequential, not fire-and-forget: three concurrent requests on page load
+// can drop or corrupt connections on Flask's single-threaded dev server.
+(async () => {
+  if (HAS_BUILTIN_EXAMPLES) {
+    await loadExample(0);
+  } else {
+    patientEl.value = "{}";
+    planEl.value = "{}";
+  }
+  await loadGuidelineHeader();
+  await loadRulesTable();
+})();
 </script>
 
 </body>
