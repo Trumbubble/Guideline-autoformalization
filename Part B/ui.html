@@ -252,12 +252,12 @@ function populateExamples() {
     .join("");
 }
 
-function loadExample(index) {
+async function loadExample(index) {
   if (!HAS_BUILTIN_EXAMPLES) return;
   const ex = EXAMPLES[index];
   patientEl.value = JSON.stringify(ex.patient, null, 2);
   planEl.value = JSON.stringify(ex.plan, null, 2);
-  runCheck();
+  await runCheck();
 }
 
 async function loadGuidelineHeader() {
@@ -409,14 +409,18 @@ document.getElementById("check-btn").addEventListener("click", runCheck);
 exampleEl.addEventListener("change", (e) => loadExample(Number(e.target.value)));
 
 populateExamples();
-if (HAS_BUILTIN_EXAMPLES) {
-  loadExample(0);
-} else {
-  patientEl.value = "{}";
-  planEl.value = "{}";
-}
-loadGuidelineHeader();
-loadRulesTable();
+// Sequential, not fire-and-forget: three concurrent requests on page load
+// can drop or corrupt connections on Flask's single-threaded dev server.
+(async () => {
+  if (HAS_BUILTIN_EXAMPLES) {
+    await loadExample(0);
+  } else {
+    patientEl.value = "{}";
+    planEl.value = "{}";
+  }
+  await loadGuidelineHeader();
+  await loadRulesTable();
+})();
 </script>
 
 </body>

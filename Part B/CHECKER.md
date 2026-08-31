@@ -147,6 +147,21 @@ predicate. Raw JSON is one click away behind a `<details>` toggle. Single
 static file, no build step, no dependency beyond the Flask app that serves
 it.
 
+### `demo.html` -- see it work, no setup
+
+Served from `GET /demo`, linked from the dashboard header. Runs three
+checks against the `fixtures` guideline's ACE-inhibitor rules the moment
+the page loads -- one definite violation, one definite compliance, one
+genuinely undetermined case -- and renders each as a plain-English step
+with the real verdict from the real checker, not a scripted mockup. The
+third step shows the minimized counterexample in prose (`potassium check
+occurred = false`), which is the concrete case a naive yes/no check can't
+distinguish from either of the other two. The three checks are run
+sequentially, not with `Promise.all`: Flask's single-threaded dev server
+can drop or corrupt connections under concurrent requests, which is also
+why `ui.html`'s own page-load fetches are sequential rather than
+fire-and-forget.
+
 ### `dashboard.html` -- the guideline library
 
 Served from `GET /`. A grid of rounded-card guidelines fetched from

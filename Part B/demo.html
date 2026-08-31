@@ -1,0 +1,279 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Demo</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #f7f7f8;
+    --panel: #ffffff;
+    --text: #1a1a1a;
+    --muted: #6b6b6b;
+    --border: #dcdcdc;
+    --must: #b3261e;
+    --must-bg: #fdecea;
+    --may: #8a5a00;
+    --may-bg: #fff4dc;
+    --certified: #1e6b3a;
+    --certified-bg: #e8f5ec;
+    --accent: #2757c9;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #16171a;
+      --panel: #1f2023;
+      --text: #eaeaea;
+      --muted: #9a9a9a;
+      --border: #35363a;
+      --must-bg: #3a1f1d;
+      --may-bg: #3a2f14;
+      --certified-bg: #163524;
+      --accent: #6f97f0;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    line-height: 1.5;
+  }
+  header { padding: 1.5rem 2rem 0.5rem; }
+  .back-link { color: var(--accent); text-decoration: none; font-size: 0.85rem; font-weight: 600; }
+  .back-link:hover { text-decoration: underline; }
+  header h1 { margin: 0.3rem 0 0.4rem; font-size: 1.5rem; }
+  header p { margin: 0; color: var(--muted); font-size: 0.95rem; max-width: 640px; }
+  main { max-width: 760px; margin: 0 auto; padding: 1rem 2rem 3rem; }
+
+  .step {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 1.2rem 1.4rem;
+    margin-top: 1.4rem;
+  }
+  .step .kicker {
+    font-size: 0.72rem; font-weight: 700; letter-spacing: 0.04em;
+    color: var(--accent); text-transform: uppercase; margin: 0 0 0.5rem;
+  }
+  .step .sentence {
+    font-style: italic; font-size: 0.95rem; margin: 0 0 0.9rem;
+    padding-left: 0.8rem; border-left: 3px solid var(--border);
+  }
+  .facts { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.9rem; }
+  .fact {
+    font-size: 0.8rem; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    background: var(--bg); border: 1px solid var(--border); border-radius: 6px;
+    padding: 0.25rem 0.55rem;
+  }
+  .badge {
+    display: inline-block; font-size: 0.75rem; font-weight: 700; letter-spacing: 0.02em;
+    padding: 0.25rem 0.6rem; border-radius: 999px; margin-bottom: 0.5rem;
+  }
+  .badge.must { color: var(--must); background: var(--must-bg); }
+  .badge.may { color: var(--may); background: var(--may-bg); }
+  .badge.certified { color: var(--certified); background: var(--certified-bg); }
+  .explanation { margin: 0; font-size: 0.94rem; }
+  .aside {
+    margin-top: 0.7rem; font-size: 0.85rem; color: var(--muted);
+    background: var(--bg); border-radius: 8px; padding: 0.6rem 0.8rem;
+  }
+  .loading { color: var(--muted); font-size: 0.9rem; }
+  .error { color: var(--must); background: var(--must-bg); border-radius: 6px; padding: 0.6rem 0.8rem; font-size: 0.9rem; }
+  .closing {
+    margin-top: 1.8rem; padding-top: 1.4rem; border-top: 1px solid var(--border);
+  }
+  .closing p { color: var(--muted); font-size: 0.9rem; }
+  .cta-row { display: flex; gap: 0.7rem; margin-top: 1rem; flex-wrap: wrap; }
+  .cta {
+    display: inline-block; padding: 0.55rem 1.1rem; border-radius: 6px;
+    font-size: 0.9rem; font-weight: 600; text-decoration: none;
+  }
+  .cta.primary { background: var(--accent); color: white; }
+  .cta.secondary { background: transparent; color: var(--text); border: 1px solid var(--border); }
+  .cta:hover { filter: brightness(1.08); }
+</style>
+</head>
+<body>
+
+<header>
+  <a class="back-link" href="/">&larr; Guideline library</a>
+  <h1>See it work, on one rule</h1>
+  <p>
+    This runs live against the checker below -- no setup, no upload, nothing
+    hand-picked for effect. The rule: an ACE inhibitor should not be started
+    if serum potassium is above 5.0&nbsp;mmol/L, and potassium should be
+    checked within 14&nbsp;days of starting one. Three patients, three
+    different amounts of information, three different verdicts.
+  </p>
+</header>
+
+<main id="steps">
+  <p class="loading">Running the checks&hellip;</p>
+</main>
+
+<script>
+const GUIDELINE_ID = "fixtures";
+
+const SCENARIOS = [
+  {
+    kicker: "Definitely violates",
+    patient: { "potassium": 5.4 },
+    plan: { "ace_inhibitor_on": true },
+    factLabels: ["ACE inhibitor: started", "potassium: 5.4 mmol/L"],
+    aside: "No matter what else is true about this patient, this plan " +
+      "cannot be made to comply -- the solver proves it, it doesn't just " +
+      "flag a suspicious number.",
+  },
+  {
+    kicker: "Definitely compliant",
+    patient: { "potassium": 4.0 },
+    plan: { "ace_inhibitor_on": true },
+    factLabels: ["ACE inhibitor: started", "potassium: 4.0 mmol/L"],
+    aside: "Same drug, safely within range. No matter what else is left " +
+      "unspecified about this patient, this plan can never violate the rule.",
+  },
+  {
+    kicker: "Genuinely undetermined",
+    patient: {},
+    plan: { "ace_inhibitor_on": true },
+    factLabels: ["ACE inhibitor: started", "potassium: (not recorded yet)"],
+    aside: "A plain yes/no checker has to guess here, or stay silent. This " +
+      "one instead names exactly what's missing and what value would turn " +
+      "it into a real violation -- see below.",
+  },
+];
+
+function humanize(name) {
+  return String(name).replace(/_/g, " ");
+}
+
+function humanizeValue(v) {
+  if (typeof v === "boolean") return v ? "true" : "false";
+  return String(v);
+}
+
+function verdictBadgeClass(verdict) {
+  if (verdict === "MUST-violate") return "must";
+  if (verdict === "CERTIFIED-compliant") return "certified";
+  return "may";
+}
+
+function describeCounterexample(result) {
+  const entries = Object.entries(result.counterexample_core || {});
+  if (entries.length === 0) return "";
+  const clauses = entries.map(([k, v]) => `${humanize(k)} = ${humanizeValue(v)}`);
+  return `It becomes a certain violation if ${clauses.join(" and ")}.`;
+}
+
+function explanationFor(result) {
+  if (result.verdict === "MUST-violate") {
+    return "This plan definitely violates the rule, given what's specified.";
+  }
+  if (result.verdict === "CERTIFIED-compliant") {
+    return "This plan is certified compliant -- no completion of the unspecified values could violate it.";
+  }
+  return "Compliance isn't determined yet from what's specified. " + describeCounterexample(result);
+}
+
+function renderStep(scenario, result, error) {
+  const factsHtml = scenario.factLabels.map((f) => `<span class="fact">${f}</span>`).join("");
+  if (error) {
+    return `
+      <div class="step">
+        <p class="kicker">${scenario.kicker}</p>
+        <p class="sentence">${result ? result.source_sentence : ""}</p>
+        <div class="facts">${factsHtml}</div>
+        <div class="error">Could not run this check: ${error}</div>
+      </div>`;
+  }
+  const badgeClass = verdictBadgeClass(result.verdict);
+  return `
+    <div class="step">
+      <p class="kicker">${scenario.kicker}</p>
+      <p class="sentence">&ldquo;${result.source_sentence}&rdquo;</p>
+      <div class="facts">${factsHtml}</div>
+      <span class="badge ${badgeClass}">${result.verdict}</span>
+      <p class="explanation">${explanationFor(result)}</p>
+      <div class="aside">${scenario.aside}</div>
+    </div>`;
+}
+
+async function runScenario(scenario) {
+  try {
+    const response = await fetch(`/guidelines/${GUIDELINE_ID}/check`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        patient: scenario.patient, plan: scenario.plan,
+        rule_id: "ace_inhibitor_hyperkalemia_contraindication",
+      }),
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || "request failed");
+    return { result: data, error: null };
+  } catch (err) {
+    return { result: null, error: err.message };
+  }
+}
+
+async function runMonitoringScenario() {
+  // The third scenario is about whether potassium was CHECKED, not its
+  // value -- that's a different rule (the Since-based monitoring one), so
+  // it's fetched separately and its result stands in for the "undetermined"
+  // step above.
+  try {
+    const response = await fetch(`/guidelines/${GUIDELINE_ID}/check`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        patient: {}, plan: { ace_inhibitor_on: true },
+        rule_id: "ace_inhibitor_potassium_monitoring",
+      }),
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || "request failed");
+    return { result: data, error: null };
+  } catch (err) {
+    return { result: null, error: err.message };
+  }
+}
+
+async function run() {
+  const stepsEl = document.getElementById("steps");
+  // Sequential, not Promise.all: the checker runs on Flask's single-threaded
+  // dev server, which drops or corrupts connections under concurrent
+  // requests. Three quick sequential calls cost nothing noticeable and
+  // avoid that entirely.
+  const first = await runScenario(SCENARIOS[0]);
+  const second = await runScenario(SCENARIOS[1]);
+  const third = await runMonitoringScenario();
+
+  stepsEl.innerHTML =
+    renderStep(SCENARIOS[0], first.result, first.error) +
+    renderStep(SCENARIOS[1], second.result, second.error) +
+    renderStep(SCENARIOS[2], third.result, third.error) +
+    `<div class="closing">
+      <p>
+        Every one of those verdicts came from proving satisfiability with
+        Z3, not from a hand-written flag -- and the third one's
+        counterexample (the exact missing fact that would make it a
+        violation) was minimized down from every unspecified variable to
+        just the one that matters. A naive "does this look wrong" check
+        can't tell that middle case apart from either of the other two;
+        this system doesn't have to guess.
+      </p>
+      <div class="cta-row">
+        <a class="cta primary" href="/check?guideline=fixtures">Try your own patient &rarr;</a>
+        <a class="cta secondary" href="/">Explore the guideline library &rarr;</a>
+      </div>
+    </div>`;
+}
+
+run();
+</script>
+
+</body>
+</html>

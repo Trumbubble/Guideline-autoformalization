@@ -174,6 +174,11 @@ def checker_page():
     return send_from_directory(APP_DIR, "ui.html")
 
 
+@app.get("/demo")
+def demo_page():
+    return send_from_directory(APP_DIR, "demo.html")
+
+
 # ---------------------------------------------------------------- guidelines
 
 @app.get("/settings")
