@@ -120,14 +120,21 @@ def is_vague(phrase: str) -> bool:
     p = phrase.lower()
     return any(h in p for h in VAGUE_HINTS)
 
-def holes_from(statement: str, refusals, declined) -> tuple[dsl.VarDef, ...]:
+def holes_from(statement: str, refusals, declined,
+               unbound_kinds: list[str] | None = None) -> tuple[dsl.VarDef, ...]:
     """Which unbindable things deserve to become free variables.
 
-    Two sources, and the distinction matters. A predicate the model NAMES as
-    undefined ("at high risk") is a genuine hole. A concept the binder simply
-    failed to retrieve ("refer to nephrology") is a COVERAGE GAP -- a fixable
+    Three sources, and the distinction matters. A predicate the model NAMES as
+    undefined ("at high risk") is a genuine hole. A concept the binder failed
+    to retrieve with NO candidates at all is a COVERAGE GAP -- a fixable
     index problem -- and turning it into a hole would launder a bug into a
-    finding. Only vague-looking binder refusals qualify.
+    finding, so it stays excluded. A concept where candidates DID exist and
+    the one-shot selector just didn't commit to one
+    (`classify_unbound(...) == "unbound_unselected"`) is closer to the
+    model-named case than to a coverage gap: the concept is real, only the
+    single call was unlucky, so it qualifies too -- refusing the whole
+    statement over one unlucky pick (measured on PMC13074134: "at start LRD",
+    and drug brand names like "Abasaglar") was the actual bug.
 
     Named predicates are checked verbatim against the statement, the same
     anti-synthesis rule the segmenter and binder use."""
@@ -148,9 +155,11 @@ def holes_from(statement: str, refusals, declined) -> tuple[dsl.VarDef, ...]:
                 if dsl.modal_only(h.name):
                     continue
                 out.append(h)
-    for r in refusals:
+    for i, r in enumerate(refusals):
         p = (r.source_span or "").strip()
-        if p and is_vague(p) and p.lower() not in seen:
+        kind = unbound_kinds[i] if unbound_kinds is not None else None
+        if (p and (is_vague(p) or kind == "unbound_unselected")
+                and p.lower() not in seen):
             seen.add(p.lower())
             out.append(hole_for(p, "condition"))
     return tuple(out)
@@ -299,6 +308,7 @@ def triage(statement: str, index, *, statement_id: str = "s",
     # attributes it to the document. Tagged so `spectrum` and `residue_report`
     # both count it as OURS.
     _failed = len(getattr(index, "failures", ())) - _failed_before
+    unbound_kinds = []
     for r in refusals:
         # Attribute the failure. An `unbound_concept` that is really an INDEX
         # GAP is a bug in our retrieval; one where no candidate exists at all
@@ -306,7 +316,14 @@ def triage(statement: str, index, *, statement_id: str = "s",
         # formalizability number uninterpretable -- measured on a real
         # guideline, 8 of 14 refusals were index gaps for concepts (CVAD,
         # solid tumors, noncardiac surgery) that DO exist in SNOMED and VSAC.
-        ev.append(Evidence("binder", classify_unbound(r, index), r.reason_text))
+        #
+        # Reused below by holes_from(): an "unselected" refusal (candidates
+        # existed, the one-shot pick just missed) is hole-eligible the same
+        # way a model-named vague predicate is, instead of discarding the
+        # whole statement over one unlucky selector call.
+        kind = classify_unbound(r, index)
+        unbound_kinds.append(kind)
+        ev.append(Evidence("binder", kind, r.reason_text))
 
     # Appended AFTER the per-concept evidence on purpose. `as_refusal` builds
     # the refusal's reason_text by joining evidence in order, so putting this
@@ -326,7 +343,7 @@ def triage(statement: str, index, *, statement_id: str = "s",
     if _doses:
         reg = dsl.Registry([reg[n] for n in reg.names()] + _doses,
                            [reg.event(e) for e in reg.event_names()])
-    holes = holes_from(statement, refusals, [])
+    holes = holes_from(statement, refusals, [], unbound_kinds)
 
     if not bindings:
         # Nothing bound at all: there is no vocabulary to write a rule in, and
@@ -415,7 +432,7 @@ def triage(statement: str, index, *, statement_id: str = "s",
 
     # -- attempt 2: partial. Declare the unbindable predicates as HOLES. --
     # The model names the predicates that defeated it; those are the holes.
-    holes = holes_from(statement, refusals, decls) or holes
+    holes = holes_from(statement, refusals, decls, unbound_kinds) or holes
     if allow_partial and holes:
         # The compiled grammar scales with the variable enum (R8), and a wide
         # registry -- bound vars PLUS every hole -- can exceed the API's limit
