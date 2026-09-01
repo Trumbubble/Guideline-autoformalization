@@ -248,29 +248,48 @@ _DOSE_CHANGE = re.compile(
     r"down-?titrat\w+|titrat\w+|adjust\w*|escalat\w+|de-?escalat\w+)\b"
     r"[^.]{0,60}?(\b\d+\s*%|\bdose\b|\bdosage\b)", re.I)
 
+# A stated RANGE ("150-240 min", "450-720 MET-min"), not a bare number. A
+# single number ("the dose was 5 mg") is reporting a fact, not asking for a
+# quantity target -- requiring two numbers joined by a dash/"to" is what
+# keeps this from firing on that case (see
+# test_the_dose_cue_needs_a_verb_and_a_quantity). Catches statements like
+# "engaging in 150-240 min of aerobic exercise per week", which have no
+# change verb for `_DOSE_CHANGE` to match at all.
+_QUANTITY_RANGE = re.compile(
+    r"\d+(?:\.\d+)?\s*(?:-|–|\bto\b)\s*\d+(?:\.\d+)?\s*"
+    r"(min(?:ute)?s?|hours?|days?|weeks?|mg|kg|mmHg|mmol\S*|%|units?|MET-?min\w*)\b",
+    re.I)
+
 def dose_companions(bindings, statement: str) -> list:
-    """A numeric dose variable for each bound medication, when the sentence
-    asks for a dose change.
+    """A numeric companion variable for each bound drug/procedure, when the
+    sentence asks for a dose change OR states a numeric target range.
 
-    `Delta` needs something numeric to change. A medication binds as a BOOLEAN
-    -- `on_basal_insulin`, is it prescribed -- so a registry built from
-    bindings alone has no quantity, and `dsl.decoding_schema` will not offer
-    the node however many events are declared. That is why "Reduce basal
-    insulin by 50%" still refused as `beyond_dsl` after both were added.
+    `Delta`/`between` need something numeric to change or bound. A medication
+    or procedure binds as a BOOLEAN -- `on_basal_insulin`, is it prescribed --
+    so a registry built from bindings alone has no quantity, and
+    `dsl.decoding_schema` will not offer either node however many events are
+    declared. That is why "Reduce basal insulin by 50%" still refused as
+    `beyond_dsl` after both were added, and why "engaging in 150-240 min of
+    aerobic exercise per week" still failed `between`'s TYPE_ERROR after
+    `terms.db` was fixed: the min/max range had nothing numeric to attach to,
+    because "aerobic exercise" is a `procedure`, which this used to exclude
+    outright, and the sentence has no dose-change verb for `_DOSE_CHANGE` to
+    match.
 
-    Declared only when the statement contains a relative-change cue, because
-    every extra variable enlarges the decoding grammar and R8 showed that is a
-    hard ceiling: a 13-variable registry compiles only at depth 1. The cue is a
-    closed set of verbs; which variable actually changes is the model's choice.
+    Declared only when the statement contains a relative-change cue OR a
+    stated numeric range, because every extra variable enlarges the decoding
+    grammar and R8 showed that is a hard ceiling: a 13-variable registry
+    compiles only at depth 1. The cues are closed patterns; which variable
+    actually gets the quantity is the model's choice.
 
     Parallel to how `Since` derives `<event>_occurred` and
     `days_since_<event>`: a companion the DSL needs, named rather than
     implicit, so a report can say which quantity it wants."""
-    if not _DOSE_CHANGE.search(statement or ""):
+    if not (_DOSE_CHANGE.search(statement or "") or _QUANTITY_RANGE.search(statement or "")):
         return []
     out = []
     for b in bindings:
-        if b.kind not in {"drug", "drug_class"}:
+        if b.kind not in {"drug", "drug_class", "procedure"}:
             continue
         name = f"{b.variable}_dose"
         out.append(dsl.VarDef(
@@ -281,6 +300,36 @@ def dose_companions(bindings, statement: str) -> list:
             # one would be asserted to the solver as fact.
             plausible=None))
     return out
+
+# A stated age threshold: "from age 5", "under 12 years", "65 years old".
+# Deliberately narrower than a general number-finder -- age phrasing is a
+# closed enough set that a few patterns cover the common cases without
+# firing on unrelated numbers in the sentence.
+_AGE_THRESHOLD = re.compile(
+    r"\bage[ds]?\s+(?:of\s+)?\d+|\d+\s*years?\s*(?:of\s*age\b|old\b)|"
+    r"\b(?:under|over|above|below|younger than|older than)\s+\d+\s*years?\b",
+    re.I)
+
+def age_companion(statement: str) -> list:
+    """A numeric `age` variable, declared whenever the statement states an
+    age threshold.
+
+    Age is a structural patient attribute, not a terminology-coded concept:
+    no SNOMED/LOINC search was ever going to bind it -- there is no generic
+    "patient age" code to look up -- so it fell through to a boolean hole
+    the same way a dose or duration did before its own companion existed.
+    Measured on PMC12948374:0000 ("ABPM from age 5 is strongly
+    recommended"): encoded with `has_age_5` (a boolean) instead of a real
+    `age >= 5` comparison. Reuses the exact `age` VarDef already declared
+    once, by hand, in `CKD_REGISTRY` -- one real variable, not a
+    document-specific invention.
+
+    Declared only when the statement states a threshold, for the same
+    reason `dose_companions` is conditional: every extra variable enlarges
+    the decoding grammar (R8)."""
+    if not _AGE_THRESHOLD.search(statement or ""):
+        return []
+    return [dsl.VarDef("age", "real", "years", "patient age", plausible=(0, 120))]
 
 # ---------------------------------------------------------------- gate
 
@@ -339,9 +388,9 @@ def triage(statement: str, index, *, statement_id: str = "s",
                            + "; ".join(index.failures.summary()[-_failed:])[:200]))
 
     reg = bind.registry_from_bindings(bindings, events=datable_events(bindings))
-    _doses = dose_companions(bindings, statement)
-    if _doses:
-        reg = dsl.Registry([reg[n] for n in reg.names()] + _doses,
+    _companions = dose_companions(bindings, statement) + age_companion(statement)
+    if _companions:
+        reg = dsl.Registry([reg[n] for n in reg.names()] + _companions,
                            [reg.event(e) for e in reg.event_names()])
     holes = holes_from(statement, refusals, [], unbound_kinds)
 
@@ -352,8 +401,19 @@ def triage(statement: str, index, *, statement_id: str = "s",
         # NOT infer `not_patient_level` from an empty binding, which would
         # confuse "about a service" with "too vague to have concepts". That
         # distinction is the segmenter's `is_patient_level`, passed in here.
-        code = ("not_patient_level" if is_patient_level is False
-                else "unbound_concept")
+        #
+        # `unbound_concept` alone doesn't distinguish "this concept is real
+        # but uncoded" from "this phrase is inherently hedging" -- the same
+        # is_vague() check holes_from() already trusts for hole-eligibility,
+        # reused here so a wave of refused VAGUE_HINTS phrases (with nothing
+        # else bound) reports the informative reason instead of the generic
+        # coverage-gap one every time.
+        if is_patient_level is False:
+            code = "not_patient_level"
+        elif any(is_vague((r.source_span or "")) for r in refusals):
+            code = "vague_predicate"
+        else:
+            code = "unbound_concept"
         ev.append(Evidence("binder", "NO_BOUND_VOCABULARY",
                            "no clinical concept in the statement resolved to a code"))
         return Triage(statement_id, statement, "refuse", code, None, 0.0,
@@ -433,6 +493,7 @@ def triage(statement: str, index, *, statement_id: str = "s",
     # -- attempt 2: partial. Declare the unbindable predicates as HOLES. --
     # The model names the predicates that defeated it; those are the holes.
     holes = holes_from(statement, refusals, decls, unbound_kinds) or holes
+    pdecls: list = []
     if allow_partial and holes:
         # The compiled grammar scales with the variable enum (R8), and a wide
         # registry -- bound vars PLUS every hole -- can exceed the API's limit
@@ -443,11 +504,27 @@ def triage(statement: str, index, *, statement_id: str = "s",
             ev.append(Evidence("gate", "REGISTRY_TRUNCATED",
                                f"{len(holes) - len(kept_holes)} of {len(holes)} holes "
                                f"dropped to keep the decoding grammar compilable"))
+        # The event enum is its own `$defs` entry in decoding_schema (needed
+        # for `since`/`delta`), so it inflates the compiled grammar the same
+        # way the var enum does -- but nothing capped it here. A statement
+        # with many datable concepts (e.g. 8 drug-brand mentions, each its own
+        # event) can blow the grammar ceiling on the event enum ALONE, even at
+        # decoding depth 0 -- dropping depth buys nothing there, since the
+        # leaf node still needs the full event enum. Same treatment as holes:
+        # cap it, keep the first N, and say so rather than truncating silently.
+        event_names = reg.event_names()
+        kept_events = event_names[:MAX_DECODE_VARS]
+        if len(kept_events) < len(event_names):
+            ev.append(Evidence("gate", "REGISTRY_TRUNCATED",
+                               f"{len(event_names) - len(kept_events)} of "
+                               f"{len(event_names)} events dropped to keep the "
+                               f"decoding grammar compilable"))
         wide = dsl.Registry([reg[n] for n in reg.names()] + kept_holes,
-                            [dsl.EventDef(e) for e in reg.event_names()])
+                            [dsl.EventDef(e) for e in kept_events])
         outs = _attempt_k(statement, wide, formalize, statement_id,
                           source_page, source_span, max(1, samples))
         prules = [o for o in outs if isinstance(o, dsl.Rule)]
+        pdecls = [o for o in outs if isinstance(o, dsl.Refusal)]
         # Confidence must describe the attempt the DECISION came from. Measured:
         # a statement refused 8/8 strictly but encoded cleanly once its hole was
         # declared was being reported at confidence 0.00, which would sort a
@@ -483,7 +560,7 @@ def triage(statement: str, index, *, statement_id: str = "s",
                                   refusal_rate=prate, registry=wide)
 
     # -- refuse, carrying the model's own reason where it gave one -------
-    best = decls[0] if decls else None
+    best = _best_refusal(decls + pdecls)
     if best:
         ev.append(Evidence("model", best.reason_code, best.reason_text))
     # The validator's diagnosis outranks the fallback, and outranks the model's
@@ -549,6 +626,29 @@ def _best(rules: list[dsl.Rule], reg: dsl.Registry):
     scored = [(r, issues(r)) for r in rules]
     scored.sort(key=lambda t: sum(1 for i in t[1] if i.severity == "error"))
     return scored[0]
+
+# Codes a model reaches only by engaging with WHY a statement fails, preferred
+# on a tie over the two that mean little more than "nothing else fit".
+_GENERIC_REASON_CODES = {"unbound_concept", "not_patient_level"}
+
+def _best_refusal(decls: list) -> "dsl.Refusal | None":
+    """Pick among K (possibly disagreeing) self-declared refusals by simple
+    majority on `reason_code` -- NOT the first one in the list, which was
+    never a real choice, just whichever of K identical, independently
+    sampled calls happened to be listed first. Ties (including every code
+    getting exactly one vote) favour a SPECIFIC code over
+    unbound_concept/not_patient_level: a model that committed to
+    vague_predicate/defeasible/beyond_dsl/unsupported_temporal is reporting
+    it engaged with the content, not just that nothing bound."""
+    if not decls:
+        return None
+    counts: dict[str, int] = {}
+    first_by_code: dict = {}
+    for d in decls:
+        counts[d.reason_code] = counts.get(d.reason_code, 0) + 1
+        first_by_code.setdefault(d.reason_code, d)
+    best_code = max(counts, key=lambda c: (counts[c], c not in _GENERIC_REASON_CODES))
+    return first_by_code[best_code]
 
 # ---------------------------------------------------------------- report
 

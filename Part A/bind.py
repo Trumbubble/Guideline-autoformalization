@@ -881,6 +881,13 @@ concept. Two jobs, and the second matters more:
       "epidural analgesia"   -> "epidural anaesthesia"
   Prefer the noun form of a procedure ("mobilisation", not "mobilising").
 
+  A verb like "lowering"/"raising" applied to a NUMBER ("lowering systolic BP
+  < 140 mmHg") is a THRESHOLD on that lab/vital value, not a separate
+  procedure -- list only the lab ("systolic BP"), never also "lowering
+  systolic BP" as its own procedure mention. The "BP lowering ->
+  antihypertensive therapy" mapping above is for when the guideline is
+  deciding WHETHER to treat, with no accompanying number.
+
 This is used only to SEARCH a terminology index; the code itself still comes
 from that index, never from you -- so a wrong guess here costs a wasted query,
 never a wrong code. Use null when the phrase is already the standard name."""
