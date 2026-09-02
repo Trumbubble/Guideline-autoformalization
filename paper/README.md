@@ -32,6 +32,12 @@ bottom of `main.tex` and fill it in.
 4. `\draftmodetrue` shows the guidance notes; set `\draftmodefalse` to see the
    true page count. **Submit with notes off and `neurips_2026` un-optioned.**
 
+## Files
+`main.tex` is self-contained apart from Section 5, which lives in
+`experiments.tex` because it is the elaborate version and carries its own cut
+guidance at the top. Say the word and it inlines the same way the
+reproducibility appendix did.
+
 ## Figures — OFF by default
 
 `main.tex` ships with `\usesvgfalse`, so it compiles to labelled placeholder
