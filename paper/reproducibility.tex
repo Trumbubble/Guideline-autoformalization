@@ -1,0 +1,96 @@
+%==============================================================================
+%  \input{reproducibility} inside the appendix of main.tex.
+%  Does not count against the page limit.
+%==============================================================================
+
+\section{Reproducing the measurements}
+\label{app:repro}
+
+\paragraph{Commands.}
+Both tables of Section~\ref{sec:necessity} are produced by two commands. Neither
+makes a model call, so neither needs an API key.
+\begin{center}
+\texttt{cd "Part B/tests"}\\
+\texttt{python3 ablation.py -{}-generated -{}-plans 50 -{}-seed 0 -{}-out generated\_ablation.csv}\\
+\texttt{python3 ablation.py -{}-plans 50 -{}-seed 0 -{}-out ablation.csv}
+\end{center}
+The generated rule set is printed by
+\texttt{python3 generated\_rules.py -{}-list}.
+
+\paragraph{Environment.}
+Python 3.14.2, \texttt{z3-solver} 5.1.0, macOS 15.5 (arm64). The commit is
+recorded in the artefact. Z3 is the only dependency of these two scripts.
+
+\paragraph{Determinism.}
+Runs are reproducible byte for byte given the seed: three separate processes
+produce identical CSVs. This required one fix worth recording, because it is
+the kind of thing that silently invalidates a reported number. A rule's
+variable map is built from a Python \emph{set}, whose iteration order varies
+between processes under hash randomisation; the record sampler drew from that
+order, so the same seed gave different counts run to run (for one row, $103$
+against $104$). The sampler now sorts the names. Anyone reproducing a
+solver-driven measurement in Python should check this specifically --- the
+symptom is a stable seed with unstable output, and it is invisible within a
+single process.
+
+\paragraph{Record counts.}
+\texttt{-{}-plans} is a \emph{ceiling}, not a quantity. A record pins a subset
+of a rule's variables, so a rule with few variables admits few distinct
+records: at \texttt{-{}-plans 50} the actual counts range from $3$ to $50$
+(mean $31.7$ on the generated set, $20.1$ on the existing rules). The unit of
+analysis is therefore the rule--record pair, and rules contribute unequally. A
+reported rate is not the fraction of \emph{rules} affected.
+
+\paragraph{How \emph{applicable} is determined.}
+Every rate is over the pairs the guard can act on, and that set is defined in
+code (\texttt{ablation.applies}) rather than by a convention in this paper, so
+it is reproducible and auditable:
+\begin{center}
+\begin{tabular}{ll}
+  \toprule
+  Guard & Applies to a rule when \\
+  \midrule
+  substitute \textsf{false} / \textsf{true}
+    & it has an undefined predicate of \emph{boolean} sort \\
+  deontic operator
+    & it is a permission \\
+  occurrence flag
+    & it mentions an occurrence flag, i.e.\ it contains a time window \\
+  three-valued verdict
+    & always \\
+  \bottomrule
+\end{tabular}
+\end{center}
+The boolean restriction matters: an unbound \emph{event} also leaves free
+symbols behind, but they are integer and real valued, and substituting a truth
+value into a quantity is meaningless. Those rules are excluded from the
+substitution rows rather than coerced. Reporting over all pairs instead would
+dilute every rate by the rules the guard cannot touch --- on the generated set
+that is $1{,}292$ of $4{,}569$ pairs for the substitution rows alone.
+
+\paragraph{Artefacts.}
+Each run writes one row per (rule, record, guard) with columns
+\texttt{source}, \texttt{rule\_id}, \texttt{deontic}, \texttt{holes},
+\texttt{pinned}, \texttt{ablation}, \texttt{applies}, \texttt{full},
+\texttt{ablated}, \texttt{direction} --- $22{,}845$ rows for the generated set.
+Both summary tables can be recomputed from these rows independently of the
+script's own counters, which is how they were checked.
+
+\paragraph{Verdict transitions.}
+The two columns of Section~\ref{sec:necessity} record only whether a verdict
+became \textsc{certified-compliant} or \textsc{must-violate}. The full
+transition matrix is recoverable from the artefact and is worth inspecting:
+printing it is what exposed three separate confounds in the harness, in each
+case an ablation that was changing more than one thing at once. Two examples
+that are recorded but counted in neither column: a move within the permission
+lattice (\textsc{option-available} to \textsc{option-not-taken}), and
+\textsc{must-violate} degrading to \textsc{may-violate}, which loses certainty
+in the safe direction.
+
+\paragraph{Replaying the pipeline itself.}
+The measurements above concern the checker and need no model. The extraction
+pipeline does call one, and a recorded run is replayed offline by
+\texttt{python3 -m pytest test\_replay.py}: prompts are stored as SHA-256
+hashes with their responses, so the pipeline can be re-executed without an API
+key and without redistributing source documents. A tape that no longer matches
+the code \emph{skips} rather than passes.

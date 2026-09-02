@@ -157,6 +157,39 @@ def _sub_verdict(rule, domain, pairs) -> str:
     return api.classify(domain, z3.substitute(rule.predicate, *pairs))
 
 
+def applies(rule, mode: str) -> bool:
+    """Can this guard act on this rule at all?
+
+    A rate over pairs the guard CANNOT touch is diluted by construction: a rule
+    with no undefined predicate can never move under a substitution, however
+    many records you throw at it, and counting those pairs made the two rule
+    sets look further apart than they are. So every rate is reported over the
+    applicable pairs, and this predicate -- not a note in a paper -- is what
+    defines them.
+
+      stub_false / stub_true   at least one undefined predicate of BOOLEAN
+                               sort. An unbound event also leaves Int and Real
+                               symbols free, but substituting true or false
+                               into a quantity is meaningless, so those rules
+                               are not applicable to a substitution.
+      no_deontic               the rule is a permission. An obligation treated
+                               as an obligation is unchanged.
+      no_occurrence_flag       the rule mentions an occurrence flag, i.e. it
+                               contains a time window.
+      naive_single_call        every rule.
+    """
+    if mode in ("stub_false", "stub_true"):
+        return any(h in rule.var_refs and z3.is_bool(rule.var_refs[h])
+                   for h in holes_of(rule))
+    if mode == "no_deontic":
+        return deontic_of(rule) == "permission"
+    if mode == "no_occurrence_flag":
+        return any(n.endswith("_occurred") for n in rule.var_refs)
+    if mode == "naive_single_call":
+        return True
+    raise ValueError(mode)
+
+
 def direction(full: str, ablated: str) -> str | None:
     """Which way the verdict moved, or None if it did not move meaningfully.
 
@@ -348,6 +381,8 @@ def main(argv=None) -> int:
             for mode in ABLATIONS:
                 abl = verdict_ablated(rule, d, mode)
                 tally[mode]["pairs"] += 1
+                if applies(rule, mode):
+                    tally[mode]["applies"] += 1
                 move = direction(full, abl)
                 if move:
                     tally[mode][move] += 1
@@ -356,8 +391,8 @@ def main(argv=None) -> int:
                     "deontic": deontic_of(rule),
                     "holes": ";".join(holes_of(rule)),
                     "pinned": ";".join(sorted(plan)),
-                    "ablation": mode, "full": full, "ablated": abl,
-                    "direction": move or "",
+                    "ablation": mode, "applies": int(applies(rule, mode)),
+                    "full": full, "ablated": abl, "direction": move or "",
                 })
 
     with open(a.out, "w", newline="") as fh:
@@ -382,12 +417,15 @@ def main(argv=None) -> int:
         print(f"rules_with_a_time_window,"
               f"{sum(1 for r in rules if any(n.endswith('_occurred') for n in r.var_refs))}")
     print()
-    print("ablation,pairs,wrongly_certified,wrongly_accused,pct_certified,pct_accused")
+    # `applies_to` is the denominator every rate uses; `pairs` is printed
+    # beside it so the dilution is visible rather than implied.
+    print("ablation,pairs,applies_to,to_certified,to_must_violate,rate_pct")
     for mode in ABLATIONS:
         t = tally[mode]
-        n = t["pairs"] or 1
-        print(f"{mode},{t['pairs']},{t['wrongly_certified']},{t['wrongly_accused']},"
-              f"{100*t['wrongly_certified']/n:.1f},{100*t['wrongly_accused']/n:.1f}")
+        app = t["applies"] or 1
+        moved = t["wrongly_certified"] + t["wrongly_accused"]
+        print(f"{mode},{t['pairs']},{t['applies']},{t['wrongly_certified']},"
+              f"{t['wrongly_accused']},{100*moved/app:.1f}")
     print()
     print("# canonicalise-before-the-vacuity-sweep is a rule-level guard, not a")
     print("# per-plan one: without it these rules load clean and then certify")
