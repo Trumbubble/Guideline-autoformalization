@@ -147,7 +147,7 @@ returned REFUSE, but via `unbound_concept` rather than `defeasible` --
 "Deprescribing" and "shared decision-making" got refused at the BINDER
 stage this time (a `procedure`-kind lookup failing to bind), before the
 pipeline ever reached the formalize step this fix guards. Same underlying
-item 2 (single-shot binder variance) intervening on a different call this
+item 1 (single-shot binder variance) intervening on a different call this
 run, not a failure of this fix -- the unit-level proof is the reliable
 evidence here, not the one live sample.
 
@@ -236,7 +236,7 @@ based readings" (from the statement's bundled RATIONALE clause: "ABPM is
 more strongly correlated with LVH than clinic-based readings") consistently
 failed to bind, both times, blocking the whole statement before the age fix
 could show its effect end-to-end. Not random noise -- it reproduced
-identically -- and it maps onto item 3 (multi-clause bundling): gold's own
+identically -- and it maps onto item 2 (multi-clause bundling): gold's own
 note on this exact statement says it folds "recommendation + rationale +
 comparison" into one table row, and the rationale clause is pulling in a
 concept unrelated to the actual recommendation. Same shape as R4's `:0005`
@@ -292,27 +292,196 @@ above): `PMC13090725:0503` now REFUSEs correctly. `PMC13074134:0010`
 as before, full `Delta` rules intact -- zero regression on the session's
 first and most important fix. 155/155 offline tests pass throughout.
 
+### R8. `README.md` was gone from the repo root -- FIXED 2026-09-02
+
+Removed by a teammate's restructuring commit at some point before this
+session; run instructions lived only in `Part B/CHECKER.md`, findable only
+if you already knew to look there. Added a short root `README.md`:
+project description, setup (`venv` + `.env`), the run command, and pointers
+to `CHECKER.md`/`DSL.md`/`BACKLOG.md` rather than duplicating them.
+Deliberately kept minimal, not a rewrite of `CHECKER.md`. Verified the
+documented commands actually work -- started the server exactly as written
+and confirmed the dashboard, `/demo`, and `/check` pages all return 200.
+
+### R9. `is_patient_level` was silently dropped once any concept binds -- FIXED 2026-09-02
+
+Found live retesting PMC13131131:0060 ("Patient education should be
+evidence-based, verifiable and accessible..." -- gold: REFUSE/`not_patient_level`).
+`gate.triage()` takes an `is_patient_level` keyword, set upstream by the
+segmenter, but only ever consulted it in ONE place: the early shortcut for
+when nothing binds at all. The moment even one concept binds -- `:0060`
+binds `patient_education` -- the statement proceeds into `formalize()`,
+which is never told `is_patient_level` (not in its signature, not in its
+prompt), and the final refuse-code-selection block only overrode `code` for
+two other signals (`MODAL_PREDICATE`, `VACUOUS_RULE`), never this one. A
+known, correct, upstream fact was silently dropped the moment any binding
+succeeded -- confirmed live: `:0060` still returned `vague_predicate` even
+with `is_patient_level=False` passed correctly, before this fix.
+
+Checked against every other open item first (no code changed until this was
+clear): distinct from item 2 (misattributes which CONCEPT blocks a
+statement -- a vocabulary-layer problem) and item 3 (a real concept fails to
+bind -- also vocabulary-layer). This bug is orthogonal to vocabulary
+entirely; it's a pre-computed scope fact getting dropped. Also distinct from
+R5, despite touching the same code block -- R5 fixed the model not knowing
+what the six reason codes MEANT; this fixes a known fact never reaching that
+decision at all.
+
+Fixed: `is_patient_level is False` now checked FIRST in the final
+refuse-code-selection block (`gate.py`), ahead of `MODAL_PREDICATE`/
+`VACUOUS_RULE` -- if a statement isn't about an individual patient at all,
+that's the more fundamental reason it can't become a Track-B rule,
+regardless of what else went wrong encoding it. Same priority order already
+used in the early nothing-bound branch. New test
+`test_a_refusal_after_binding_still_reports_not_patient_level`
+(`test_gate.py`) covers the binding-succeeds path the bug was in --
+mirrors the existing `test_an_empty_binding_is_never_labelled_not_patient_level_by_guess`,
+which only covered the nothing-bound path. 222/222 offline tests pass (was
+221/221; the two pre-existing pymupdf failures are item 5, unrelated).
+Verified live: `:0060` now returns REFUSE/`not_patient_level`, exact match
+to gold.
+
+**Flagged, not acted on:** whether `is_patient_level is False` should also
+block a successful ENCODE/PARTIAL outcome earlier (before `formalize()` is
+even attempted), rather than only correcting the reason code after a refusal
+already happened. No case has been observed where a not-patient-level
+statement produces an ENCODE -- extending the fix that far would be
+unevidenced speculation. Worth a look if such a case ever turns up.
+
+### R10. A correct "not a recommendation" verdict was discarded for returning an empty quote -- FIXED 2026-09-02
+
+Found live retesting PMC13131131:0044 ("Tebentafusp has been approved by
+the FDA and the EMA as first-line systemic treatment...") -- gold:
+NOT_A_RECOMMENDATION. `segment.classify()`'s verbatim-quote check reads
+`if not quote or quote not in block.source_text:` and rejects the whole LLM
+verdict if it trips, falling back to the offline heuristic. Captured the
+model's actual raw response: `{'quote': '', 'is_recommendation': False,
+'is_patient_level': False, 'reason': 'Describes regulatory approval status
+and ongoing trials; no directive clinical action.'}` -- the model was
+CORRECT, exact match to gold. But a model that correctly says "nothing to
+quote" returns `quote=""`, and `not ""` is `True` in Python -- so a
+genuinely right answer tripped the same guard meant to catch an invented,
+non-verbatim quote, and got thrown away in favor of the heuristic's wrong
+guess (`is_recommendation=True`, matching R1-era "approved... as
+first-line" reading like treatment language).
+
+Fixed: the verbatim check now only applies when the model actually claims a
+recommendation --
+`if v.get("is_recommendation") and (not quote or quote not in
+block.source_text):` -- an empty quote paired with `is_recommendation=False`
+is accepted as-is; a claimed recommendation still needs a real, verified
+verbatim quote exactly as before. New test
+`test_empty_quote_is_accepted_when_not_a_recommendation` (`test_segment.py`).
+223/223 offline tests pass (was 222/222; same 2 pre-existing pymupdf
+failures, item 5, unrelated). Verified by replaying the exact captured model
+output through the fixed `classify()` -- no new live call needed --
+confirming `judge="llm"`, `is_recommendation=False`, matching gold.
+
+### R11. `dose_companions()` mistook a timing window for a dose -- FIXED 2026-09-02
+
+Found live exploring PMC13169229 (a balloon-gastrostomy-tube replacement
+guideline, chosen at random). "we recommend waiting 6-12 weeks after BGT
+placement for the initial replacement" declared nonsensical `bgt_dose` and
+`bgt_placement_dose` companion variables on a statement with no dose
+anywhere in it. `_QUANTITY_RANGE` (`gate.py`) matches any stated numeric
+range in an accepted unit, including bare durations ("weeks", "days",
+"hours") -- and nothing distinguished "150-240 min OF aerobic exercise" (a
+quantity of the bound action itself, R2's original case, `Delta`/`Between`'s
+domain) from "6-12 weeks AFTER BGT placement" (a window relative to a prior
+event, `Since`'s domain, structurally unrelated).
+
+Fixed: `_QUANTITY_RANGE` now has a negative lookahead excluding a match
+immediately followed by `after`/`before`/`following`/`post`/`prior to`.
+Checked against every statement in `gold.csv` first -- none currently
+matches this pattern in either direction, so this is a pure precision gain,
+not a measured tradeoff against the existing corpus. New test
+`test_a_range_after_an_event_is_not_a_dose` (`test_gate.py`), which also
+re-confirms R2's original "150-240 min of aerobic exercise" phrasing still
+fires correctly. 224/224 offline tests pass (was 223/223; same 2
+pre-existing pymupdf failures, item 5, unrelated). Verified by replaying the
+exact captured statement text through the fixed regex -- no new live call
+needed -- confirming `dose_companions()` no longer fires on it.
+
+Harmless to any final DECISION either way -- the wrongly-declared companion
+always went unused, since `formalize()` correctly never had a dose to put
+in it -- but polluted the evidence trail with confusing, wrongly-named
+variables a reviewer would have had to puzzle over.
+
+### R12. Grammar-too-large ceiling -- FIXED 2026-09-03
+
+Item 1's original framing (~13% of calls on one case, PMC13074134:0018)
+understated it badly. Grepping every saved log from this session for the
+actual `BadRequestError` text found **46 failed calls across 16 different
+verification runs** -- this was a routine, recurring failure across nearly
+every live round this session, not one narrow edge case. Every occurrence
+was `formalize()`'s compiled-grammar-size limit, the only call whose
+schema scales with a `Registry`.
+
+Two fixes, in the order they were actually found:
+
+**Reactive (built first):** `gate._attempt()` now catches `formalize()`'s
+`GrammarTooLarge` (recognized by message text, not exception class --
+`gate.py` stays decoupled from `llm.py` so it can be tested offline with a
+fake `formalize`) and retries once via `_shrink_registry()`, which drops
+half the unbound holes/events and keeps every BOUND var untouched (a bound
+var is the statement's actual substance; dropping one is the exact silent
+omission `DROPPED_CONCEPT_RISK` exists to catch). Turns a lost statement
+into a smaller-but-sound encoding instead of a misleading `beyond_dsl`.
+Two new offline tests (`test_grammar_too_large_shrinks_the_registry_and_retries`,
+`test_grammar_too_large_gives_up_cleanly_when_nothing_left_to_shrink`,
+`test_gate.py`).
+
+**Proactive (the one that actually moved the failure rate):** a first
+design -- a hand-derived formula weighting variable/event name-length by
+which DSL leaf type references it, times `(max_depth + 1)` -- was drafted,
+then independently reviewed and **rejected before being implemented**: it
+could not fit this project's own existing calibration data (`RESULTS.md`'s
+R8 table has a depth-3 row no formula of that shape can match -- no
+multiplicative model can produce "3 variables fails at depth 3" while "13
+variables succeeds at depth 1," which R8 already measured), and it
+targeted the wrong code path (`gate.py`'s registry caps only apply in the
+PARTIAL-retry phase; the STRICT attempt, where the real 39-variable
+failure case almost certainly happened, was never capped at all).
+
+What actually fits every known anchor: `len(json.dumps(decoding_schema(reg,
+depth)))` -- literal compiled-schema byte length, additive in depth
+(~629 bytes per level, independent of registry size) plus a small
+per-character cost per enum member, names counted once. This matches
+`decoding_schema()`'s own design comment (leaves are `$ref`'d, not
+inlined, specifically so depth doesn't multiply the grammar) and means
+**one extra decode depth level costs about as much as 39 short variables**
+-- registry trimming was never going to be the lever that mattered.
+Replaying `PMC13074134`'s own recorded rules found none ever nested past
+depth 1, even though `formalize()` always started at
+`dsl.MAX_DECODING_DEPTH` (2).
+
+Fixed: `llm.formalize()`'s default starting depth changed from 2 to 1
+(`depth = 1 if max_depth is None else max_depth`) -- a one-line,
+near-zero-risk change; the existing depth-down retry loop still reaches
+depth 2 if a caller explicitly asks via `max_depth`, and the function's
+own design already argues a shallower encode is sound (anything that
+genuinely needed the depth surfaces as a validation error, not silently).
+226/226 offline tests pass throughout (unaffected -- `formalize()` isn't
+exercised by the offline suite). Verified live: re-ran the same 5-statement
+batch that had 2/30 grammar failures four times total -- 2/30 before the
+fix, then **0/30, 0/29, 0/30 after** -- zero failures across 89 calls,
+not one lucky run.
+
+**Checked, not conflated:** individual statement decisions across those
+same runs remained just as volatile as before (one statement landed on 5
+different outcomes across 5 runs, including a bare ENCODE once) --
+confirmed this is item 1's pre-existing single-shot variance, upstream of
+and unrelated to this fix, not a regression it introduced.
+
+The elaborate pre-flight size estimator (steps 2-4 of the plan that
+produced this fix) was scoped but not built -- the depth-1 change alone
+closed the gap in live testing, so the more complex machinery wasn't
+needed. Worth revisiting only if a future document reproduces the failure
+again despite this fix.
+
 ## Open
 
-### 1. Grammar-too-large ceiling: event cap helps, doesn't fully close it
-
-`gate.py`'s `MAX_DECODE_VARS = 10` was empirically calibrated (R8) against
-variable-only registries with no events. This session added an equivalent
-cap on the event enum (previously fully uncapped) -- a real, verified fix
-for the "events pass through with zero limit" gap. But live testing on
-PMC13074134:0018 (8 drug-brand mentions) still showed ~13% of live calls
-hitting "grammar too large" afterward, because the cap never even engaged
-(the statement's event count was already under 10) yet failures persisted
-anyway.
-
-Working theory, not yet verified: a var-enum near its own cap of 10 AND an
-event-enum near its own cap of 10 *simultaneously* can still exceed the real
-ceiling, because R8's original number was measured with no events present at
-all. A shared/combined budget across vars+holes+events (rather than two
-independent caps of 10 each) is the likely next step, but picking a new
-number needs its own live calibration -- don't just guess a smaller number.
-
-### 2. Single-shot LLM calls with no retry/vote, at two different stages
+### 1. Single-shot LLM calls with no retry/vote, at two different stages
 
 The root cause of two separate bugs found this session (the PMC13074134
 ENCODE/REFUSE flip, and PMC13151662:0002's spurious "lowering systolic BP"
@@ -343,25 +512,53 @@ that mention-extraction never noticed in the first place. Not a new root
 cause, just a sharper description of what single-shot mention proposal
 actually costs.
 
-### 3. Multi-sentence "statements" bundling narrative + one directive clause
+### 2. Multi-sentence "statements" bundling narrative + one directive clause -- narrower than it looked; live pipeline doesn't reach it
 
 PMC13151662:0014 refused with the right verdict and the right reason code,
 but naming the wrong concept -- it named an unbound concept from the
 background-narrative sentences rather than the one actually blocking the
 directive clause at the end. Gold's own annotator flagged this exact
-statement as "a segmentation problem as much as a formalization one." Known,
-not new, not scoped for a quick fix -- would mean the segmenter splitting a
-paragraph like this into narrative + directive as separate statements,
-which is a bigger change than anything touched this session.
+statement as "a segmentation problem as much as a formalization one."
 
-### 4. `README.md` is gone from the repo root
+Investigated further 2026-09-02, live, before attempting any fix.
+`segment.py`'s classifier (`classify()`) was tested directly against the real
+sentence-splitter unit for this statement (and for PMC13131131:0040, a
+second case with the same shape): 12 live calls, 100% consistent, it already
+quotes ONLY the directive sentence, dropping the leading narrative/rationale
+sentence -- with no code change. Feeding that narrow, real segmenter output
+through `gate.triage()` end-to-end does NOT reproduce the wrong-concept
+symptom for either statement -- both instead **ENCODE successfully**. (An
+earlier pass through this same check found both refusing on
+`MISSING_PROVENANCE`; that turned out to be a test-harness mistake -- an
+omitted `source_span=` argument, which `gate.triage()` forcibly stamps onto
+every produced rule, spuriously forcing `MISSING_PROVENANCE` regardless of
+the statement. Not a pipeline bug; retracted once caught.) :0040 matches
+gold's ENCODE label; :0014 actually
+diverges from gold's REFUSE call by successfully binding
+`has_undifferentiated_stroke` -- plausibly because the `terms.db` rebuild
+(R1) added coverage that did not exist when gold's annotator made that call.
+Not investigated further. The wrong-concept symptom only reproduces when
+gold.csv's own wide, hand-authored text (built by design without running the
+segmenter, per `GOLD.md`'s methodology, as an independent formalization-only
+ground truth) is fed to `triage()` directly -- which is how the original
+finding was made, not how the live pipeline behaves.
 
-Removed by a teammate's restructuring commit at some point before this
-session. Run instructions now live only in `Part B/CHECKER.md`. Nobody has
-decided whether to recreate a root README or leave documentation split this
-way -- open question, not a bug.
+So: not a live bug today for these two cases -- segmentation already avoids
+ever constructing the wide multi-sentence input that triggers it. But the
+underlying weakness this exposed is real and still unfixed: when a
+statement's text DOES legitimately span multiple sentences with multiple
+concept mentions (a genuinely bundled recommendation, not a segmentation
+failure -- e.g. a table row, or a guideline that states its rationale and
+directive in one sentence), `bind()`/`gate()`'s refusal-reason selection has
+no logic to prefer the mention that's actually inside the directive clause
+over one that's merely earlier or more prominent in the text. Just unreached
+by anything in the current corpus's live segmenter output. A prompt-only
+`CLASSIFIER_INSTRUCTIONS` fix was drafted and live-tested against both cases,
+then reverted -- it changed nothing measurable, since the baseline
+instruction ("if the recommendation is only part of the candidate, quote
+exactly that part") was already being followed reliably.
 
-### 5. A phrase can fail to bind because the index has only MORE SPECIFIC candidates than what the sentence generically said (the mirror image of R7)
+### 3. A phrase can fail to bind because the index has only MORE SPECIFIC candidates than what the sentence generically said (the mirror image of R7)
 
 PMC13270348:0024 ("we recommend epidural analgesia... provided local
 expertise is available") should PARTIAL (epidural analgesia is a real,
@@ -389,9 +586,95 @@ recognizing that a generic phrase over several specific same-family
 candidates (route/level variants of the same procedure) should bind to the
 FAMILY, not abstain entirely. Not investigated further this session.
 
+### 4. Mechanism-based drug CLASSES ("ICI", "TKI") are unreachable -- `drug_class`'s real vocabulary (ATC) was never loaded, and there is no loader for it
+
+Found live exploring PMC13034276 (SITC immunotherapy guideline, chosen at
+random to look for new issues). "ICI therapy" and "TKI-based regimen" both
+refused/held-out as unbound `drug_class` concepts. Traced all the way to
+root cause before proposing anything -- three compounding layers, each
+independently sufficient to block it:
+
+1. **Abbreviation matching is exact-whole-phrase-only.** `segment.py`
+   already extracts `"ICIs": "Immune checkpoint inhibitors"` and
+   `"TKIs": "tyrosine kinase inhibitors"` straight from this document's own
+   text, and `bind_statement()` does thread that glossary through to
+   `search_all()`. It still never fires: the lookup requires the ENTIRE
+   mention text to equal a dictionary key verbatim. `"ICI therapy"` (a
+   multi-word mention containing the abbreviation) doesn't equal `"ICIs"`,
+   and even the bare word `"ICI"` doesn't either -- the extracted key is the
+   plural `"ICIs"`, and the lookup does no singular/plural normalization at
+   all, confirmed directly: `expand_query("ICI", abbrevs)` returns `['ICI',
+   'ici']`, the glossary hit never fires.
+2. **`KIND_SYSTEMS["drug"] = (RxNorm, VSAC)` excludes SNOMED, by
+   documented design** (`BIND.md`'s own sources table: `drug, drug_class ->
+   RxNorm / ATC`, present since the first commit, confirmed via `git
+   blame`). Not a bug -- but it means the row for `Immune checkpoint
+   inhibitor` and `Protein-tyrosine kinase inhibitor` (both real, both
+   sitting in `terms.db` right now, both SNOMED-sourced) can never be found
+   by any `drug`-kind search, however it's phrased. Checked how much of the
+   loaded table this actually costs: **110,260 of 171,231 `drug`-kind rows
+   (64%) are SNOMED-sourced and structurally unreachable** by this
+   restriction alone.
+3. **`drug_class`'s real vocabulary was never loaded.** Unlike SNOMED,
+   LOINC, and RxNorm (`load_snomed()`, `load_rxnorm()`, `load_loinc()` --
+   all real bulk loaders, all exercised by R1's rebuild), there is **no
+   `load_atc()` anywhere in this codebase** -- confirmed by a full-codebase
+   search, zero matches. `drug_class` has exactly 99 rows total in the real
+   `terms.db` (19 ATC + 80 VSAC); R1's own writeup recorded this number
+   without flagging it, since the near-zero-everywhere problem it was fixing
+   dwarfed it at the time. This is the SAME shape of gap R1 already fixed
+   for the other three systems -- just missed for ATC, likely because
+   (unlike SNOMED/LOINC/RxNorm) WHO's ATC/DDD data isn't freely
+   redistributable the same way, so there was nothing free to point a
+   loader at.
+
+**Why ICI and TKI behaved differently, given the identical root cause:** ICI
+has a second entry filed under `kind='procedure'` (SNOMED, which
+`procedure` *does* allow) -- `idx.search('ICI therapy', 'procedure', k=8)`
+finds it cleanly as the #1 hit, no abbreviation fix even needed. TKI has no
+such escape hatch: its only entry is `kind='drug'`/SNOMED, and there is no
+ATC or RxNorm class-level entry for it in this database at all.
+
+**Candidate fixes, tested offline against real `terms.db` data (no API
+calls, no code changed yet):**
+
+- Fixing the abbreviation-matching gap (item 1 above) alone: necessary but
+  NOT sufficient -- generates the right expanded query text, but the search
+  still can't reach a SNOMED-only row.
+- Adding `procedure` to `KIND_FALLBACK["drug_class"]`: cleanly rescues ICI
+  (verified). Does nothing for TKI (no procedure-kind entry exists for it).
+- Widening `KIND_SYSTEMS["drug"]` to include SNOMED, combined with the
+  abbreviation fix: rescues BOTH ICI and TKI cleanly, verified directly
+  (`Immune checkpoint inhibitor` and `Protein-tyrosine kinase inhibitor`
+  both land as unambiguous #1 hits). **But it has a real, demonstrated
+  regression cost**, checked against a known-good case from earlier this
+  session: `"basal insulin"` currently correctly surfaces the specific
+  long-acting analogs (`insulin glargine`, `insulin detemir`, `insulin
+  lispro`); widened, a bare generic SNOMED `Insulin` concept (via the same
+  head-noun-backoff mechanism that surfaced `Events` for the "irAEs" case
+  earlier in this same investigation) outscores them and crowds them out of
+  the candidate list entirely, losing the clinically meaningful "basal"
+  qualifier. Widening
+  `drug` to compete on equal footing with SNOMED helps the empty cases and
+  actively hurts cases that already work.
+- **Proposed, not yet built or tested:** treat SNOMED-under-`drug` as a
+  RESERVED, lower-priority fallback -- only consulted when the RxNorm/ATC
+  search comes up empty -- mirroring the pattern `search_all()` already
+  uses for its semantic layer ("APPEND -- never evict... a fixed share of
+  the list is honest about there being two rankings"). Should rescue TKI
+  (RxNorm/ATC find nothing there) without ever touching `"basal insulin"`
+  (RxNorm already finds good candidates, so the reserve never triggers).
+  This is the most promising direction but is unverified.
+
+**Real fix, mirrors R1 exactly:** get real ATC data into `terms.db` and
+write `load_atc()`. Everything above is retrieval-layer mitigation around a
+vocabulary that was never actually loaded -- the same class of problem R1
+solved for the other three systems. Needs a data source, not a code change;
+not something to do unilaterally.
+
 ## Known, not pursued further
 
-### 6. Pre-existing PDF/pymupdf test failures
+### 5. Pre-existing PDF/pymupdf test failures
 
 `test_segment.py::test_pdf_box_recovery_finds_the_callout` and
 `test_pdf_statements_carry_page_and_bbox` fail with

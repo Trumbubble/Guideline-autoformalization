@@ -294,7 +294,15 @@ def formalize(statement: str, registry, *, effort: str = "high",
     commit to one or the other in the same decode, which is what makes refusal
     a first-class output rather than an afterthought."""
     import anthropic, dsl
-    depth = dsl.MAX_DECODING_DEPTH if max_depth is None else max_depth
+    # Depth costs far more than variable count: one level of nesting adds
+    # roughly 629 bytes to the compiled grammar regardless of registry size
+    # (measured this session), while a whole extra bound variable adds only
+    # a few dozen. Starting at the DSL's full MAX_DECODING_DEPTH (2) on
+    # every call spends that cost on statements that never needed it --
+    # replaying PMC13074134's own recorded rules found none nested past
+    # depth 1. Start one level down; the loop below still reaches depth 2
+    # for a caller that explicitly asks for it via `max_depth`.
+    depth = 1 if max_depth is None else max_depth
     while depth >= 0:
         try:
             return ask_json(FORMALIZE_INSTRUCTIONS,

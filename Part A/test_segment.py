@@ -276,6 +276,23 @@ def test_widened_quote_still_has_to_be_verbatim():
                         "reason": "paraphrase"}
     assert sg.classify(truncated, 3.0, (), invent)[1] == "heuristic:quote_rejected"
 
+def test_empty_quote_is_accepted_when_not_a_recommendation():
+    """A model that correctly says 'not a recommendation' has nothing to
+    quote and returns "" -- that is a valid answer, not an invalid one, and
+    must not be discarded the same way an invented quote is. PMC13131131:0044
+    ('Tebentafusp has been approved by the FDA...') hit exactly this: the
+    model correctly judged is_recommendation=False, returned quote="", and
+    the old check's bare `not quote` threw the correct verdict away."""
+    block = Block("Tebentafusp has been approved by the FDA and the EMA as "
+                  "first-line systemic treatment.", "section_text",
+                  Provenance("d", "/p", 0, 10), ("Section",))
+    correct = lambda b: {"quote": "", "is_recommendation": False,
+                         "is_patient_level": False,
+                         "reason": "regulatory status, no directive action"}
+    verdict, judge = sg.classify(block, 3.0, (), correct)
+    assert judge == "llm"
+    assert verdict["is_recommendation"] is False
+
 def test_units_carry_their_parent_element():
     for u in blocks_to_units(_blocks()):
         assert u.source_text and u.text.strip() in u.source_text
