@@ -1,0 +1,524 @@
+%==============================================================================
+%  GenAI4Health @ NeurIPS 2026 --- DEMONSTRATION PAPER TRACK
+%
+%  HARD CONSTRAINTS (from the CFP -- re-check before submitting):
+%    * 5 pages max, EXCLUDING acknowledgements, references, appendix
+%    * neurips_2026.sty, anonymous (double-blind), >=2 reviewers, NO rebuttal
+%    * Deadline: 5 September 2026, 11:59pm AoE.  Notification: 29 September.
+%    * The track wants "a functioning system -- deployed, in pilot, or a working
+%      prototype" plus "evidence that the system works as described (screenshots,
+%      example interactions, a video link, usage statistics, or preliminary user
+%      feedback)".  QUANTITATIVE EVALUATION IS NOT REQUIRED.  Mockups are not OK.
+%
+%  READ THIS FIRST -- the single biggest risk is over-scoping.  You have a large
+%  system and 5 pages.  The paper carries ONE argument; everything else goes to
+%  the appendix or the repo.  Cut ruthlessly and cut early.
+%
+%  ANONYMISATION CHECKLIST (do this before you upload anywhere):
+%    [ ] no author name / email / ORCID in this file
+%    [ ] anonymous repo mirror; scrub `git log` (author name is in every commit)
+%    [ ] .env is gitignored AND was never committed -- check history, not just HEAD
+%    [ ] no institution name in figure captions, screenshots, or file paths
+%    [ ] screenshots: no macOS username visible in a title bar or URL
+%==============================================================================
+
+\documentclass{article}
+
+\usepackage[final]{neurips_2026}   % `final` = non-anonymous. For SUBMISSION use
+                                    % \usepackage{neurips_2026} with no option.
+                                    % <-- SWITCH THIS BEFORE YOU SUBMIT.
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{hyperref}
+\usepackage{url}
+\usepackage{booktabs}
+\usepackage{amsfonts}
+\usepackage{amsmath}
+\usepackage{nicefrac}
+\usepackage{microtype}
+\usepackage{graphicx}
+\usepackage{xcolor}
+\usepackage{listings}
+
+% Overleaf has Inkscape, so \includesvg works there and keeps the figures vector.
+% If your build complains, either (a) enable shell-escape in Overleaf's menu, or
+% (b) convert the SVGs to PDF once and swap in \includegraphics.
+\usepackage{svg}
+\svgpath{{figures/}}
+
+%------------------------------------------------------------------------------
+% Drafting aids.  Set \draftmodetrue while writing; flip to false to see the
+% real page count.  DO NOT SUBMIT WITH NOTES VISIBLE.
+%------------------------------------------------------------------------------
+\newif\ifdraftmode
+\draftmodetrue          % <-- set to \draftmodefalse before submitting
+
+\ifdraftmode
+  \newcommand{\note}[1]{\par\noindent\small\textcolor{blue!70!black}{\textsf{[#1]}}\par\normalsize}
+  \newcommand{\todo}[1]{\textcolor{red!80!black}{\textbf{[TODO: #1]}}}
+  \newcommand{\budget}[1]{\marginpar{\scriptsize\textcolor{gray}{#1}}}
+  \newcommand{\num}[1]{\textcolor{orange!80!black}{#1}}  % un-verified number
+\else
+  \newcommand{\note}[1]{}
+  \newcommand{\todo}[1]{}
+  \newcommand{\budget}[1]{}
+  \newcommand{\num}[1]{#1}
+\fi
+
+\lstset{basicstyle=\ttfamily\scriptsize, frame=single, framesep=4pt,
+        columns=fullflexible, breaklines=true, xleftmargin=0pt}
+
+%==============================================================================
+\title{Coverage Is Not a Safety Metric: Guideline Formalisation\\
+       with Provenance, Refusal, and Three-Valued Verdicts}
+% ALTERNATIVES, in case a co-author hates the above:
+%   The Residue Is the Deliverable: An Auditable Pipeline from Clinical
+%     Guidelines to Executable Checks
+%   Don't Stub, Don't Guess: Formalising Clinical Guidelines with Named Holes
+% Pick one and stop -- the title is not where your remaining hours go.
+
+\author{%
+  Anonymous Author(s)\\
+  Affiliation\\
+  \texttt{email}
+}
+
+\begin{document}
+\maketitle
+
+%==============================================================================
+\begin{abstract}
+\note{WRITE THIS LAST. Six sentences, in this order --- the shape is doing work:
+(1) LLM pipelines that turn clinical guidelines into executable logic are scored
+on coverage; (2) coverage rewards the one failure that matters, because a rule
+that is silently wrong looks exactly like a rule that works; (3) we demonstrate
+a system whose primary output is the rule set AND a per-statement account of
+everything it declined to encode, with reasons and source spans; (4) name the
+three mechanisms --- retrieval-not-generation for codes, named holes instead of
+stubs, deontic force as an operator; (5) say what a viewer can DO with the demo
+(upload a guideline, check a patient, see the residue); (6) one honest sentence
+on scope --- n documents, n rules, no clinician adjudication yet.
+
+Do not put the 36\% number in the abstract. It is your most interesting number
+and your least defensible one; it belongs in \S\ref{sec:residue} with its caveat
+attached.}
+\end{abstract}
+
+%==============================================================================
+\section{The failure a coverage metric rewards}
+\label{sec:intro}
+\budget{0.75 pp}
+
+\note{OPEN COLD WITH THE ARTEFACT, NOT WITH BACKGROUND. Suggested first
+paragraph, roughly: a live run of an earlier version of this system reported
+2 encoded of 4 statements --- 50\% coverage. Hand-auditing the bundle found 0 of
+4 faithfully encoded. One rule had been written over two variable names that the
+terminology layer had bound to the same SNOMED code, so it denoted $(A \wedge B)
+\rightarrow B$: valid under every interpretation, unfalsifiable, and it returns
+CERTIFIED-COMPLIANT for every patient ever tested against it. It did not crash.
+It passed every syntactic gate. It looked like a rule that works.
+
+Then the thesis sentence, which is the whole paper:
+\emph{a refusal is a true statement about the tool's limits; a tautology is a
+false statement about the patient.}
+
+Then contributions as a short list (3--4 items, one line each). Then a pointer
+to the demo: URL + video.}
+
+\note{CONTRIBUTIONS --- draft list, trim to 3:
+\begin{itemize}
+  \item A working pipeline from an open-access guideline PDF/XML to executable
+        CQL and a three-valued checker, in which every emitted rule cites the
+        sentence it came from.
+  \item Refusal as a first-class output: six reason codes, reported beside the
+        rules, so the residue is measured rather than hidden.
+  \item Named holes: an undefined predicate stays a free variable rather than
+        being stubbed, which changes the verdict for a real patient
+        (\S\ref{sec:necessity}).
+  \item Deontic force as an operator, not a label --- a permission has no
+        violating patient by construction.
+\end{itemize}}
+
+\todo{Insert the demo URL and the video link here, anonymised.}
+
+%==============================================================================
+\section{Why the obvious approaches fail}
+\label{sec:why}
+\budget{0.75 pp}
+
+\note{THREE LEGS. This section replaces a conventional related-work paragraph
+and is stronger than one, because each leg has a consequence you can point at.
+Roughly one paragraph each.}
+
+\note{\textbf{Leg 1 --- coverage-maximising formalisers stub the uncomputable
+node, and that is unsafe in the direction that matters.} PathWISE-style systems
+replace a predicate they cannot compute with \texttt{false}. Show the measured
+consequence here and forward-reference the ablation. This is the leg that earns
+Figure~\ref{fig:stub} if you have room for it.}
+
+\note{\textbf{Leg 2 --- sampling-disagreement does not detect vagueness.} This
+is a genuine negative result about a prior method and you already ran it:
+20 statements $\times$ K{=}8 samples; all 80 samples of the vague statements were
+REFUSED, and 0 statements produced more than one semantic reading. The premise
+is that a vague statement admits several readings which disagree; in practice
+the model does not produce several readings, it produces eight refusals. So
+separation comes from refusal, not from disagreement --- one constrained decode
+does what a K-sample ambiguity estimator was supposed to, at an eighth of the
+cost. K$>$1 survives only as a confidence estimator, because a risk--coverage
+curve needs a score. \textbf{Foreground this one.} It is the most quotable thing
+in the paper and it costs you three sentences.}
+
+\note{\textbf{Leg 3 --- asking a model ``is this vague?'' is circular} and weak
+even when purpose-built (cite the $\sim$0.71 F1 error-categorisation result).
+So the gate aggregates evidence the earlier stages already produced, and only
+then asks a model to encode. BE PRECISE HERE --- see \S\ref{sec:residue} and
+Table~\ref{tab:attribution}: two of six reason codes are reachable without a
+model. Do NOT write ``most of the decision is made deterministically''; that
+claim was false and is now pinned false by a test.}
+
+%==============================================================================
+\section{System}
+\label{sec:system}
+\budget{1.25 pp}
+
+\note{ORGANISING PRINCIPLE: describe the pipeline as a NARROWING. Each stage
+ends in an output that confines the next --- a statement that is verbatim and
+locatable, then a vocabulary of bound codes, then a validated rule. Say the
+ratio out loud: four of twenty-one components call a model, and each of those
+four has an output space too small to hold the characteristic failure.
+
+The four constrained calls, one sentence each:
+\begin{itemize}
+  \item the recommendation classifier must return a verbatim quote, checked as a
+        substring of the source element; a paraphrase is rejected;
+  \item the mention proposer returns exact substrings of the sentence;
+  \item the terminology selector returns an INDEX into a candidate list, or
+        abstains --- a hallucinated code is not expressible;
+  \item the rule decoder's variable enum is the registry, so an unknown name
+        cannot appear.
+\end{itemize}
+
+Then one paragraph on the DSL (Fig.~\ref{fig:language} if you keep it), one on
+the three-valued verdict, one on refusal.}
+
+\begin{figure}[t]
+  \centering
+  \includesvg[width=\linewidth]{architecture}
+  \caption{The pipeline. Four stages, each terminating in an output the next is
+  confined to. Shaded components are the four model calls; every other component
+  is deterministic. The channel along the bottom is the declared residue.}
+  \label{fig:arch}
+\end{figure}
+
+\note{FIGURE SIZING WARNING. \texttt{architecture.svg} is 1636$\times$1319, so at
+\texttt{width=\textbackslash linewidth} it occupies roughly 4.4in of vertical
+space --- about 40\% of a page. That is defensible for Figure 1 in a systems
+demo, but if you are tight, the honest fix is to crop it to stages 01--03 and
+describe stage 04 in prose. Do NOT shrink it below \texttt{0.9\textbackslash
+linewidth}; the 9.5pt labels stop being legible.}
+
+\note{OPTIONAL, ONLY IF YOU HAVE ROOM: Figures~\ref{fig:deontic} and
+\ref{fig:lowering} are each only $\sim$1.3in tall, so they are cheap. Figure
+\ref{fig:language} is 3.5in and probably does not fit --- send it to the
+appendix. My ranking if you can afford exactly one extra:
+\ref{fig:stub} $>$ \ref{fig:deontic} $>$ \ref{fig:lowering} $>$ \ref{fig:language}.}
+
+%==============================================================================
+\section{The demonstration}
+\label{sec:demo}
+\budget{1.0 pp --- screenshot-heavy}
+
+\note{THIS IS THE SECTION THE TRACK ACTUALLY ASKS FOR. Three scenes, each with a
+screenshot. Write it as ``what a viewer sees'', not as a feature list.
+
+SCENE 1 --- upload. A real PMC guideline goes in; the dashboard shows rules,
+refusals grouped by reason, and the awaiting-formalisation count side by side.
+The point to make: a checker that shows only what compiled tells a governance
+reader the tool covered everything.
+  RUN:  cd "Part B" \&\& python3 api.py   then open http://localhost:8000/
+  SHOT: the dashboard grid, then the upload modal.
+
+SCENE 2 --- one statement, adjudicable. The HTML report puts the source sentence
+beside the rule it became, with the guideline's own wording of its strength.
+Use the PMC12355350:0048 case: the sentence ends ``...and a weak recommendation
+against finerenone in adults with CKD'' and the rule beside it is only about
+SGLT-2i/GLP-1. The dropped clause is visible at a glance.
+  RUN:  python3 report.py <bundle.json> -o report.html   (check the exact flags)
+  SHOT: one statement card, cropped.
+
+SCENE 3 --- a patient, and a verdict that is not yes/no. POST a patient+plan and
+get MAY-violate with a minimised counterexample rendered in prose
+(``it becomes a certain violation if potassium check occurred = false'').
+  RUN:  curl -s -X POST localhost:8000/guidelines/fixtures/check \\
+          -H 'Content-Type: application/json' \\
+          -d '{"patient":{"potassium":5.4},"plan":{"ace_inhibitor_on":true}}'
+  SHOT: the ui.html verdict badge + the prose counterexample.
+
+ALSO: record a 2--3 minute screen capture of these three scenes and link it. The
+CFP names video explicitly and it is the cheapest evidence you can produce.}
+
+\todo{Take the three screenshots, put them in figures/, and lay them out as a
+2- or 3-panel figure. Crop tightly --- a full browser window wastes the page.}
+
+%==============================================================================
+\section{Necessity: what each guard is worth}
+\label{sec:necessity}
+\budget{0.75 pp}
+
+\note{ONE HARNESS, ONE METRIC, SIX ROWS. Every guard you could remove produces
+the same observable --- the ablated system returns a different verdict about a
+patient than the full system does --- and only the DIRECTION differs. That is
+why this is one table and not five experiments.
+
+CRUCIALLY: THIS NEEDS NO GROUND TRUTH. It is a differential measurement, full
+system versus ablated system, same rules and same patients. The claim is not
+``we are right''; it is ``these designs disagree, here is how often and in which
+direction''. Say that explicitly in the text --- a reviewer will otherwise ask
+where the labels came from.
+
+DENOMINATOR: (rule $\times$ partial plan) pairs, not rules. Patients are
+generated by the solver, so that axis is free and unbiased; rules are the scarce
+axis. State both numbers in the caption and do not hide the rule count.}
+
+\note{THE HARNESS DOES NOT EXIST YET. It is one script and it wires together
+code you already have:
+\begin{itemize}
+  \item patients: \texttt{Part B/tests/synthesize\_boundary\_tests.py} already
+        SOLVES for bundles on each side of every declared threshold. Boundary
+        bundles are the highest-yield place to run this, because divergence
+        between encodings shows up exactly at thresholds.
+  \item plans: \texttt{Part B/tests/benchmark.py} already sweeps 200 synthetic
+        patients over 25 clauses; reuse its sampler.
+  \item verdicts: \texttt{Part B/api.py:classify} --- two solver calls.
+  \item rules: the 10 Track A rules across 5 bundles, plus the 10 hand-authored
+        fixtures in \texttt{Part B/real\_rules.py}.
+\end{itemize}
+Each ablation is a one-flag change. Budget: half a day.}
+
+\note{CHEAP WAY TO DOUBLE THE RULE COUNT, IF TIME ALLOWS: you have 9 documents in
+\texttt{Part A/corpus/} and only 5 bundles. Run the gate over the other four
+(PMC12948374, PMC13054209, PMC13090725, PMC13276589), and over ALL statements
+rather than 5 per document. Same corpus, no new labels, more rules.}
+
+\begin{table}[t]
+  \centering
+  \caption{Ablation. Each row removes one guard and re-derives the verdict for
+  every (rule, plan) pair; the columns are the direction in which the verdict
+  moves. \emph{Wrongly certified} is the safety column --- the system reports a
+  patient as compliant where the guideline was merely silent. \emph{Wrongly
+  accused} is the usability column, which routes back to the safety column once
+  a clinician switches the alert off.
+  \todo{n rules, n plans, n pairs --- state all three.}}
+  \label{tab:ablation}
+  \begin{tabular}{lrr}
+    \toprule
+    Guard removed & \% wrongly certified & \% wrongly accused \\
+    \midrule
+    Free holes $\rightarrow$ stub \texttt{false}   & \todo{} & --- \\
+    Free holes $\rightarrow$ stub \texttt{true}    & ---     & \todo{} \\
+    Canonicalise before the vacuity sweep          & \todo{} & --- \\
+    Force the partial path after a binder refusal  & \todo{} & \todo{} \\
+    Deontic operator (all rules as obligations)    & ---     & \todo{} \\
+    Three-valued verdict (single solver call)      & ---     & \todo{} \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\note{ROW NOTES --- what each one is actually demonstrating:
+\begin{itemize}
+  \item \textbf{stub false}: the PathWISE default. On a patient with eGFR 45 not
+        on an ACEi, under ``start an ACEi when eGFR $<$ 30 \emph{or the patient is
+        at high risk}'', stubbing the undefined predicate false returns
+        CERTIFIED-COMPLIANT --- it silently clears a patient the guideline never
+        spoke about. Already asserted in \texttt{Part A/test\_gate.py}; the
+        ablation generalises it over every rule you have.
+  \item \textbf{canonicalise}: without it, two names bound to one code give
+        $(A \wedge B) \rightarrow B$, which certifies everyone. This is where the
+        \S\ref{sec:intro} anecdote gets its number.
+  \item \textbf{partial path}: the APLA case. ``In pediatric patients with
+        persistently positive APLA without a history of thrombosis, suggest no
+        primary prophylaxis'' encoded as
+        \texttt{has\_thrombosis == false} $\rightarrow$ no prophylaxis, because
+        APLA never bound --- so the whole population restriction vanished and
+        what remained still typechecked and passed as ENCODE.
+  \item \textbf{deontic}: 15\% of real recommendations are permissive; each one
+        is an accusation against a clinician who did nothing wrong.
+  \item \textbf{single solver call}: \texttt{benchmark.py} ALREADY reports
+        \texttt{naive\_false\_violation\_rate} over 200 patients $\times$ 25
+        clauses. This row is free --- run it and copy the number.
+\end{itemize}}
+
+\note{RUN, once the harness exists:
+\begin{verbatim}
+cd "Part B/tests"
+python3 synthesize_boundary_tests.py      # writes the boundary bundles
+python3 benchmark.py                      # naive_false_violation_rate (row 6)
+python3 ablation.py --out ablation.csv    # <-- the script to write
+\end{verbatim}}
+
+% ---- OPTIONAL FIGURE: the single most persuasive thing in the paper ---------
+\note{\textbf{FIGURE \ref{fig:stub} DOES NOT EXIST YET AND YOU SHOULD BUILD IT.}
+Three columns, same rule, same patient, three treatments of one undefined
+predicate: stub false $\rightarrow$ CERTIFIED-COMPLIANT (silently clears);
+stub true $\rightarrow$ MUST-VIOLATE (over-fires); leave the hole free
+$\rightarrow$ MAY-VIOLATE with a witness naming \texttt{has\_high\_risk = true}.
+A reviewer understands the entire contribution from that table in eight seconds.
+Make it a screenshot of the real UI showing all three, not a LaTeX table --- the
+track asks for example interactions and this doubles as one.}
+%\begin{figure}[t]
+%  \centering
+%  \includegraphics[width=\linewidth]{figures/stub_comparison.png}
+%  \caption{One rule, one patient, three treatments of an undefined predicate.}
+%  \label{fig:stub}
+%\end{figure}
+
+%==============================================================================
+\section{What the residue turns out to be}
+\label{sec:residue}
+\budget{0.5 pp}
+
+\note{FOUR NUMBERS, EACH WITH ITS CAVEAT INLINE. Frame them as properties of
+GUIDELINES, not as scores for your system.
+
+\textbf{Provenance caveat, stated FIRST and in your own voice:} this pass was
+labelled by the same model family that produces the encodings, is therefore not
+independent, and is reported as a pilot. Saying it yourself converts your
+biggest vulnerability into a credibility signal. Do not bury it in limitations.
+
+\begin{itemize}
+  \item \num{27\%} of extracted spans are not recommendations at all --- so any
+        coverage figure computed over raw extracted spans is not comparable
+        across papers. THIS IS YOUR MOST USEFUL CONTRIBUTION TO THE FIELD and it
+        is currently buried; give it its own sentence.
+  \item Ceiling of \num{12/33 = 36\%} on real recommendations, and only
+        \num{1 of 21} refusals is \texttt{beyond\_dsl} --- expressiveness is
+        almost never the binding constraint. Vagueness and non-patient-level
+        content are. Adding DSL operators would buy close to nothing.
+  \item \num{15\%} of real recommendations are permissive, and every one is
+        misreported as a violation by anything that lowers to CQL and reads
+        \texttt{Violated}.
+  \item One guideline in the corpus is essentially 100\% defeasible --- and only
+        a system willing to return zero can report that.
+\end{itemize}
+
+\num{Numbers in orange are unverified against the current code.} Re-run before
+you submit; several of them predate fixes that moved the denominator.}
+
+\begin{table}[t]
+  \centering
+  \caption{Who decides each refusal. Verified against the assignment sites, and
+  pinned by \texttt{test\_gate.py}, which fails if any deterministic path starts
+  assigning \texttt{unsupported\_temporal}.}
+  \label{tab:attribution}
+  \begin{tabular}{lll}
+    \toprule
+    Reason code & Decided by & What sets it \\
+    \midrule
+    \texttt{unbound\_concept}      & deterministic & the binder: selector abstains, or no candidate \\
+    \texttt{defeasible}            & deterministic & the validator: \texttt{MODAL\_PREDICATE} \\
+    \texttt{beyond\_dsl}           & mixed         & \texttt{VACUOUS\_RULE}, else the model or fallback \\
+    \texttt{not\_patient\_level}   & model         & the segmenter's classifier, upstream \\
+    \texttt{vague\_predicate}      & model         & the formalizer declines \\
+    \texttt{unsupported\_temporal} & model         & the formalizer declines \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\note{PUT TABLE~\ref{tab:attribution} IN THE PAPER, not the appendix. A
+reviewer's first question about a refusal-based system is ``how much of this is
+the model marking its own homework?'' The honest answer --- two of six
+deterministic, all six gated by deterministic checks --- is defensible. The
+boast that four were free was not, and it was wrong.}
+
+%==============================================================================
+\section{Limitations, and what a reviewer can run}
+\label{sec:limits}
+\budget{0.25 pp --- flat, no hedging}
+
+\note{SHORT AND BLUNT. Reviewers reward this and it costs almost nothing.
+\begin{itemize}
+  \item \texttt{cql-to-elm} has never run, so ``compiles'' means brackets balance
+        and names resolve. Nothing has executed against a FHIR bundle.
+  \item No clinician has adjudicated anything. The gold labels are ours.
+  \item Corpus is 9 open-access guidelines; PMC OA over-represents journals that
+        publish structured recommendation abstracts. NICE, KDIGO and ACC/AHA are
+        not open access. State the sampling frame.
+  \item Physiological ranges are the caller's to supply and the live pipeline
+        supplies none, so on a Track A rule the unit-slip warning cannot fire and
+        the solver may return a counterexample at eGFR = 2.0. (Small fix: a
+        lookup table keyed by binding code, threaded into one call.)
+  \item There is no reference corpus with ground truth for this task. AHRQ CDS
+        Connect is not a rules artefact and eCQMs are cohort definitions rather
+        than recommendations. \textbf{This is a finding, not an apology} --- one
+        sentence, and it pre-empts ``why didn't you evaluate against X''.
+\end{itemize}}
+
+\note{END ON THE REPRODUCIBILITY LINE --- it is a genuine asset and almost
+nobody offers it: \texttt{cassette.py} + \texttt{test\_replay.py} record one real
+run's model responses and replay the full pipeline offline, so a reviewer can
+reproduce the pipeline WITH NO API KEY. A stale tape skips rather than passes.
+\begin{verbatim}
+python3 test_dsl.py && python3 test_bind.py && python3 test_segment.py \
+  && python3 test_gate.py && python3 test_cql.py    # offline, no key
+python3 test_replay.py                              # replays a real run
+\end{verbatim}}
+
+%==============================================================================
+\bibliographystyle{plain}
+\bibliography{refs}
+\note{refs.bib needs: PathWISE (the false-stub baseline); the K-sample /
+disagreement method; the $\sim$0.71 F1 error-categorisation result; the
+self-correction-is-unreliable result that justifies the bounded repair loop;
+HL7 CQL; GRADE; and one or two guideline-formalisation surveys.
+BE PRECISE ABOUT THE BASELINE: you did not run PathWISE. You reimplemented its
+stubbing rule. Say so in one clause --- a reviewer who knows the paper will
+check, and the honest phrasing costs you nothing.}
+
+%==============================================================================
+\appendix
+\section{Additional figures}
+
+\note{The appendix does not count against the 5 pages. Put here: the language
+figure, the deontic figure, the lowering figure, the full residue log, per
+document statement counts, and the DSL grammar.}
+
+\begin{figure}[h]
+  \centering
+  \includesvg[width=\linewidth]{language}
+  \caption{The rule language, with one worked example at every layer. Leaves are
+  tagged with the logical fragment each requires; the rule's fragment is the
+  maximum over the tree, computed from the tree rather than annotated by hand.}
+  \label{fig:language}
+\end{figure}
+
+\begin{figure}[h]
+  \centering
+  \includesvg[width=\linewidth]{deontic}
+  \caption{Obligation and permission differ in exactly one place. The violation
+  condition of a permission is the constant \textsc{false}, so no patient and no
+  completion of the unknowns can yield a violation --- a structural guarantee
+  rather than a guard on a verdict string.}
+  \label{fig:deontic}
+\end{figure}
+
+\begin{figure}[h]
+  \centering
+  \includesvg[width=\linewidth]{lowering}
+  \caption{One node, two lowerings. A solver has no patient timeline, so recency
+  flattens to an occurrence flag and a day count; a CQL engine evaluates over the
+  record, where a retrieve plus a temporal \texttt{where} already is the bounded
+  existential.}
+  \label{fig:lowering}
+\end{figure}
+
+\section{Engineering log}
+\note{One paragraph pointing at \texttt{Part A/RESULTS.md} in the anonymised
+repo. Do NOT try to compress 36 log entries into the appendix --- cite it as an
+artefact. But DO extract one table: ``defect class $\rightarrow$ the structural
+check that now catches it'', with 5--6 rows. That table is the strongest thing in
+the log, because it shows you can enumerate the failure classes precisely
+BECAUSE you built detectors for them. Presented as a closed arc it reads as
+rigour; presented as a list of past bugs it reads as a confession.}
+
+\end{document}

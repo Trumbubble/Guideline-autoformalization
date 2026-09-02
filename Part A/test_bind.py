@@ -414,3 +414,43 @@ def test_an_unavailable_index_is_not_an_absent_concept():
         assert "semantic index" in str(exc) or "no " in str(exc)
     else:
         raise AssertionError("returned instead of raising")
+
+# ------------------------------------------- retrieval: category-word noise
+
+def test_a_category_word_is_not_evidence_of_a_match():
+    """BM25 rewards a RARE token, and a clinically empty word can be very rare:
+    "regimens" occurs in 6 concepts of the real index, "insulin" in 1,638. So
+    "Basal insulin regimen" retrieved *Transfeminine Regimens, All*,
+    *Transmasculine Regimens, All* and nothing else -- the entire candidate
+    list decided by the one word carrying no clinical meaning, and the drug the
+    sentence is about never proposed to the selector at all. Three statements
+    in one document refused on this, with the model abstaining correctly each
+    time because the right concept was never shown to it."""
+    ix = b.SqliteIndex(":memory:")
+    ix.semantic = False
+    ix.add([b.Concept(system=b.VSAC, code="1.1", kind="drug_class",
+                         term="Transfeminine Regimens, All"),
+            b.Concept(system=b.ATC, code="D049528", kind="drug_class",
+                         term="Insulin, Long-Acting")])
+    cands = b.search_all(ix, b.Mention("Basal insulin regimen", "drug_class"), 8)
+    terms = [c.concept.term for c in cands]
+    assert "Insulin, Long-Acting" in terms
+    assert "Transfeminine Regimens, All" not in terms, (
+        "sharing only 'regimen' is not sharing a concept")
+
+def test_stripping_leaves_a_phrase_alone_when_it_would_gut_it():
+    assert b.strip_generic_modifiers("Basal insulin regimen") == "basal insulin"
+    assert b.strip_generic_modifiers("regimen") is None, "nothing would be left"
+    assert b.strip_generic_modifiers("insulin") is None, "nothing to strip"
+    assert b.strip_generic_modifiers("mechanical thrombectomy") is None
+
+def test_a_neighbouring_kind_never_outranks_the_kind_asked_for():
+    """The lexical path penalised fallback-kind candidates and the semantic path
+    did not, so SNOMED `Insulin` (a drug, cosine 0.78) outranked ATC
+    `Insulin, Long-Acting` (a drug CLASS, 0.61) and filled every slot before the
+    only candidate that denotes a class could appear."""
+    assert b.FALLBACK_KIND_PENALTY > 0
+    import inspect
+    src = inspect.getsource(b.semantic_candidates)
+    assert "FALLBACK_KIND_PENALTY" in src, (
+        "the semantic path must apply the same penalty as the lexical one")

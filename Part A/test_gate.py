@@ -4,6 +4,7 @@ The model is injected, so `formalize` here is a lookup table keyed on the
 statement -- which makes every decision path deterministic and lets the tests
 assert on the gate's LOGIC rather than on a model's mood.
 """
+import pytest
 import z3
 
 import bind
@@ -622,3 +623,84 @@ def test_the_menu_is_read_off_the_decoder_not_a_hand_kept_list():
                        [reg.event(e) for e in reg.event_names()])
     assert "delta" in dsl.offered_leaves(reg)
     assert "since" in dsl.offered_leaves(reg)
+
+def test_a_temporal_hole_is_also_declared_as_an_event():
+    """"at start LRD" is the point in time a dose change is measured from, but
+    it arrived as a plain boolean hole, which a Delta cannot anchor to. So the
+    model anchored to the drug instead -- twelve circular baselines in one
+    document."""
+    holes = [dsl.VarDef("has_start_lrd", "bool", None, "at start LRD", unbound=True),
+             dsl.VarDef("has_high_risk", "bool", None, "at high risk", unbound=True)]
+    events = gate.anchor_events(holes)
+    assert [e.name for e in events] == ["start_lrd"], "a risk is not a point in time"
+    assert events[0].unbound, "no terminology holds 'start of the liver reduction diet'"
+
+def test_the_widened_registry_keeps_what_its_events_declared():
+    """`wide` rebuilt every event as a bare EventDef, dropping the description
+    and the unbound flag on the way into the attempt that uses them."""
+    reg = dsl.Registry(
+        [dsl.VarDef("dose", "real", None, "dose", role="action")],
+        [dsl.EventDef("start_lrd", "at start LRD", None, unbound=True)])
+    wide = dsl.Registry([reg[n] for n in reg.names()],
+                        [reg.event(e) for e in reg.event_names()])
+    assert wide.event("start_lrd").unbound
+    assert wide.event("start_lrd").description == "at start LRD"
+
+def test_a_tool_failure_is_never_reported_as_a_dsl_limitation():
+    """`_attempt` caught every exception and returned
+    `beyond_dsl: encoding attempt failed`, which is indistinguishable from the
+    DSL genuinely lacking a construct. An auth error, a rate limit or a bad
+    JSON body therefore inflated the formalizability residue with our own
+    downtime -- and that number is a headline result."""
+    def broken(text, reg):
+        raise RuntimeError("connection reset by peer")
+    t = triage(S_OK, IX, statement_id="s1", formalize=broken, source_span="s")
+    assert t.decision == "refuse"
+    said = " ".join(e.detail for e in t.evidence)
+    assert "ENCODER FAILURE" in said, "the outage must be named as ours"
+
+def test_a_cassette_miss_stops_the_replay_instead_of_becoming_a_refusal():
+    """The harness reported a green run while every taped call was missing."""
+    import cassette
+    def missing(text, reg):
+        raise cassette.CassetteMiss("no recorded response")
+    with pytest.raises(cassette.CassetteMiss):
+        triage(S_OK, IX, statement_id="s1", formalize=missing, source_span="s")
+
+def test_which_refusal_codes_are_reachable_without_a_model():
+    """Pins the table at the top of gate.py.
+
+    That table was wrong for a long time -- it claimed `not_patient_level` came
+    from "obligation names no action" and that `unsupported_temporal` was
+    produced by a deterministic fragment check. Neither is true, and being
+    wrong there is expensive: it is what an architecture diagram gets drawn
+    from, so the error propagates into anything describing the system.
+
+    `formalize=None` is exactly "no model", so the codes reachable that way are
+    the deterministic ones, plus `not_patient_level` only when the caller
+    supplies the segmenter's judgement."""
+    f = lambda text, reg: _refusal("vague_predicate", "x")
+
+    # unbound_concept: the binder alone
+    assert triage(S_VAGUE, IX, statement_id="a").reason_code == "unbound_concept"
+
+    # defeasible: the validator alone, from MODAL_PREDICATE
+    modal = lambda text, reg: _rule(
+        {"kind": "cmp", "var": "has_may_be_considered", "op": "==", "value": True},
+        {"kind": "cmp", "var": "on_ace_inhibitor", "op": "==", "value": True})
+    t = triage(S_OK, IX, statement_id="b", formalize=modal, source_span="s")
+    assert t.reason_code == "defeasible", "MODAL_PREDICATE is deterministic"
+
+    # not_patient_level: ONLY when the segmenter's classifier says so. It is
+    # never derived here, and on a live run that classifier is a model.
+    t = triage(S_VAGUE, IX, statement_id="c", is_patient_level=False)
+    assert t.reason_code == "not_patient_level"
+
+    # unsupported_temporal: no deterministic path produces it at all. If this
+    # ever fails, a fragment check was added and the table must say so.
+    import inspect
+    body = inspect.getsource(gate)
+    assigns = [ln for ln in body.splitlines()
+               if "unsupported_temporal" in ln and "=" in ln
+               and not ln.strip().startswith("#")]
+    assert not assigns, f"gate.py now assigns unsupported_temporal: {assigns}"

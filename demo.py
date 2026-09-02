@@ -32,6 +32,8 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, "Part A"))
 sys.path.insert(0, os.path.join(HERE, "Part B"))
 
+import z3  # noqa: E402
+
 import bind, cassette, cql, dsl, gate  # noqa: E402
 
 # Statements are quoted verbatim from KDIGO-style CKD guidance. Chosen to
@@ -165,7 +167,7 @@ def main(argv=None):
 
     # ---- 2-4. bind, synthesise, compile ---------------------------------
     hdr(2, "SYNTHESISE + COMPILE  -- the encodable statements become CQL")
-    rules, refusals, libraries = [], [], {}
+    rules, refusals, libraries, cql_files = [], [], {}, {}
     for t in triages:
         if not t.encodable or t.rule is None:
             if t.as_refusal():
@@ -200,12 +202,59 @@ def main(argv=None):
               f"{'COMPILES' if not errs else errs[0][:52]}")
         rules.append(t.rule)
         libraries[t.statement_id] = lib
+        # Write it out. The CQL is the artifact a site actually runs, and it
+        # was being generated, printed as a one-line status, and thrown away --
+        # so the pipeline's most concrete output existed only for as long as
+        # the terminal scrollback did.
+        cql_dir = os.path.join(os.path.dirname(a.out) or ".", "cql",
+                               os.path.splitext(os.path.basename(a.out))[0])
+        os.makedirs(cql_dir, exist_ok=True)
+        cql_path = os.path.join(cql_dir, f"{_slugfile(t.statement_id)}.cql")
+        with open(cql_path, "w", encoding="utf-8") as fh:
+            fh.write(lib.text)
+        cql_files[t.statement_id] = os.path.relpath(cql_path, HERE)
 
     # ---- 5. the governance bundle ---------------------------------------
     hdr(3, "BUNDLE  -- what a governance committee receives")
     reg_all = _merge_registries(triages, index, mention_llm, select_llm)
-    dsl.write_bundle(a.out, reg_all, rules, refusals)
+    import report as _rep
+    findings = [_rep.finding(t, reg_all, cql_files) for t in triages]
+    dsl.write_bundle(a.out, reg_all, rules, refusals, findings)
     print(f"  wrote {a.out}")
+    # The readable half. The bundle is an interface artifact for Track B; this
+    # is the one a clinician or a governance committee can actually read, with
+    # each source sentence beside the rule it became.
+    try:
+        import report as _report
+        _stem = os.path.splitext(os.path.basename(a.out))[0]
+        _html = os.path.join(os.path.dirname(a.out) or ".", f"{_stem}.html")
+        with open(_html, "w", encoding="utf-8") as fh:
+            fh.write(_report.render(
+                json.load(open(a.out, encoding="utf-8")),
+                title=f"{a.doc or 'demo'} — formalization report",
+                cql_root=os.path.join(os.path.dirname(a.out) or ".", "cql", _stem)))
+        print(f"    report: {os.path.relpath(_html, HERE)}  (open in a browser)")
+        # Put it in the library the web UI serves. demo.py and Track B's upload
+        # both produce bundles, but only the upload's landed in the store -- so
+        # a document formalized from the CLI never appeared on the dashboard,
+        # and the report route the UI has could not reach it. Re-running a
+        # document replaces its entry rather than stacking duplicates.
+        try:
+            import guidelines as _gl
+            _entry = _gl.register_bundle(
+                a.out, title=(a.doc or "demo"),
+                guideline_id=_slugfile(a.doc or "demo"))
+            print(f"    library: http://localhost:8000/guidelines/"
+                  f"{_entry['id']}/report  (run `python3 api.py` in Part B)")
+        except Exception as exc:
+            print(f"    (not added to the web library: {type(exc).__name__}: {exc})")
+        if cql_files:
+            print(f"    CQL   : {len(cql_files)} library/libraries under "
+                  f"{os.path.relpath(os.path.dirname(next(iter(cql_files.values()))), HERE) if cql_files else ''}")
+    except Exception as exc:
+        # A report is a convenience. It must never be the reason a run fails
+        # after the bundle -- the deliverable -- has already been written.
+        print(f"    (report not generated: {type(exc).__name__}: {exc})")
     print(f"    {len(rules)} rule(s), {len(refusals)} refusal(s), "
           f"{len(reg_all.names())} bound variable(s)")
     for r in refusals:
@@ -470,17 +519,59 @@ def _merge_registries(triages, index, mention_llm, select_llm):
             seen.setdefault(v.name, v)
     return dsl.Registry(list(seen.values()), list(events.values()))
 
+def _z3_py(value):
+    """A z3 model value as a Python bool/int/float, or None if it is not a
+    concrete number (an unconstrained or algebraic value)."""
+    if z3.is_true(value):
+        return True
+    if z3.is_false(value):
+        return False
+    if z3.is_int_value(value):
+        return value.as_long()
+    if z3.is_rational_value(value):
+        return value.numerator_as_long() / value.denominator_as_long()
+    if z3.is_algebraic_value(value):
+        return _z3_py(value.approx(12))
+    return None
+
+def _slugfile(name: str) -> str:
+    return re.sub(r"[^A-Za-z0-9_.-]", "_", name)
+
 def _patients_for(lr):
     """A pinned compliant patient, a pinned violating one, and a partial one --
-    the third is the case the two-valued check gets wrong."""
-    names = set(lr.var_refs)
+    the third is the case the two-valued check gets wrong.
+
+    The patients are SOLVED FOR, not guessed. This used to decide a variable's
+    type by substring-matching its name (`"acr" not in n and "egfr" not in n`)
+    and pin everything else to True, which worked only for the hand-picked
+    demo statements. The first real registry containing a dose handed the
+    boolean True to a real-valued variable and Track B refused it -- correctly,
+    since True is a category error, not the number 1 -- and stage 4 crashed.
+
+    z3 already knows every sort and every constraint, so ask it: a model of
+    `domain and phi` is a genuinely compliant patient and a model of
+    `domain and not phi` a genuinely violating one, for any rule shape, with no
+    name heuristics anywhere."""
     out = []
-    bools = {n for n in names if "acr" not in n and "egfr" not in n
-             and not n.startswith("days_since")}
-    if bools:
-        out.append(("every variable pinned, compliant",
-                    {n: True for n in names if n in bools}))
-    out.append(("nothing pinned -- partial patient", {}))
+    for label, goal in [("solved compliant patient", lr.predicate),
+                        ("solved violating patient", z3.Not(lr.predicate))]:
+        solver = z3.Solver()
+        solver.add(*list(getattr(lr, "domain", None) or []), goal)
+        if solver.check() != z3.sat:
+            continue                      # no such patient exists; say nothing
+        model = solver.model()
+        known = {}
+        for name, ref in lr.var_refs.items():
+            # Holes included, deliberately. Supplying the missing datum is what
+            # turns MAY-violate into a definite verdict, and the contrast with
+            # the unpinned patient below IS the three-valued demonstration: the
+            # same rule and the same z3, answering "cannot tell" only because
+            # one value was never supplied.
+            value = _z3_py(model.eval(ref, model_completion=True))
+            if value is not None:
+                known[name] = value
+        out.append((label, known))
+    out.append(("nothing pinned -- the holes stay free", {}))
     return out
 
 if __name__ == "__main__":

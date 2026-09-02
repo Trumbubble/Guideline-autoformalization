@@ -1,0 +1,188 @@
+<title>PMC12355350 — formalization report</title>
+<style>
+:root{--bg:#fbfbfa;--fg:#1a1a1a;--muted:#6b6b6b;--line:#e3e1dd;--card:#fff;
+--ok:#1a7f4b;--part:#9a6700;--no:#a4342a;--accent:#2b5c8a;--code:#f5f4f1}
+@media(prefers-color-scheme:dark){:root{--bg:#16181c;--fg:#e8e6e3;--muted:#9a9a9a;
+--line:#2c2f36;--card:#1c1f24;--ok:#4ec48a;--part:#e0b341;--no:#f0857a;
+--accent:#7fb3e0;--code:#22252b}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);
+font:16px/1.6 ui-sans-serif,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+.wrap{max-width:920px;margin:0 auto;padding:40px 24px 80px}
+.back{display:inline-block;margin-bottom:18px;font-size:13.5px;color:var(--accent);
+text-decoration:none}
+.back:hover{text-decoration:underline}
+@media print{.back{display:none}}
+h1{font-size:26px;margin:0 0 4px;letter-spacing:-.01em}
+h2{font-size:15px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);
+margin:44px 0 14px;font-weight:600}
+.sub{color:var(--muted);font-size:14px;margin:0 0 28px}
+.bar{display:flex;height:10px;border-radius:5px;overflow:hidden;margin:18px 0 8px;
+background:var(--line)}
+.bar span{display:block}
+.legend{display:flex;gap:18px;flex-wrap:wrap;font-size:13px;color:var(--muted)}
+.dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;
+padding:18px 20px;margin:0 0 14px}
+details.card>summary{list-style:none;cursor:pointer;margin:-18px -20px;
+padding:18px 20px 18px 40px;border-radius:10px;position:relative}
+details.card>summary::-webkit-details-marker{display:none}
+details.card>summary::before{content:"\25B8";position:absolute;left:20px;top:18px;
+color:var(--muted);transition:transform .15s}
+details.card[open]>summary::before{transform:rotate(90deg)}
+details.card>summary:hover{background:color-mix(in srgb,var(--fg) 3%,transparent)}
+details.card>summary blockquote{margin-bottom:0;border-left:none;padding-left:0}
+details.card>summary .head{margin-bottom:6px}
+details.card>.body{padding-top:14px;margin-top:14px;border-top:1px solid var(--line)}
+.controls{display:flex;gap:10px;align-items:center;margin:0 0 14px}
+.controls button{font:13px inherit;color:var(--accent);background:none;
+border:1px solid var(--line);border-radius:6px;padding:4px 11px;cursor:pointer}
+.controls button:hover{border-color:var(--accent)}
+.hint{font-size:12.5px;color:var(--muted)}
+.card.encode{border-left:4px solid var(--ok)}
+.card.partial{border-left:4px solid var(--part)}
+.card.refuse{border-left:4px solid var(--no)}
+.head{display:flex;justify-content:space-between;align-items:baseline;gap:12px;
+margin-bottom:10px}
+.id{font:12px ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--muted)}
+.badge{font-size:12px;font-weight:600;padding:2px 9px;border-radius:20px;
+white-space:nowrap}
+.badge.encode{background:color-mix(in srgb,var(--ok) 16%,transparent);color:var(--ok)}
+.badge.partial{background:color-mix(in srgb,var(--part) 18%,transparent);color:var(--part)}
+.badge.refuse{background:color-mix(in srgb,var(--no) 15%,transparent);color:var(--no)}
+blockquote{margin:0 0 14px;padding:10px 0 10px 14px;border-left:2px solid var(--line);
+color:var(--fg);font-size:15px}
+.label{font-size:11px;text-transform:uppercase;letter-spacing:.07em;
+color:var(--muted);margin:14px 0 5px;font-weight:600}
+.rule.logic{font-size:13.5px;color:var(--accent)}
+.rule{font:14px/1.7 ui-monospace,SFMono-Regular,Menlo,monospace;background:var(--code);
+border-radius:7px;padding:12px 14px;white-space:pre-wrap;overflow-x:auto}
+.why{font-size:14px;color:var(--fg)}
+ul{margin:6px 0 0;padding-left:20px;font-size:14px}
+li{margin:3px 0}
+.hole{font:12px ui-monospace,Menlo,monospace;background:color-mix(in srgb,var(--part) 15%,transparent);
+padding:1px 6px;border-radius:4px;margin-right:5px;display:inline-block}
+.caution{border-left:3px solid var(--part);padding:8px 12px;margin:8px 0 0;
+background:color-mix(in srgb,var(--part) 7%,transparent);border-radius:0 6px 6px 0;
+font-size:13.5px}
+.caution code{font-weight:600;color:var(--part)}
+details{margin-top:14px}
+summary{cursor:pointer;font-size:13px;color:var(--accent);user-select:none}
+pre{background:var(--code);border-radius:7px;padding:14px;overflow-x:auto;
+font:12.5px/1.55 ui-monospace,SFMono-Regular,Menlo,monospace;margin:10px 0 0}
+table{border-collapse:collapse;width:100%;font-size:14px;margin-top:8px}
+th,td{text-align:left;padding:7px 10px;border-bottom:1px solid var(--line)}
+th{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+td.n{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+footer{margin-top:56px;padding-top:20px;border-top:1px solid var(--line);
+font-size:13px;color:var(--muted)}
+@media print{body{background:#fff}.card{break-inside:avoid}
+.controls{display:none}details.card>.body{display:block}
+details:not(.card){display:none}}
+</style>
+<div class="wrap">
+
+<h1>PMC12355350 — formalization report</h1>
+<p class="sub">5 recommendation statement(s) &middot; generated 2026-09-01 &middot; 11 bound variable(s)</p>
+<div class="bar"><span style="width:60.0%;background:var(--ok)"></span><span style="width:0.0%;background:var(--part)"></span><span style="width:40.0%;background:var(--no)"></span></div>
+<div class="legend"><span><i class="dot" style="background:var(--ok)"></i>3 encoded</span><span><i class="dot" style="background:var(--part)"></i>0 partial &mdash; encoded with a named gap</span><span><i class="dot" style="background:var(--no)"></i>2 refused</span></div>
+<h2>Why statements were refused</h2>
+<table><tr><th>Reason</th><th>Meaning</th><th class="n">n</th></tr>
+<tr><td><span class="id">not_patient_level</span></td><td>the sentence is about a service or a system, not a patient</td><td class="n">1</td></tr>
+<tr><td><span class="id">unbound_concept</span></td><td>a clinical concept in the sentence could not be resolved to a terminology code</td><td class="n">1</td></tr>
+</table>
+<h2>Statement by statement</h2>
+<div class="controls"><button type="button" onclick="setAll(true)">Expand all</button><button type="button" onclick="setAll(false)">Collapse all</button><span class="hint">or click any statement</span></div>
+<details class="card encode">
+<summary>
+<div class="head">
+<span class="id">PMC12355350:0047</span>
+<span class="badge encode">Encoded</span>
+</div>
+<blockquote>• Lower risk (three or fewer cardiovascular risk factors without established cardiovascular disease (CVD) or chronic kidney disease (CKD)): weak recommendation against SGLT-2 inhibitors or GLP-1 receptor agonists.</blockquote>
+</summary>
+<div class="body">
+<div class="label">Encoded as</div>
+<div class="rule">IF three or fewer cardiovascular risk factors AND NOT CVD - cardiovascular disease AND NOT Chronic kidney disease
+THEN should (weak recommendation): NOT SGLT2 Inhibitors AND NOT GLP-1 Receptor Agonist</div>
+<div class="why" style="margin-top:8px"><strong>Action:</strong> avoid SGLT-2 inhibitors or GLP-1 receptor agonists</div>
+<div class="why" style="margin-top:4px;color:var(--muted)"><strong>Strength, as the guideline states it:</strong> weak recommendation against</div>
+
+<details><summary>Show the logic and its bindings</summary>
+<div class="label">&phi; = when &rarr; then</div><div class="rule logic">has_three_fewer_cardiovascular_risk_factors = true ∧ has_cardiovascular_disease_cvd = false ∧ has_chronic_kidney_disease_ckd = false
+    →  on_sglt_2_inhibitors = false ∧ on_glp_1_receptor_agonists = false</div><div class="label">What each name is bound to</div><table><tr><th>Variable</th><th>Type</th><th>Terminology</th></tr><tr><td><span class="id">has_cardiovascular_disease_cvd</span><br><span style="font-size:12.5px;color:var(--muted)">CVD - cardiovascular disease</span></td><td>bool</td><td style="word-break:break-all">http://snomed.info/sct|49601007|20260801 <span class="id">(+500 codes)</span></td></tr><tr><td><span class="id">has_chronic_kidney_disease_ckd</span><br><span style="font-size:12.5px;color:var(--muted)">Chronic kidney disease</span></td><td>bool</td><td style="word-break:break-all">http://snomed.info/sct|709044004|20260801 <span class="id">(+112 codes)</span></td></tr><tr><td><span class="id">has_three_fewer_cardiovascular_risk_factors</span><br><span style="font-size:12.5px;color:var(--muted)">three or fewer cardiovascular risk factors</span></td><td>bool</td><td style="word-break:break-all"><em style="color:var(--part)">left free &mdash; no code</em></td></tr><tr><td><span class="id">on_glp_1_receptor_agonists</span><br><span style="font-size:12.5px;color:var(--muted)">GLP-1 Receptor Agonist</span></td><td>bool</td><td style="word-break:break-all">http://www.whocc.no/atc|N0000178480</td></tr><tr><td><span class="id">on_sglt_2_inhibitors</span><br><span style="font-size:12.5px;color:var(--muted)">SGLT2 Inhibitors</span></td><td>bool</td><td style="word-break:break-all">http://cts.nlm.nih.gov/fhir/ValueSet|2.16.840.1.113762.1.4.1178.30|20260418 <span class="id">(+110 codes)</span></td></tr></table>
+</details>
+</div></details>
+<details class="card encode">
+<summary>
+<div class="head">
+<span class="id">PMC12355350:0048</span>
+<span class="badge encode">Encoded</span>
+</div>
+<blockquote>• Moderate risk (more than three cardiovascular risk factors without established CVD or CKD; or established CVD and/or CKD at lower risk of complications): weak recommendation in favour of SGLT-2 inhibitors or GLP-1 receptor agonists; and a weak recommendation against finerenone in adults with CKD.</blockquote>
+</summary>
+<div class="body">
+<div class="label">Encoded as</div>
+<div class="rule">IF (more than three cardiovascular risk factors AND NOT CVD - cardiovascular disease AND NOT Chronic kidney disease) OR (CVD - cardiovascular disease AND at lower risk of complications) OR (Chronic kidney disease AND at lower risk of complications)
+THEN should (weak recommendation): SGLT2 Inhibitors OR GLP-1 Receptor Agonist</div>
+<div class="why" style="margin-top:8px"><strong>Action:</strong> recommend SGLT-2 inhibitors or GLP-1 receptor agonists</div>
+<div class="why" style="margin-top:4px;color:var(--muted)"><strong>Strength, as the guideline states it:</strong> weak</div>
+
+<details><summary>Show the logic and its bindings</summary>
+<div class="label">&phi; = when &rarr; then</div><div class="rule logic">(has_more_than_three_cardiovascular_risk = true ∧ has_cardiovascular_disease_cvd = false ∧ has_chronic_kidney_disease_ckd = false) ∨ (has_cardiovascular_disease_cvd = true ∧ has_lower_risk_complications = true) ∨ (has_chronic_kidney_disease_ckd = true ∧ has_lower_risk_complications = true)
+    →  on_sglt_2_inhibitors = true ∨ on_glp_1_receptor_agonists = true</div><div class="label">What each name is bound to</div><table><tr><th>Variable</th><th>Type</th><th>Terminology</th></tr><tr><td><span class="id">has_cardiovascular_disease_cvd</span><br><span style="font-size:12.5px;color:var(--muted)">CVD - cardiovascular disease</span></td><td>bool</td><td style="word-break:break-all">http://snomed.info/sct|49601007|20260801 <span class="id">(+500 codes)</span></td></tr><tr><td><span class="id">has_chronic_kidney_disease_ckd</span><br><span style="font-size:12.5px;color:var(--muted)">Chronic kidney disease</span></td><td>bool</td><td style="word-break:break-all">http://snomed.info/sct|709044004|20260801 <span class="id">(+112 codes)</span></td></tr><tr><td><span class="id">has_lower_risk_complications</span><br><span style="font-size:12.5px;color:var(--muted)">at lower risk of complications</span></td><td>bool</td><td style="word-break:break-all"><em style="color:var(--part)">left free &mdash; no code</em></td></tr><tr><td><span class="id">has_more_than_three_cardiovascular_risk</span><br><span style="font-size:12.5px;color:var(--muted)">more than three cardiovascular risk factors</span></td><td>bool</td><td style="word-break:break-all"><em style="color:var(--part)">left free &mdash; no code</em></td></tr><tr><td><span class="id">on_glp_1_receptor_agonists</span><br><span style="font-size:12.5px;color:var(--muted)">GLP-1 Receptor Agonist</span></td><td>bool</td><td style="word-break:break-all">http://www.whocc.no/atc|N0000178480</td></tr><tr><td><span class="id">on_sglt_2_inhibitors</span><br><span style="font-size:12.5px;color:var(--muted)">SGLT2 Inhibitors</span></td><td>bool</td><td style="word-break:break-all">http://cts.nlm.nih.gov/fhir/ValueSet|2.16.840.1.113762.1.4.1178.30|20260418 <span class="id">(+110 codes)</span></td></tr></table>
+</details>
+</div></details>
+<details class="card encode">
+<summary>
+<div class="head">
+<span class="id">PMC12355350:0049</span>
+<span class="badge encode">Encoded</span>
+</div>
+<blockquote>• Higher risk (established CVD and/or CKD at higher risk of complications, or established heart failure): strong recommendation in favour of SGLT-2 inhibitors or GLP-1 receptor agonists; and a weak recommendation in favour of finerenone in adults with CKD.</blockquote>
+</summary>
+<div class="body">
+<div class="label">Encoded as</div>
+<div class="rule">IF CVD - cardiovascular disease OR (Chronic kidney disease AND at higher risk of complications) OR Heart failure
+THEN must (strong recommendation): SGLT2 Inhibitors OR GLP-1 Receptor Agonist</div>
+<div class="why" style="margin-top:8px"><strong>Action:</strong> recommend SGLT-2 inhibitors or GLP-1 receptor agonists</div>
+<div class="why" style="margin-top:4px;color:var(--muted)"><strong>Strength, as the guideline states it:</strong> strong recommendation in favour</div>
+
+<details><summary>Show the logic and its bindings</summary>
+<div class="label">&phi; = when &rarr; then</div><div class="rule logic">has_cardiovascular_disease_cvd = true ∨ (has_chronic_kidney_disease_ckd = true ∧ has_higher_risk_complications = true) ∨ has_heart_failure = true
+    →  on_sglt_2_inhibitors = true ∨ on_glp_1_receptor_agonists = true</div><div class="label">What each name is bound to</div><table><tr><th>Variable</th><th>Type</th><th>Terminology</th></tr><tr><td><span class="id">has_cardiovascular_disease_cvd</span><br><span style="font-size:12.5px;color:var(--muted)">CVD - cardiovascular disease</span></td><td>bool</td><td style="word-break:break-all">http://snomed.info/sct|49601007|20260801 <span class="id">(+500 codes)</span></td></tr><tr><td><span class="id">has_chronic_kidney_disease_ckd</span><br><span style="font-size:12.5px;color:var(--muted)">Chronic kidney disease</span></td><td>bool</td><td style="word-break:break-all">http://snomed.info/sct|709044004|20260801 <span class="id">(+112 codes)</span></td></tr><tr><td><span class="id">has_heart_failure</span><br><span style="font-size:12.5px;color:var(--muted)">Heart failure</span></td><td>bool</td><td style="word-break:break-all">http://snomed.info/sct|84114007|20260801 <span class="id">(+122 codes)</span></td></tr><tr><td><span class="id">has_higher_risk_complications</span><br><span style="font-size:12.5px;color:var(--muted)">at higher risk of complications</span></td><td>bool</td><td style="word-break:break-all"><em style="color:var(--part)">left free &mdash; no code</em></td></tr><tr><td><span class="id">on_glp_1_receptor_agonists</span><br><span style="font-size:12.5px;color:var(--muted)">GLP-1 Receptor Agonist</span></td><td>bool</td><td style="word-break:break-all">http://www.whocc.no/atc|N0000178480</td></tr><tr><td><span class="id">on_sglt_2_inhibitors</span><br><span style="font-size:12.5px;color:var(--muted)">SGLT2 Inhibitors</span></td><td>bool</td><td style="word-break:break-all">http://cts.nlm.nih.gov/fhir/ValueSet|2.16.840.1.113762.1.4.1178.30|20260418 <span class="id">(+110 codes)</span></td></tr></table>
+</details>
+</div></details>
+<details class="card refuse">
+<summary>
+<div class="head">
+<span class="id">PMC12355350:0124</span>
+<span class="badge refuse">Refused</span>
+</div>
+<blockquote>Understanding the recommendation—Given the benefit on overall survival (high certainty evidence), important benefits on cardiovascular and kidney outcomes (moderate to high certainty evidence), and taking into account risk of harms (moderate certainty evidence) and treatment burdens, all or almost all higher risk patients with established disease were anticipated to be inclined to accept treatment; this justified a strong recommendation in favour.</blockquote>
+</summary>
+<div class="body">
+<div class="label">Not encoded because</div>
+<div class="why">a clinical concept in the sentence could not be resolved to a terminology code <span class="id">(unbound_concept)</span></div>
+<div class="why" style="margin-top:8px;color:var(--muted)">no clinical concept in the statement resolved to a code</div>
+
+</div></details>
+<details class="card refuse">
+<summary>
+<div class="head">
+<span class="id">values-preferences-01</span>
+<span class="badge refuse">Refused</span>
+</div>
+<blockquote>The panel accordingly made judgments regarding the values and preferences of typical well-informed patients with diabetes</blockquote>
+</summary>
+<div class="body">
+<div class="label">Not encoded because</div>
+<div class="why">the sentence is about a service or a system, not a patient <span class="id">(not_patient_level)</span></div>
+<div class="why" style="margin-top:8px;color:var(--muted)">This passage reports patient preference research and panel judgments about typical values and preferences, plus guideline update scheduling. It states no actionable patient-level recommendation, and its qualifiers are unquantifiable.</div>
+
+</div></details>
+<footer>
+<strong>What this report does not claim.</strong> A refusal is a statement this tool declined to encode &mdash; it is not a judgement about the guideline. A rule shown here typechecked and compiled; that is not the same as being clinically correct, which is what the sentence beside it is for. Statements marked <em>partial</em> carry named free variables and answer <em>cannot tell</em> until those are supplied.
+
+</footer></div>
+<script>function setAll(open){document.querySelectorAll("details.card").forEach(function(d){d.open=open;});}</script>

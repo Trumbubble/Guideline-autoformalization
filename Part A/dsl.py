@@ -78,10 +78,23 @@ class VarDef:
 
 @dataclass(frozen=True)
 class EventDef:
-    """A datable clinical event, referred to by Since()."""
+    """A datable clinical event, referred to by Since() or a Delta baseline.
+
+    `unbound` marks an anchor the SENTENCE names but the terminology does not
+    hold -- "at start LRD", "pre-operatively". Without it the only events on
+    offer were the drug bindings themselves, so "reduce basal insulin by 50% at
+    start LRD" could only anchor the dose change to *being on basal insulin*:
+    circular, satisfiable by any dose, and it typechecked. The anchor became a
+    plain boolean hole instead, which the DSL cannot measure from.
+
+    This is the same discipline as an unbound variable, and the CQL lowering
+    already ends in the same place -- a named null with a comment telling the
+    site which query to bind. It is not a new node in the language: the DSL is
+    frozen, and this is a property of a declaration."""
     name: str
     description: str = ""
     binding: str | None = None
+    unbound: bool = False
 
 class Registry:
     """The closed vocabulary. Generation is constrained to these names."""
@@ -422,7 +435,7 @@ def validate(expr: Expr, reg: Registry, path: str = "when") -> list[Issue]:
                              f"{expr.baseline!r}, which is the same concept",
                              "the baseline must be a distinct clinical event "
                              "(the anchor the sentence names), not the drug "
-                             "whose dose is changing", severity="warn"))
+                             "whose dose is changing"))
         if expr.direction not in {"reduce", "increase"}:
             out.append(Issue(path, "TYPE_ERROR",
                              f"direction must be reduce|increase, got "
@@ -438,6 +451,15 @@ def validate(expr: Expr, reg: Registry, path: str = "when") -> list[Issue]:
             out.append(Issue(path, "EMPTY_INTERVAL",
                              f"hi_pct {expr.hi_pct} is below lo_pct {expr.lo_pct}"))
     elif isinstance(expr, Since):
+        if reg.has_event(expr.event) and reg.event(expr.event).unbound:
+            # A Delta baseline lowers to a named null, so an unbound anchor is
+            # honest there. `Since` lowers to a FHIR retrieve, which needs a
+            # code; against an unbound event it would silently match nothing
+            # and the window would read as "never happened".
+            out.append(Issue(path, "UNBOUND_EVENT",
+                             f"{expr.event!r} has no terminology binding, so a "
+                             f"time window cannot be measured against it",
+                             "a Since window needs a coded, datable event"))
         if not reg.has_event(expr.event):
             out.append(Issue(path, "UNKNOWN_EVENT",
                              f"{expr.event!r} is not a registered event",
@@ -723,6 +745,135 @@ def hole_defs(reg: Registry, holes: Iterable[str],
     derived = {baseline_var(v, e) for v, e in delta_baselines(rule)} if rule else set()
     return [VarDef(h, "bool", None, h, unbound=True)
             for h in holes if h not in reg and h not in derived]
+
+# ---------------------------------------------------------------- English
+# A rule is delivered to a governance committee, not to a compiler. Nobody
+# adjudicates `{"kind":"cmp","var":"egfr_ml_min_1_73m2","op":"<","value":30}`,
+# and nobody reads CQL either -- so the artifact that gets reviewed has to say
+# what the rule MEANS, next to the sentence it came from. That comparison is
+# the actual unit of clinical review, and it is the only way a reader can tell
+# a faithful encoding from one that typechecks.
+
+_OP_WORDS = {"<": "is below", "<=": "is at most", ">": "is above",
+             ">=": "is at least", "==": "equals", "!=": "is not"}
+
+def _term(var: str, reg: Registry) -> str:
+    """The description if the registry has one -- that is the clinician-facing
+    label the binding carried -- otherwise the variable name unmangled."""
+    if var in reg and reg[var].description:
+        return reg[var].description
+    return var.replace("_", " ")
+
+def _event_term(event: str, reg: Registry) -> str:
+    if reg.has_event(event) and reg.event(event).description:
+        return reg.event(event).description
+    return event.replace("_", " ")
+
+def to_english(e: Expr, reg: Registry) -> str:
+    """One expression as a readable clause."""
+    if isinstance(e, Cmp):
+        term = _term(e.var, reg)
+        unit = f" {reg[e.var].unit}" if e.var in reg and reg[e.var].unit else ""
+        if isinstance(e.value, bool):
+            # A boolean is a presence claim, not a comparison. "on_warfarin
+            # equals true" is not English; "the patient is on warfarin" is.
+            yes = (e.op == "==") == bool(e.value)
+            return f"{term}" if yes else f"NOT {term}"
+        return f"{term} {_OP_WORDS.get(e.op, e.op)} {e.value}{unit}"
+    if isinstance(e, Between):
+        unit = f" {reg[e.var].unit}" if e.var in reg and reg[e.var].unit else ""
+        lo = "" if e.lo_inclusive else " (exclusive)"
+        hi = "" if e.hi_inclusive else " (exclusive)"
+        return (f"{_term(e.var, reg)} is between {e.lo}{unit}{lo} "
+                f"and {e.hi}{unit}{hi}")
+    if isinstance(e, Since):
+        return (f"{_event_term(e.event, reg)} happened within the last "
+                f"{e.days} day{'s' if e.days != 1 else ''}")
+    if isinstance(e, Delta):
+        pct = f"{e.lo_pct:.0%}"
+        span = f"{e.lo_pct:.0%}-{e.hi_pct:.0%}" if e.hi_pct is not None else pct
+        word = "reduced by" if e.direction == "reduce" else "increased by"
+        return (f"{_term(e.var, reg)} is {word} at least {span} "
+                f"from its value at {_event_term(e.baseline, reg)}")
+    if isinstance(e, Not):
+        return f"NOT ({to_english(e.operand, reg)})"
+    if isinstance(e, (And, Or)):
+        joiner = " AND " if isinstance(e, And) else " OR "
+        parts = [to_english(o, reg) for o in e.operands]
+        return joiner.join(f"({p})" if " AND " in p or " OR " in p else p
+                           for p in parts)
+    return str(e)
+
+# GRADE-style wording, as guidelines actually write it. `strength` is free
+# text from the source, so this matches rather than enumerates.
+_WEAK = re.compile(r"\b(weak|conditional|suggest\w*|option\w*|discretionar\w+)\b", re.I)
+_STRONG = re.compile(r"\bstrong\b", re.I)
+
+def deontic_force(rule: Rule) -> str:
+    """How firmly the rule binds, in words.
+
+    A "weak recommendation against finerenone" rendered as "THEN must: NOT
+    finerenone" overstates the guideline, and overstating a recommendation to a
+    governance committee is the specific harm this project exists to avoid. The
+    DSL's `deontic` field separates obligation from permission; GRADE strength
+    is a second axis and the source states it in prose, so both are read."""
+    if rule.deontic == "permission":
+        return "may"
+    text = rule.strength or ""
+    if _WEAK.search(text):
+        return "should (weak recommendation)"
+    if _STRONG.search(text):
+        return "must (strong recommendation)"
+    return "must"
+
+_LOGIC_OP = {"<": "<", "<=": "\u2264", ">": ">", ">=": "\u2265",
+             "==": "=", "!=": "\u2260"}
+
+def to_logic(e: Expr) -> str:
+    """The expression in symbolic form, over VARIABLE NAMES.
+
+    The English gloss reads the registry's descriptions, which is right for a
+    clinician but hides which variable -- and so which terminology code -- a
+    clause actually stands on. Two variables can share a description. This is
+    the layer a reviewer checks the bindings against, and it sits between the
+    English and the CQL rather than replacing either."""
+    if isinstance(e, Cmp):
+        val = ("true" if e.value is True else "false" if e.value is False
+               else e.value)
+        return f"{e.var} {_LOGIC_OP.get(e.op, e.op)} {val}"
+    if isinstance(e, Between):
+        lo = "\u2264" if e.lo_inclusive else "<"
+        hi = "\u2264" if e.hi_inclusive else "<"
+        return f"{e.lo} {lo} {e.var} {hi} {e.hi}"
+    if isinstance(e, Since):
+        op = "\u2264" if e.inclusive else "<"
+        return f"since({e.event}) {op} {e.days}d"
+    if isinstance(e, Delta):
+        sign = "\u2212" if e.direction == "reduce" else "+"
+        span = (f"{e.lo_pct:.0%}\u2013{e.hi_pct:.0%}" if e.hi_pct is not None
+                else f"{e.lo_pct:.0%}")
+        return f"\u0394{e.var} {sign}{span} vs {e.var}@{e.baseline}"
+    if isinstance(e, Not):
+        inner = to_logic(e.operand)
+        return f"\u00ac({inner})" if not isinstance(e.operand, (Cmp, Between, Since, Delta)) \
+            else f"\u00ac{inner}"
+    if isinstance(e, (And, Or)):
+        joiner = " \u2227 " if isinstance(e, And) else " \u2228 "
+        parts = []
+        for o in e.operands:
+            t = to_logic(o)
+            parts.append(f"({t})" if isinstance(o, (And, Or)) else t)
+        return joiner.join(parts)
+    return str(e)
+
+def rule_to_logic(rule: Rule) -> str:
+    """phi = when -> then, which is exactly what the solver is given."""
+    return f"{to_logic(rule.when)}\n    \u2192  {to_logic(rule.then)}"
+
+def rule_to_english(rule: Rule, reg: Registry) -> str:
+    """The whole rule as one sentence a clinician can adjudicate."""
+    return (f"IF {to_english(rule.when, reg)}\n"
+            f"THEN {deontic_force(rule)}: {to_english(rule.then, reg)}")
 
 def validate_rule(rule: Rule, reg: Registry) -> list[Issue]:
     issues = validate(rule.when, reg, "when") + validate(rule.then, reg, "then")
@@ -1399,10 +1550,12 @@ def vardef_from_dict(d: dict) -> VarDef:
                   bool(d.get("unbound", False)))
 
 def eventdef_to_dict(e: EventDef) -> dict:
-    return {"name": e.name, "description": e.description, "binding": e.binding}
+    return {"name": e.name, "description": e.description, "binding": e.binding,
+            "unbound": e.unbound}
 
 def eventdef_from_dict(d: dict) -> EventDef:
-    return EventDef(d["name"], d.get("description", ""), d.get("binding"))
+    return EventDef(d["name"], d.get("description", ""), d.get("binding"),
+                    bool(d.get("unbound", False)))
 
 def registry_to_dict(reg: Registry) -> dict:
     return {"variables": [vardef_to_dict(reg[n]) for n in reg.names()],
@@ -1415,7 +1568,8 @@ def registry_from_dict(d: dict) -> Registry:
 BUNDLE_VERSION = "1"
 
 def bundle_to_dict(reg: Registry, rules: Iterable[Rule],
-                   refusals: Iterable[Refusal] = ()) -> dict:
+                   refusals: Iterable[Refusal] = (),
+                   findings: Iterable[dict] = ()) -> dict:
     """Everything a consumer needs: the vocabulary, the rules over it, and the
     statements that were refused. The refusals travel WITH the rules on
     purpose -- a consumer that sees only what compiled cannot report the
@@ -1431,6 +1585,16 @@ def bundle_to_dict(reg: Registry, rules: Iterable[Rule],
            "refusals": [to_dict(r) for r in refusals]}
     if alias:
         out["merged_concepts"] = alias
+    # Per-statement findings: the decision, the holes, and the EVIDENCE.
+    # Additive and optional, so an older consumer ignores it. It exists because
+    # a rule's cautions -- a dropped threshold, a circular baseline, a bound
+    # concept the rule never used -- were printed to a terminal and then lost,
+    # while the bundle carried evidence for REFUSALS only. A committee reading
+    # the artifact therefore saw a clean rule and no trace of the checks that
+    # had flagged it. The findings are the reviewable half of the deliverable.
+    fnd = list(findings)
+    if fnd:
+        out["findings"] = fnd
     return out
 
 def bundle_from_dict(d: dict) -> tuple[Registry, list[Rule], list[Refusal]]:
@@ -1442,9 +1606,11 @@ def bundle_from_dict(d: dict) -> tuple[Registry, list[Rule], list[Refusal]]:
     return reg, rules, refusals
 
 def write_bundle(path: str, reg: Registry, rules: Iterable[Rule],
-                 refusals: Iterable[Refusal] = (), **kw) -> None:
+                 refusals: Iterable[Refusal] = (),
+                 findings: Iterable[dict] = (), **kw) -> None:
     with open(path, "w", encoding="utf-8") as fh:
-        json.dump(bundle_to_dict(reg, rules, refusals), fh, indent=1, **kw)
+        json.dump(bundle_to_dict(reg, rules, refusals, findings), fh,
+                  indent=1, **kw)
 
 def read_bundle(path: str) -> tuple[Registry, list[Rule], list[Refusal]]:
     with open(path, encoding="utf-8") as fh:

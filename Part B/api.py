@@ -4,7 +4,7 @@ counterexample is minimized."""
 
 from pathlib import Path
 
-from flask import Flask, jsonify, request, send_from_directory
+from flask import Flask, Response, jsonify, request, send_from_directory
 from z3 import Not, Solver, is_bool, is_int, sat, unsat
 
 import guidelines
@@ -313,6 +313,74 @@ def guideline_residue(guideline_id):
     from from_dsl import residue_report
 
     return jsonify(residue_report(refusals))
+
+
+def _fixture_finding(r) -> dict:
+    """A hand-written fixture rule in the report's shape.
+
+    These carry no dsl.Rule and no registry, so there is no English gloss and
+    no terminology column. They DO carry the z3 predicate, which is the logic
+    itself -- printing it is honest and is what a reader clicking "show the
+    logic" is asking for. The variables are listed with their sorts so the
+    formula can be read; the absence of codes is shown rather than hidden."""
+    holes = tuple(getattr(r, "holes", ()) or ())
+    rows = []
+    for name, ref in sorted(getattr(r, "var_refs", {}).items()):
+        rows.append({"name": name,
+                     "type": str(ref.sort()).lower().replace("real", "real"),
+                     "description": "",
+                     "binding": None,
+                     "unbound": name in holes})
+    return {"statement_id": r.rule_id,
+            "statement": getattr(r, "source_sentence", "") or r.title,
+            "decision": "partial" if holes else "encode",
+            "action": r.title,
+            "strength": getattr(r, "source", "") or None,
+            "open_holes": list(holes),
+            "logic": str(getattr(r, "predicate", "")) or None,
+            "variables": rows,
+            "evidence": []}
+
+
+@app.get("/guidelines/<guideline_id>/report")
+def guideline_report(guideline_id):
+    """The human-readable formalization report for a stored guideline.
+
+    The other routes serve JSON for the checker UI. This one serves the page a
+    clinician or a governance committee actually reads: every source sentence
+    beside the rule it became, the refusals with reasons in plain English, and
+    the checks that fired on rules that compiled anyway. Rendered on demand
+    from the stored bundle, so it can never drift from what is served."""
+    import json as _json
+
+    import report as _report
+
+    found = guidelines.get_guideline(guideline_id)
+    if found is None:
+        return jsonify({"error": f"unknown guideline {guideline_id!r}"}), 404
+    rules, refusals, _reg, entry = found
+
+    bundle_path = guidelines.STORE_DIR / f"{guideline_id}.json"
+    if bundle_path.exists():
+        with bundle_path.open(encoding="utf-8") as fh:
+            bundle = _json.load(fh)
+    else:
+        # The built-in fixture library has no stored bundle -- its rules are
+        # hand-written SpecClauses, not a Track A artifact. It is also the ONLY
+        # guideline on a fresh dashboard, so 404ing here made the report link
+        # broken for every first-time visitor. Render what these rules do
+        # carry: the source sentence, what the rule is for, and its holes.
+        # There is no registry, so no English clause -- the page says less
+        # rather than claiming more.
+        bundle = {"registry": {"variables": [{"name": n} for n in sorted(
+                      {v for r in rules for v in getattr(r, "var_refs", {})})]},
+                  "rules": [], "refusals": [],
+                  "findings": [_fixture_finding(r) for r in rules]}
+    html = _report.render(bundle,
+                          title=f"{entry.get('title', guideline_id)} "
+                                f"\u2014 formalization report",
+                          home_url="/")
+    return Response(html, mimetype="text/html")
 
 
 @app.post("/guidelines/<guideline_id>/check")

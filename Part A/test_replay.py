@@ -54,12 +54,22 @@ def replayed(request):
         index = bind.SqliteIndex(os.path.join(HERE, "terms.db"))
         out = []
         for sid, text in side["statements"]:
-            out.append(gate.triage(
-                text, index, statement_id=sid,
-                mention_llm=llm.propose_mentions, select_llm=llm.select_candidate,
-                formalize=lambda t, r: llm.formalize(t, r, effort="medium",
-                                                     abbrevs=side.get("abbrevs")),
-                source_span=text, doc_abbrevs=side.get("abbrevs")))
+            try:
+                out.append(gate.triage(
+                    text, index, statement_id=sid,
+                    mention_llm=llm.propose_mentions,
+                    select_llm=llm.select_candidate,
+                    formalize=lambda t, r: llm.formalize(
+                        t, r, effort="medium", abbrevs=side.get("abbrevs")),
+                    source_span=text, doc_abbrevs=side.get("abbrevs")))
+            except cassette.CassetteMiss as miss:
+                # SKIP, never pass. The prompt this code now sends is not the
+                # prompt that was taped -- usually because the registry or the
+                # instructions changed -- so the tape cannot answer for it. A
+                # green run here would be a lie, and briefly was one: the miss
+                # was being caught upstream and returned as a refusal, so the
+                # harness reported success while replaying nothing.
+                pytest.skip(f"tape is stale, re-record with demo.py --live: {miss}")
         yield out
     finally:
         os.environ.clear(); os.environ.update(old)

@@ -1,0 +1,73 @@
+{
+ "doc": "PMC13131131",
+ "abbrevs": {
+  "UM": "Uveal melanoma",
+  "EU": "European Union",
+  "BAP1-TPDS": "BAP1 tumour predisposition syndrome",
+  "US": "ultrasound",
+  "FNA": "fine-needle aspiration",
+  "NGS": "next-generation sequencing",
+  "PD-L1": "programmed death-ligand 1",
+  "BAP1": "BRCA1-associated protein 1",
+  "HLA": "Human leukocyte antigen",
+  "AJCC": "American Joint Committee on Cancer",
+  "ICI": "immune checkpoint inhibitor",
+  "GEP": "gene expression profiling",
+  "MRI": "magnetic resonance imaging",
+  "PET": "positron emission tomography",
+  "CT": "computed tomography",
+  "RT": "radiotherapy",
+  "PBR": "proton beam RT",
+  "OS": "overall survival",
+  "LTC": "local tumour control",
+  "SRT": "Stereotactic RT",
+  "VEGF": "vascular endothelial growth factor",
+  "TTT": "Transpupillary thermotherapy",
+  "MFS": "metastasis-free survival",
+  "FDG": "fluorodeoxyglucose",
+  "PS": "performance status",
+  "MTB": "molecular tumour board",
+  "UMLMs": "UM liver metastases",
+  "PFS": "progression-free survival",
+  "PHP": "Percutaneous hepatic perfusion",
+  "ChT": "chemotherapy",
+  "BAC": "best alternative care",
+  "AEs": "adverse events",
+  "ORR": "overall response rate",
+  "FDA": "Food and Drug Administration",
+  "IHP": "Isolated hepatic perfusion",
+  "TRAEs": "treatment-related AEs",
+  "HAI": "hepatic arterial infusion",
+  "TACE": "Transarterial chemoembolisation",
+  "TARE": "transarterial radioembolisation",
+  "PD-1": "programmed cell death protein 1",
+  "ctDNA": "circulating tumour DNA",
+  "EMA": "European Medicines Agency",
+  "QoL": "quality of life",
+  "PPV": "positive predictive value",
+  "EORTC": "European Organisation for Research and Treatment of Cancer",
+  "CPG": "Clinical Practice Guideline"
+ },
+ "statements": [
+  [
+   "PMC13131131:0065",
+   "In low-risk patients, liver US every 6-12 months for \u22655 years is recommended; liver MRI should be scheduled if any suspicious finding is detected [III, A]."
+  ],
+  [
+   "PMC13131131:0052",
+   "For HLA-A\u221702:01-positive patients, tebentafusp should be standard of care in the first-line metastatic setting unless liver-directed treatment modalities are required first for tumour debulking [I, A; ESMO-Magnitude of Clinical Benefit (ESMO-MCBS) v2.0 score: 3]."
+  ],
+  [
+   "PMC13131131:0066",
+   "In high-risk patients, liver MRI is recommended every 4-6 months for \u226510 years [III, A]."
+  ],
+  [
+   "PMC13131131:0028",
+   "Patients should receive routine ophthalmologic examinations every 6 months for 2-5 years, then annually to allow for timely detection of any recurrences or complications [II, A]."
+  ],
+  [
+   "PMC13131131:0006",
+   "A biopsy is recommended if the clinical diagnosis is uncertain and if it has been discussed with the patient due to the potential risks of the procedure and the uncertainty of a conclusive result [II, A]."
+  ]
+ ]
+}

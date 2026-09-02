@@ -540,6 +540,12 @@ def head_noun(phrase: str) -> str | None:
 # with it. "CVAD" is a physical object to SNOMED, a procedure to a model, and a
 # patient state to a guideline. Searching the neighbouring kind costs one query
 # and recovers exactly the cases where the two disagree.
+# A candidate from the NEIGHBOURING hierarchy is worth proposing but must not
+# outrank one from the hierarchy actually asked for. Applied on both retrieval
+# paths -- the lexical one had it inline and the semantic one did not, which is
+# how a drug outranked the drug CLASS the sentence was talking about.
+FALLBACK_KIND_PENALTY = 0.5
+
 KIND_FALLBACK: dict[Kind, tuple[Kind, ...]] = {
     "procedure": ("condition",),
     "condition": ("procedure",),
@@ -625,16 +631,50 @@ def semantic_candidates(mention: Mention, k: int) -> list[Candidate]:
         ix = next((c for c in indices if c.available(kind)), None)
         if ix is None:
             continue
+        # The same penalty the lexical path applies. Without it a neighbouring
+        # kind outranks the RIGHT kind on raw cosine and evicts it: "basal
+        # insulin" put SNOMED `Insulin` (drug, 0.78) above ATC `Insulin,
+        # Long-Acting` (drug_class, 0.61) and filled all eight slots before the
+        # drug-CLASS concept -- the only candidate that actually denotes a
+        # class -- could appear. The selector then abstained, correctly, on
+        # three statements across one document, and bound on the two where the
+        # model happened to guess the synonym "long-acting insulin" itself.
+        penalty = 0.0 if kind == mention.kind else FALLBACK_KIND_PENALTY
         for q in queries:
             try:
                 hits = ix.search(q, kind, k)
             except _sem.SemanticUnavailable:
                 continue
             for code, system, term, sim in hits:
+                why = (f"semantic({sim:.2f})",)
+                if penalty:
+                    why += (f"kind_fallback:{kind}",)
                 out.append(Candidate(
                     Concept(system=system, code=code, term=term, kind=kind),
-                    round(float(sim), 3), (f"semantic({sim:.2f})",)))
+                    round(float(sim) - penalty, 3), why))
     return _dedupe_candidates(sorted(out, key=lambda c: -c.score))[:k]
+
+_GENERIC_STEMS = frozenset(_stems(" ".join(sorted(_GENERIC_HEADS))))
+
+def strip_generic_modifiers(phrase: str) -> str | None:
+    """The phrase with category words like "regimen" or "protocol" removed.
+
+    BM25 rewards a RARE token, and a clinically empty one can be very rare:
+    "regimens" occurs in 6 concepts in this index, "insulin" in 1,638. So
+    "Basal insulin regimen" retrieved *Transfeminine Regimens, All*,
+    *Transmasculine Regimens, All* and nothing else -- the whole candidate list
+    decided by the one word that carries no clinical meaning, while the drug it
+    is about was never even proposed.
+
+    `_GENERIC_HEADS` already names these words; it was only consulted for the
+    head-noun BACKOFF, so it could not help when the noise word sat in the
+    primary query. Returns None when stripping would leave nothing, or change
+    nothing."""
+    toks = _tokens(phrase)
+    kept = [t for t in toks if t not in _GENERIC_HEADS]
+    if not kept or len(kept) == len(toks):
+        return None
+    return " ".join(kept)
 
 def search_all(index: TerminologyIndex, mention: Mention, k: int,
                doc_abbrevs: dict[str, str] | None = None) -> list[Candidate]:
@@ -647,6 +687,13 @@ def search_all(index: TerminologyIndex, mention: Mention, k: int,
         bare = normalise_query(mention.canonical)
         if bare and bare not in queries:
             queries.append(bare)
+    # Union, so the unstripped phrase still gets its chance: "insulin pump"
+    # would lose nothing here, but a phrase whose head really is the concept
+    # must not be silently rewritten away.
+    for q in list(queries):
+        bare = strip_generic_modifiers(q)
+        if bare and bare.lower() not in {x.lower() for x in queries}:
+            queries.append(bare)
     for q in queries:
         found.extend(index.search(q, mention.kind, k=k))
     # Always search the neighbouring kind, not only when the chosen one comes up
@@ -656,7 +703,7 @@ def search_all(index: TerminologyIndex, mention: Mention, k: int,
     # which can see the sentence, decides.
     for alt in KIND_FALLBACK.get(mention.kind, ()):
         for q in queries:
-            found.extend(replace(c, score=c.score - 0.5,
+            found.extend(replace(c, score=c.score - FALLBACK_KIND_PENALTY,
                                  why=c.why + (f"kind_fallback:{alt}",))
                          for c in index.search(q, alt, k=k))
 
@@ -670,8 +717,22 @@ def search_all(index: TerminologyIndex, mention: Mention, k: int,
     qtokens = set()
     for q in queries:
         qtokens |= set(_stems(q))
-    if qtokens:
-        found = [c for c in found if set(_stems(c.concept.term)) & qtokens]
+    # CONTENT tokens only. Overlap on a category word is not overlap on a
+    # concept: "Basal insulin regimen" and "Transfeminine Regimens, All" share
+    # "regimen" and nothing else, and because BM25 rewards a rare token --
+    # "regimens" occurs in 6 concepts here, "insulin" in 1,638 -- the gender
+    # affirming value sets scored 14.5 against the insulins' 12.0 and took every
+    # slot. Three statements in one document refused on that, with the selector
+    # abstaining correctly each time because the drug was never proposed to it.
+    #
+    # Union across queries cannot fix it: BM25 scores from different queries
+    # are not comparable, so the noisier query simply wins. The fix has to be a
+    # FILTER, and this is the filter that already exists -- it was just counting
+    # a meaningless word as evidence of a match.
+    content = qtokens - _GENERIC_STEMS
+    keep = content or qtokens
+    if keep:
+        found = [c for c in found if set(_stems(c.concept.term)) & keep]
 
     # The token-overlap filter above is exactly what makes clinical synonymy
     # unreachable: "kidney function" and "Renal function" share no stem, so the
@@ -708,7 +769,15 @@ def search_all(index: TerminologyIndex, mention: Mention, k: int,
         # not exist; taking a fixed share of the list is honest about there
         # being two rankings.
         share = max(2, k // 3)
-        sem = semantic_candidates(mention, share)
+        # Ask for more than the share and spend it on candidates the lexical
+        # list does NOT already contain. Truncating to the share first wasted
+        # both reserved slots on duplicates -- for "Basal insulin regimen" the
+        # top two semantic hits were `Insulin Detemir` and `Insulin Glargine`,
+        # already retrieved lexically, so `Insulin, Long-Acting` at rank 3 --
+        # the only candidate in the whole index that denotes a drug CLASS, and
+        # the one the selector binds to when it sees it -- was cut. The slots
+        # exist to add information, so they are filled with information.
+        sem = semantic_candidates(mention, max(4 * share, k))
         if sem:
             # APPEND -- never evict. Reserving slots by truncating the lexical
             # list to `k - len(sem)` dropped a correct candidate sitting at
@@ -719,7 +788,7 @@ def search_all(index: TerminologyIndex, mention: Mention, k: int,
             # right answer to make room for a guess.
             seen = {(c.concept.system, c.concept.code) for c in found[:k]}
             extra = [c for c in sem
-                     if (c.concept.system, c.concept.code) not in seen]
+                     if (c.concept.system, c.concept.code) not in seen][:share]
             return found[:k] + extra
     return found[:k]
 

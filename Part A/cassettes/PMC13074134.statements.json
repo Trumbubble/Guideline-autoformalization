@@ -1,0 +1,35 @@
+{
+ "doc": "PMC13074134",
+ "abbrevs": {
+  "CPOC": "Centre for Perioperative Care",
+  "LRD": "liver reduction diet",
+  "JBDS\u2010IP": "Joint British Diabetes Societies for Inpatient Care",
+  "DKA": "diabetic ketoacidosis",
+  "MDT": "multi\u2010disciplinary team",
+  "SGLT2": "sodium glucose transporter\u20102",
+  "CGM": "continuous glucose monitoring",
+  "VRIII": "variable rate intravenous insulin regimen"
+ },
+ "statements": [
+  [
+   "PMC13074134:0010",
+   "Action: Reduce basal insulin by 50% at start LRD. May need optimisation Depending on the carbohydrate intake, consider holding fast\u2010acting mealtime insulin or reduce dose by 50% Consideration should be given to the overall glycaemic control and insulin requirements which govern dose adjustment to optimise glycaemic control"
+  ],
+  [
+   "PMC13074134:0018",
+   "Class of medication: Basal insulin regimen; (not exhaustive list): Abasaglar\u00ae (once or twice daily), Humulin\u2010I\u00ae (once or twice daily), Insulatard\u00ae (once or twice daily), Lantus\u00ae (once or twice daily), Levemir\u00ae (once or twice daily), Semglee\u00ae (once or twice daily), Toujeo\u00ae (once daily), Tresiba\u00ae (once daily); Action: Reduce dose by 35\u201350% of pre\u2010liver reduction diet (LRD) dose. Consider further reduction or discontinuation in those with type 2 diabetes. Consideration should be given to the individual's glycaemic control and insulin requirements which govern dose adjustment to optimise glycaemic control"
+  ],
+  [
+   "PMC13074134:0019",
+   "Class of medication: Premixed insulin regimen; (not exhaustive list): Humalog Mix 25\u00ae, Humalog Mix 50\u00ae, Humulin M3\u00ae, Novomix 30\u00ae; Action: Reduce dose by 35%\u201350% of pre\u2010LRD dose. Consider further reduction or discontinuation in those with type 2 diabetes. Consideration should be given to the individual's glycaemic control and insulin requirements which govern dose adjustment to optimise glycaemic control Consider switching to a once\u2010a\u2010day basal insulin to avoid potential hypoglycaemia risk"
+  ],
+  [
+   "PMC13074134:0020",
+   "Action: Reduce basal insulin dose by 35%\u201350% of pre\u2010LRD dose. Consider further reduction or discontinuation of fast\u2010acting mealtime insulin in those with type 2 diabetes. Consideration should be given to the individual's glycaemic control and insulin requirements which govern dose adjustment to optimise glycaemic control"
+  ],
+  [
+   "PMC13074134:0008",
+   "Class of medication: Basal insulin regimens; (not exhaustive list): Abasaglar\u00ae (once or twice daily), Humulin\u2010I\u00ae (once or twice daily), Insulatard\u00ae (once or twice daily), Lantus\u00ae (once or twice daily), Levemir\u00ae (once or twice daily), Semglee\u00ae (once or twice daily), Toujeo\u00ae (once daily), Tresiba\u00ae (once daily); Action: Reduce the total daily insulin dose by 50% at start LRD. May need optimisation Consideration should be given to the overall glycaemic control and insulin requirements which govern dose adjustment to optimise glycaemic control"
+  ]
+ ]
+}
