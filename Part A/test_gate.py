@@ -439,6 +439,58 @@ def test_a_vacuous_encoding_is_refused_not_shipped():
     assert t.decision == "refuse"
     assert "VACUOUS_RULE" in codes(t)
 
+def test_grammar_too_large_shrinks_the_registry_and_retries():
+    """llm.formalize() already steps decode DEPTH down to 0 before raising
+    GrammarTooLarge -- if it still fails, the REGISTRY itself is too big, not
+    the depth. One shrink-and-retry (drop half the holes/events, keep every
+    bound var) should turn what used to be a hard `beyond_dsl` failure into a
+    smaller but sound encoding."""
+    calls = []
+    def formalize(text, reg):
+        calls.append(reg)
+        if len(calls) == 1:
+            raise RuntimeError(f"registry of {len(reg.names())} variables "
+                               f"will not compile at any depth")
+        return _rule({"kind": "cmp", "var": "on_ace_inhibitor", "op": "==", "value": True},
+                     {"kind": "cmp", "var": "on_ace_inhibitor", "op": "==", "value": True})
+    reg = dsl.Registry(
+        [dsl.VarDef("on_ace_inhibitor", "bool", None, "ACE inhibitor", role="action")] +
+        [dsl.VarDef(f"hole_{i}", "bool", None, f"hole {i}", unbound=True) for i in range(6)],
+        [dsl.EventDef("on_ace_inhibitor")])
+    result = gate._attempt(S_OK, reg, formalize, "s", None, "s")
+    assert len(calls) == 2, "should retry exactly once after the shrink"
+    assert isinstance(result, dsl.Rule)
+    second_reg = calls[1]
+    assert len(second_reg.names()) < len(reg.names())
+    assert "on_ace_inhibitor" in second_reg.names(), "bound var must survive the shrink"
+
+def test_grammar_too_large_gives_up_cleanly_when_nothing_left_to_shrink():
+    """A registry with no holes and no events can't be shrunk further -- must
+    not retry with an IDENTICAL registry and loop, must refuse cleanly."""
+    calls = []
+    def formalize(text, reg):
+        calls.append(reg)
+        raise RuntimeError(f"registry of {len(reg.names())} variables "
+                           f"will not compile at any depth")
+    reg = dsl.Registry([dsl.VarDef("on_ace_inhibitor", "bool", None, "ACE inhibitor",
+                                   role="action")])
+    result = gate._attempt(S_OK, reg, formalize, "s", None, "s")
+    assert len(calls) == 1, "nothing to shrink, must not retry"
+    assert isinstance(result, dsl.Refusal)
+    assert result.reason_code == "beyond_dsl"
+
+def test_a_refusal_after_binding_still_reports_not_patient_level():
+    """is_patient_level was only consulted in the nothing-bound branch
+    (see test_an_empty_binding_is_never_labelled_not_patient_level_by_guess);
+    once something binds -- S_OK binds real concepts -- formalize()'s own
+    self-declared code used to win even when the caller already knows this
+    is a system/service statement, not a patient one."""
+    f = lambda text, reg: _refusal("vague_predicate", "x")
+    t = triage(S_OK, IX, formalize=f, is_patient_level=False,
+              statement_id="s", source_span=S_OK)
+    assert t.decision == "refuse"
+    assert t.reason_code == "not_patient_level", t.reason_code
+
 
 # ------------------------------------- the registry the rule was written against
 
@@ -600,6 +652,22 @@ def test_the_dose_cue_needs_a_verb_and_a_quantity():
                            ("Increase the dose gradually.", True),
                            ("Reduce the risk of stroke.", False),
                            ("The dose was 5 mg.", False)]:
+        got = bool(gate.dose_companions(bs, text))
+        assert got is expected, (text, got)
+
+def test_a_range_after_an_event_is_not_a_dose():
+    """'wait 6-12 weeks AFTER placement' is a window relative to a prior
+    event (Since's domain), not a quantity of the bound action itself
+    (Delta/Between's domain) -- PMC13169229's replacement-timing statement
+    declared a nonsensical `..._dose` companion on a statement with no dose
+    in it at all, before this fix."""
+    bs, _ = bind.bind_statement(S_OK, IX)
+    for text, expected in [
+            ("Wait 6-12 weeks after placement before replacement.", False),
+            ("Wait 6-12 weeks before the next visit.", False),
+            ("Reassess 2-4 weeks following discharge.", False),
+            ("Engaging in 150-240 min of aerobic exercise per week is recommended.", True),
+    ]:
         got = bool(gate.dose_companions(bs, text))
         assert got is expected, (text, got)
 

@@ -666,7 +666,10 @@ def classify(block: Block, score: float, feats: tuple,
         v["reason"] = f"llm error, fell back to heuristic: {exc}"
         return v, "heuristic:llm_error"
     quote = (v.get("quote") or "").strip()
-    if not quote or quote not in block.source_text:
+    # A model that correctly says "not a recommendation" has nothing to
+    # quote, and returns "" -- that's a valid answer, not a failure to
+    # produce one. Only a claimed recommendation needs its quote verified.
+    if v.get("is_recommendation") and (not quote or quote not in block.source_text):
         v = _heuristic_verdict(block, score, feats)
         v["reason"] = "llm quote was not verbatim; fell back to heuristic"
         return v, "heuristic:quote_rejected"

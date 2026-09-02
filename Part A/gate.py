@@ -361,9 +361,22 @@ def anchor_events(holes) -> list:
 # test_the_dose_cue_needs_a_verb_and_a_quantity). Catches statements like
 # "engaging in 150-240 min of aerobic exercise per week", which have no
 # change verb for `_DOSE_CHANGE` to match at all.
+#
+# But "wait 6-12 weeks AFTER BGT placement" is the same regex shape with a
+# different meaning: a window relative to a prior EVENT (Since's domain),
+# not a quantity of the bound action itself (Delta/Between's domain, which
+# is what this companion variable exists to feed). Measured on
+# PMC13169229's replacement-timing statement -- it declared `bgt_dose`,
+# `bgt_placement_dose` on a statement with no dose anywhere in it, purely
+# because "weeks" is an accepted unit and nothing distinguished "6-12 weeks
+# of X" from "6-12 weeks after X". The lookahead excludes the latter shape;
+# checked against every gold.csv statement, none currently rely on a range
+# immediately followed by one of these words, so this is a pure precision
+# gain, not a measured tradeoff.
 _QUANTITY_RANGE = re.compile(
     r"\d+(?:\.\d+)?\s*(?:-|–|\bto\b)\s*\d+(?:\.\d+)?\s*"
-    r"(min(?:ute)?s?|hours?|days?|weeks?|mg|kg|mmHg|mmol\S*|%|units?|MET-?min\w*)\b",
+    r"(min(?:ute)?s?|hours?|days?|weeks?|mg|kg|mmHg|mmol\S*|%|units?|MET-?min\w*)\b"
+    r"(?!\s*(?:after|before|following|post|prior\s+to)\b)",
     re.I)
 
 def dose_companions(bindings, statement: str) -> list:
@@ -691,7 +704,16 @@ def triage(statement: str, index, *, statement_id: str = "s",
     # A VACUOUS_RULE means no non-vacuous obligation could be extracted; that
     # is reported as `beyond_dsl` with the vacuity named in the evidence, so a
     # governance reader is never told a rule certifies patients when it cannot.
-    if "MODAL_PREDICATE" in blocked_codes:
+    #
+    # `is_patient_level` outranks all of that. It was only ever consulted in
+    # the nothing-bound branch above -- the moment ANY concept binds, this
+    # known fact got dropped and whatever formalize() self-declared (e.g.
+    # `vague_predicate`) won instead, even though "not about an individual
+    # patient at all" is the more fundamental reason the statement can't
+    # become a Track-B rule, no matter what else also went wrong encoding it.
+    if is_patient_level is False:
+        code = "not_patient_level"
+    elif "MODAL_PREDICATE" in blocked_codes:
         code = "defeasible"
     elif "VACUOUS_RULE" in blocked_codes:
         code = "beyond_dsl"
@@ -724,6 +746,22 @@ def _attempt_k(statement, reg, formalize, sid, page, span, k):
                    for _ in range(k)]
         return [f.result() for f in futures]
 
+def _shrink_registry(reg: dsl.Registry) -> dsl.Registry:
+    """Halve the unbound holes and the events, keep every BOUND var untouched.
+
+    A bound var is the statement's actual substance -- dropping one silently
+    omits a real concept, the exact failure `DROPPED_CONCEPT_RISK` exists to
+    catch. Holes and events are supplementary structure the grammar can
+    afford to lose first, and a smaller-but-sound encoding beats losing the
+    statement outright."""
+    holes = reg.unbound()
+    bound = [n for n in reg.names() if n not in holes]
+    kept_holes = holes[:len(holes) // 2]
+    events = reg.event_names()
+    kept_events = events[:len(events) // 2]
+    return dsl.Registry([reg[n] for n in bound + kept_holes],
+                        [reg.event(e) for e in kept_events])
+
 def _attempt(statement, reg, formalize, sid, page, span):
     try:
         obj = dsl.from_decoded(formalize(statement, reg))
@@ -734,13 +772,31 @@ def _attempt(statement, reg, formalize, sid, page, span):
         # while every single call was missing.
         raise
     except Exception as exc:
-        # Kept broad on purpose -- one transient API error should not lose a
-        # whole document -- but LABELLED. This used to read "beyond_dsl:
-        # encoding attempt failed", which is indistinguishable from the DSL
-        # genuinely lacking a construct, so an auth failure, a rate limit or a
-        # malformed JSON body all inflated the formalizability residue with our
-        # own outages. That number is a headline result; it cannot quietly
-        # include our downtime.
+        # `formalize()` already steps the decode DEPTH down to 0 before
+        # raising `GrammarTooLarge` -- if it still fails, the REGISTRY itself
+        # is too big, not the depth. Recognized by message, not by class:
+        # gate.py stays decoupled from llm.py so it can be tested offline
+        # with a fake `formalize` and no model. One shrink-and-retry.
+        #
+        # Both give-ups below are LABELLED, not the plain "beyond_dsl:
+        # encoding attempt failed" this used to read. That message is
+        # indistinguishable from the DSL genuinely lacking a construct, so an
+        # auth failure, a rate limit or a malformed JSON body all inflated the
+        # formalizability residue with our own outages. That number is a
+        # headline result; it cannot quietly include our downtime.
+        if "will not compile at any depth" in str(exc):
+            shrunk = _shrink_registry(reg)
+            if shrunk.names() != reg.names() or shrunk.event_names() != reg.event_names():
+                try:
+                    obj = dsl.from_decoded(formalize(statement, shrunk))
+                except Exception as exc2:
+                    return dsl.Refusal(sid, "beyond_dsl",
+                                       f"ENCODER FAILURE (ours, not the guideline's): "
+                                       f"encoding attempt failed after registry shrink: "
+                                       f"{type(exc2).__name__}: {exc2}")
+                if isinstance(obj, dsl.Rule):
+                    return replace(obj, rule_id=sid, source_page=page, source_span=span)
+                return obj
         return dsl.Refusal(sid, "beyond_dsl",
                            f"ENCODER FAILURE (ours, not the guideline's): "
                            f"{type(exc).__name__}: {exc}")
