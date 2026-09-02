@@ -822,6 +822,30 @@ $1{,}472$ returned \textsc{may-violate}:
 \end{tabular}
 \end{center}
 
+\paragraph{What the core claims, and what it does not.}
+The claim is one-directional and worth stating carefully, because the natural
+misreading is a stronger and false one. Because the check leaves every
+non-core variable unconstrained, unsatisfiability quantifies over all their
+completions: if the core's values hold, the violation is certain \emph{whatever
+the unmeasured variables turn out to be}. On one measured instance the rule
+$(\textsf{on\_acei} \wedge \textsf{has\_ckd}) \rightarrow$ \emph{potassium
+checked within 14 days} left four variables unstated and produced a core of
+three (a gap of $125$ days, and both antecedent conjuncts true); the fourth,
+whether a check occurred at all, remains free, and the result is unsatisfiable
+for both of its values, because no occurrence flag rescues a $125$-day gap.
+
+What the core is not is a measurement plan. It is a sufficient condition for
+\emph{one} outcome: values that guarantee a violation. A reader who measures
+those variables and finds different values has learned nothing conclusive --- the
+verdict may remain undetermined, and a variable outside the core may then be the
+one that decides it. Answering ``what should be measured next'' is a different
+question, requiring a sweep over which observations most reduce uncertainty,
+which we do not attempt. Nor is the core unique: it is extracted from a single
+witness, and a different witness may yield a different, possibly disjoint, set
+of values that force a violation by another route. The output is therefore
+\emph{an} explanation of how the rule could be broken, not \emph{the}
+explanation, and not a recommendation.
+
 \paragraph{The core cannot collapse to one.}
 For the assumptions to make $\mathcal{D} \wedge P \wedge \Phi_R$ unsatisfiable
 they must force $\Phi_R$ false, which requires the antecedent true \emph{and}

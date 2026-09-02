@@ -19,10 +19,15 @@ $\Phi_R = \llbracket \mathit{when} \rrbracket \rightarrow
           \llbracket \mathit{then} \rrbracket$
 over a signature of typed variables. $\mathcal{D}$ is the domain theory
 (plausible physiological ranges, code membership, $0 \le \mathsf{dse}_e \le H$,
-baseline positivity). A patient record is a \emph{partial} assignment $P$;
-symbols it does not pin remain free, so $\mathcal{D} \wedge P$ denotes the set
-of \emph{completions} of the record. Write $\mathrm{Vars}(\Phi)$ for the symbols
-occurring in $\Phi$.
+baseline positivity). A patient record is a \emph{partial} assignment $P$: it pins the values the
+record supplies and leaves every other symbol free, either because nothing
+measured it or because it is an undefined predicate no data source can supply.
+A \emph{completion} of the record is a model of $\mathcal{D} \wedge P$ --- one
+consistent way of filling in everything the record left open. A record therefore
+does not describe one patient but the set of patients compatible with it, and
+the three verdicts below are statements about that whole set: every completion
+violates, none does, or the record does not settle the question. Write
+$\mathrm{Vars}(\Phi)$ for the symbols occurring in $\Phi$.
 
 \[
 \mathrm{verdict}(R,P) =
