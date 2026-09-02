@@ -244,3 +244,6 @@ Part A/semantic/
 paper.zip
 .DS_Store
 Formatting_Instructions_For_NeurIPS_2026/
+
+# ablation output
+Part B/tests/ablation.csv
