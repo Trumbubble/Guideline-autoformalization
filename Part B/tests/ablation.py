@@ -159,7 +159,11 @@ def sample_plans(rule, domain, n: int, rng: random.Random) -> list[dict]:
     rule really is broken.  Rates below are therefore rates over a sample
     ENRICHED for disagreement, not over an arbitrary patient population, and
     the paper must say so."""
-    names = list(rule.var_refs)
+    # SORTED, not list(): from_dsl builds var_refs from a set, so its key
+    # order varies between processes with Python's hash randomisation. Left
+    # unsorted, the same --seed gave different counts run to run (103 vs 104
+    # pairs), which would make the paper's numbers unreproducible.
+    names = sorted(rule.var_refs)
     if not names:
         return []
 
