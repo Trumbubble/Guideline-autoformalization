@@ -1,10 +1,15 @@
 %==============================================================================
-%  \input{experiments} from main.tex, in place of the placeholder Section 5.
+%  \input{experiments} from main.tex, in place of Section 5.
 %
-%  This is the ELABORATE version -- more than 5 pages can hold.  Cut in this
-%  order: (1) Table~\ref{tab:holepos} to the appendix, (2) the per-row prose
-%  down to one sentence each, (3) merge the two result tables into one with a
-%  "generated / real" column pair.
+%  Measured over the GENERATED rule set only. The table over the system's own
+%  19 rules was cut: every one of its rows rested on between 2 and 6 rules, and
+%  it disagreed with this table in magnitude for reasons we could not isolate.
+%  The harness still produces it -- `python3 ablation.py --plans 50 --seed 0` --
+%  so it can be restored if the corpus grows.
+%
+%  This is the ELABORATE version. Cut in this order: (1) Table~\ref{tab:holepos}
+%  to the appendix, (2) the per-row prose down to one sentence each, (3) the
+%  robustness paragraph.
 %==============================================================================
 
 \section{What each design decision is worth}
@@ -28,7 +33,7 @@ disagree.\footnote{Under uniform sampling the deontic row measured $0.0\%$, not
 because the operator is inert but because no sampled record pinned a
 permission's antecedent true and its consequent false. Rates below are
 therefore over a sample enriched for disagreement, not over a patient
-population.} Runs are deterministic given a seed.
+population.} Runs are deterministic given a seed; see Appendix~\ref{app:repro}.
 
 \paragraph{The two directions, stated exactly.}
 Verdicts are \textsc{must-violate}, \textsc{certified-compliant} and
@@ -49,8 +54,7 @@ permission lattice has no accusing state, so reporting that a patient may have
 deviated is already the harm. Transitions within a lattice
 (\textsc{option-available} to \textsc{option-not-taken}) and losses of
 certainty in the safe direction (\textsc{must-violate} to
-\textsc{may-violate}) are recorded but not counted in either column; the full
-transition matrix is in the appendix.
+\textsc{may-violate}) are recorded but not counted in either column.
 
 \paragraph{On ground truth.}
 The comparison is differential --- the same rules and records under two
@@ -65,64 +69,43 @@ free asserts nothing. For the deontic row it rests on a human judgement --- that
 the sentence expresses a permission --- which is exactly the labelling this
 system cannot avoid needing.
 
-\subsection{Two samples}
+\subsection{The rule set}
 
-Reported over two rule sets, because each answers a question the other cannot.
+The rules are generated, and deliberately so. Measured over the rules the
+system happens to have produced, each row would rest on between $2$ and $6$
+rules --- not a sample but an accident of which guidelines are open access. We
+therefore enumerate the space the language can express: undefined predicate in
+the antecedent, in the consequent, or absent; obligation or permission; numeric
+threshold, boolean, time window, or relative change; one atom, two under
+conjunction, or two under disjunction. Two instances per cell over $72$ cells
+gives $144$ rules.
 
-The \textbf{generated set} enumerates the expressible space: undefined
-predicate in the antecedent, in the consequent, or absent; obligation or
-permission; numeric threshold, boolean, time window, or relative change; one
-atom, two under conjunction, or two under disjunction. Two instances per cell
-over $72$ cells gives $144$ rules, every one of which is admitted by the same
-validator and non-degeneracy check the pipeline applies --- no candidate was
-rejected. This set says what a guard is worth \emph{when it applies}, with
-enough rules per row to be quotable.
-
-The \textbf{existing rules} are the $19$ the system already had, and they are
-two different things: $10$ hand-authored directly against the DSL as checker
-fixtures, and $9$ produced by the pipeline from open-access guidelines. The
-distinction is not cosmetic, because the two halves populate disjoint rows.
-No hand-authored fixture carries an undefined predicate or is permissive, so
-the substitution rows and the deontic row draw entirely from the $6$ and $2$
-pipeline-derived rules respectively. The time-window row is mixed ($3$ fixtures
-and $2$ pipeline rules). Every row therefore rests on between $2$ and $19$
-rules, and Table~\ref{tab:real} names which, because a rate over $16$ pairs
-from $2$ rules and a rate over $382$ pairs from $19$ are not the same kind of
-number.
+Every generated rule is put through the same \texttt{validate\_rule} and
+non-degeneracy check the pipeline applies to a rule a model wrote, and no
+candidate was rejected --- so each is a rule the system would have accepted.
+The vocabulary is synthetic: a lab with a plausible range, patient facts, an
+action a care plan controls, a datable event, an undefined predicate. This
+tells us what a guard is worth \emph{when it applies}. It does not tell us
+which regions of that space real guidelines occupy, and we make no claim that
+it does.
 
 \begin{table}[t]
   \centering
-  \caption{Generated set: $144$ rules, up to $50$ records each (mean $31.7$; a rule with few variables admits fewer distinct partial records), $4{,}569$ rule--record pairs in total. \emph{Applies to} counts the pairs the guard can act on at all --- a substitution needs a boolean undefined predicate, the deontic row needs a permission, the occurrence row needs a time window --- and the rate is over those.}
+  \caption{$144$ rules, up to $50$ records each (mean $31.7$; a rule with few
+  variables admits fewer distinct partial records), $4{,}569$ rule--record
+  pairs. \emph{Applies to} counts the pairs the guard can act on at all --- a
+  substitution needs a boolean undefined predicate, the deontic row a
+  permission, the occurrence row a time window --- and the rate is over those.}
   \label{tab:generated}
   \begin{tabular}{lrrr}
     \toprule
-    Guard removed & applies to & moved & rate \\
+    Guard removed & applies to & $\rightarrow$\,\textsc{cert}\,/\,\textsc{must} & rate \\
     \midrule
-    Undefined predicate $\rightarrow$ \textsf{false} & 3277 & 206 & 6.3\% \\
-    Undefined predicate $\rightarrow$ \textsf{true} & 3277 & 368 & 11.2\% \\
-    Deontic operator (all rules obligations) & 2282 & 1837 & 80.5\% \\
-    Occurrence flag on a time window & 1800 & 26 & 1.4\% \\
-    Three-valued verdict $\rightarrow$ single query & 4569 & 1468 & 32.1\% \\
-    \bottomrule
-  \end{tabular}
-\end{table}
-
-\begin{table}[t]
-  \centering
-  \caption{Existing rules: $19$ rules ($10$ hand-authored
-  fixtures, $9$ pipeline-derived), up to $50$ records each (mean $20.1$), $382$
-  pairs. \emph{From} names which rules supply the applicable pairs --- the two
-  halves populate disjoint rows.}
-  \label{tab:real}
-  \begin{tabular}{llrrr}
-    \toprule
-    Guard removed & applicable rules & pairs & $\rightarrow$\,\textsc{cert}\,/\,\textsc{must} & rate \\
-    \midrule
-    Undefined predicate $\rightarrow$ \textsf{false} & 6 pipeline & 225 & 126/0 & 56.0\% \\
-    Undefined predicate $\rightarrow$ \textsf{true} & 6 pipeline & 225 & 0/42 & 18.7\% \\
-    Deontic operator (all rules obligations) & 2 pipeline & 16 & 0/10 & 62.5\% \\
-    Occurrence flag on a time window & 3 fixture + 2 pipeline & 115 & 12/0 & 10.4\% \\
-    Three-valued verdict $\rightarrow$ single query & 10 fixture + 9 pipeline & 382 & 0/249 & 65.2\% \\
+    Undefined predicate $\rightarrow$ \textsf{false}   & 3277 & 137/69  & 6.3\% \\
+    Undefined predicate $\rightarrow$ \textsf{true}    & 3277 & 0/368   & 11.2\% \\
+    Deontic operator (all rules obligations)           & 2282 & 0/1837  & 80.5\% \\
+    Occurrence flag on a time window                   & 1800 & 26/0    & 1.4\% \\
+    Three-valued verdict $\rightarrow$ single query    & 4569 & 0/1468  & 32.1\% \\
     \bottomrule
   \end{tabular}
 \end{table}
@@ -132,44 +115,41 @@ number.
 \paragraph{Substituting a value for an undefined predicate.}
 Every guideline in the corpus states predicates it never defines. Both
 substitutions are unsafe and they are unsafe in opposite directions, which is
-the argument for neither. Position matters and is visible only in the generated
-set, where the predicate is placed deliberately
-(Table~\ref{tab:holepos}): substituting \textsf{false} for a predicate in the
-\emph{antecedent} narrows applicability and clears patients, while the same
-substitution in the \emph{consequent} makes the obligation unsatisfiable and
-manufactures alerts. Every existing rule carrying an undefined predicate has
-it in the antecedent, which is why Table~\ref{tab:real} shows only the first
-effect --- and why a system evaluated on those rules alone would not discover
-the second.
+the argument for neither. Position determines which: substituting
+\textsf{false} for a predicate in the \emph{antecedent} narrows applicability
+and clears patients, while the same substitution in the \emph{consequent} makes
+the obligation unsatisfiable and manufactures alerts
+(Table~\ref{tab:holepos}). The headline rates understate both, because half the
+generated rules are permissive and a permission cannot move to
+\textsc{certified-compliant} at all; restricted to obligations the rates are
+$12.6\%$ and $22.5\%$ rather than $6.3\%$ and $11.2\%$.
 
 \paragraph{Deontic force.}
-The rate is $80.5\%$ in the sweep and $62.5\%$ on existing rules, but the denominators differ by two orders of magnitude ($2{,}282$ pairs against $16$). Half the generated set is permissive by construction; $2$ of $19$ existing rules are. The
-generated figure is the effect when the guard applies; the existing-rule figure is
-how often it applies to this corpus. Both are needed, and quoting either alone
-misleads. Every one of these is an alert on a patient who declined an option
-the source offered.
+The largest effect measured: once a rule is permissive, dropping the operator
+changes the verdict for four pairs in five. Every one is an alert on a patient
+who declined an option the source offered.
 
 \paragraph{The occurrence flag.}
 A time window lowers to \emph{the event occurred} $\wedge$ \emph{it was within
 $n$ days}. Dropping the first conjunct lets a patient who was never tested
 satisfy the window, because the solver selects a small day count. All $26$
-divergences in the generated set fall on time-window rules, and all move to
-compliant. The absolute rate is low because only a quarter of the sweep
-contains a window at all; conditioned on those rules it is the difference
-between detecting and not detecting the commonest failure of a monitoring
-recommendation.
+divergences move to compliant, and all fall on time-window rules. The rate is
+low because the flag is decisive only when the rest of the record leaves the
+window in question; it is nonetheless the difference between detecting and not
+detecting the commonest failure of a monitoring recommendation.
 
 \paragraph{The three-valued verdict.}
-The largest effect in both samples, and the only one whose correctness is a
-theorem rather than an argument. A single satisfiability call returns the same
-answer for ``every completion violates'' and ``some completion violates'', so
-it reports both as violations. Roughly two thirds of pairs are affected.
+The only row whose correctness is a theorem rather than an argument. A single
+satisfiability call returns the same answer for ``every completion violates''
+and ``some completion violates'', so it reports both as violations. This row
+uses the rule's own violation condition, so it does not also drop the deontic
+operator; measured against $\neg\Phi_R$ instead it reads $72.1\%$, and that
+figure double-counts the row above it.
 
 \begin{table}[t]
   \centering
-  \caption{Generated set, split by where the undefined predicate sits. Rules
-  with no undefined predicate are the control: nothing is substituted and
-  nothing moves.}
+  \caption{Split by where the undefined predicate sits. Rules with none are the
+  control: nothing is substituted and nothing moves.}
   \label{tab:holepos}
   \begin{tabular}{llrrr}
     \toprule
@@ -186,50 +166,35 @@ it reports both as violations. Roughly two thirds of pairs are affected.
   \end{tabular}
 \end{table}
 
-\subsection{Threats to this measurement}
+\subsection{Robustness and threats}
+
+The generated vocabulary assigns every numeric variable a plausible
+physiological range; the pipeline currently supplies none, so a rule it
+produces is checked against a weaker domain theory. Re-running the sweep with
+the ranges stripped moves the rates by at most a few points (substituting
+\textsf{false}: $6.3\%$ to $8.7\%$; single query: $32.1\%$ to $36.2\%$), so the
+result does not rest on that difference.
 
 \begin{itemize}\itemsep2pt
-  \item \textbf{The samples disagree in magnitude.} Substituting \textsf{false}
-        moves $56.0\%$ of applicable existing-rule pairs and $6.3\%$ of applicable
-        generated pairs. The directions agree; the magnitudes do not, and we do not claim
-        one predicts the other.
-  \item \textbf{We cannot account for the gap between the two samples.} Under
-        substitution of \textsf{false} the rate is $59.2\%$ on existing rules
-        and $12.6\%$ on generated ones (obligations only, the comparable
-        subset). Three candidate explanations were tested and none accounts for
-        it: removing the plausible ranges from the generated vocabulary, to
-        match what the pipeline supplies, moves the rate from $6.3\%$ to
-        $8.7\%$; the two sets have near-identical rule sizes ($4.4$ against
-        $4.7$ variables per rule); and restricting both to obligations with the
-        undefined predicate in the antecedent leaves them diverging in opposite
-        directions ($16.7\%$ against $59.2\%$ for \textsf{false}, $44.8\%$
-        against $19.7\%$ for \textsf{true}). The directions of harm agree
-        across both samples; the magnitudes do not, and we do not claim the
-        generated set predicts behaviour on real material.
+  \item \textbf{The rules are synthetic.} This establishes what each guard is
+        worth across the expressible space. It says nothing about which regions
+        of that space real guidelines occupy, and the sweep is uniform over
+        cells where real material certainly is not. Measured on the $19$ rules
+        the system has produced, the directions of harm are the same but the
+        magnitudes differ substantially, and we were not able to isolate which
+        property of the rules accounts for that; we therefore report the
+        generated set alone rather than a comparison we cannot explain.
   \item \textbf{Records are enriched for disagreement.} Rates are conditional
         on that sampling and are not incidence in a patient population.
   \item \textbf{Rules are weighted unequally.} The unit is the rule--record
         pair, and a rule with more variables admits more distinct partial
-        records (from $3$ to $50$, mean $31.7$), so it contributes more pairs.
-        A rate is therefore not the fraction of \emph{rules} affected.
-  \item \textbf{The deontic row on existing rules rests on $16$ pairs} from
-        $2$ permissive rules. We report the rate because the denominator is
-        printed beside it; it should not be read as an estimate.
+        records ($3$ to $50$, mean $31.7$), so it contributes more pairs. A
+        rate is not the fraction of \emph{rules} affected.
   \item \textbf{Two guards are not measured here.} Merging duplicate concepts
         before the vacuity sweep changes which rules exist rather than what
-        verdict they yield; it currently catches nothing in this corpus, the
+        verdict they yield, and it catches nothing in the current corpus, the
         collision that motivated it having been fixed upstream. Forcing the
         partial encoding path after a binding failure changes what the
         formalizer emits, and measuring it requires re-running generation with
         the guard disabled.
-  \item \textbf{The generated set is synthetic.} It establishes what the
-        guards are worth across the expressible space; it says nothing about
-        which regions of that space real guidelines occupy.
 \end{itemize}
-
-\paragraph{Reproduction.}
-Both tables are produced without any model call, from a fixed seed:
-\begin{center}
-\texttt{python3 tests/ablation.py -{}-generated -{}-plans 50 -{}-seed 0}\\
-\texttt{python3 tests/ablation.py -{}-plans 50 -{}-seed 0}
-\end{center}

@@ -495,13 +495,16 @@ document statement counts, and the DSL grammar.}
 \label{app:repro}
 
 \paragraph{Commands.}
-Both tables of Section~\ref{sec:necessity} are produced by two commands. Neither
-makes a model call, so neither needs an API key.
+Section~\ref{sec:necessity} is produced by one command, which makes no model
+call and needs no API key.
 \begin{center}
 \texttt{cd "Part B/tests"}\\
-\texttt{python3 ablation.py -{}-generated -{}-plans 50 -{}-seed 0 -{}-out generated\_ablation.csv}\\
-\texttt{python3 ablation.py -{}-plans 50 -{}-seed 0 -{}-out ablation.csv}
+\texttt{python3 ablation.py -{}-generated -{}-plans 50 -{}-seed 0 -{}-out generated\_ablation.csv}
 \end{center}
+The same harness runs over the rules the system itself produced
+(\texttt{python3 ablation.py -{}-plans 50 -{}-seed 0}) and over the generated
+set with the plausible ranges stripped (\texttt{-{}-no-ranges}); neither is
+reported in the paper, and both are in the artefact.
 The generated rule set is printed by
 \texttt{python3 generated\_rules.py -{}-list}.
 
@@ -525,7 +528,7 @@ single process.
 \texttt{-{}-plans} is a \emph{ceiling}, not a quantity. A record pins a subset
 of a rule's variables, so a rule with few variables admits few distinct
 records: at \texttt{-{}-plans 50} the actual counts range from $3$ to $50$
-(mean $31.7$ on the generated set, $20.1$ on the existing rules). The unit of
+(mean $31.7$). The unit of
 analysis is therefore the rule--record pair, and rules contribute unequally. A
 reported rate is not the fraction of \emph{rules} affected.
 
