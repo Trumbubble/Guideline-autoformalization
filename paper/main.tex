@@ -431,21 +431,24 @@ it does.
 
 \begin{table}[t]
   \centering
-  \caption{$144$ rules, up to $50$ records each (mean $31.7$; a rule with few
-  variables admits fewer distinct partial records), $4{,}569$ rule--record
-  pairs. \emph{Applies to} counts the pairs the guard can act on at all --- a
-  substitution needs a boolean undefined predicate, the deontic row a
-  permission, the occurrence row a time window --- and the rate is over those.}
+  \caption{$144$ rules, up to $50$ records each (mean $31.7$; a rule
+  with few variables admits fewer distinct partial records), $4{,}569$
+  rule--record pairs. \emph{Applies to} counts the pairs the guard can act on at
+  all --- a substitution needs a boolean undefined predicate, the deontic row a
+  permission, the occurrence row a time window --- and both percentages are over
+  those. A dash is an exact zero: the guard never moves a verdict that way.}
   \label{tab:generated}
   \begin{tabular}{lrrr}
     \toprule
-    Guard removed & applies to & $\rightarrow$\,\textsc{cert}\,/\,\textsc{must} & rate \\
+    & & \multicolumn{2}{c}{verdict moved to} \\
+    \cmidrule(l){3-4}
+    Guard removed & applies to & \textsc{certified-compliant} & \textsc{must-violate} \\
     \midrule
-    Undefined predicate $\rightarrow$ \textsf{false}   & 3277 & 137/69  & 6.3\% \\
-    Undefined predicate $\rightarrow$ \textsf{true}    & 3277 & 0/368   & 11.2\% \\
-    Deontic operator (all rules obligations)           & 2282 & 0/1837  & 80.5\% \\
-    Occurrence flag on a time window                   & 1800 & 26/0    & 1.4\% \\
-    Three-valued verdict $\rightarrow$ single query    & 4569 & 0/1468  & 32.1\% \\
+    Undefined predicate $\rightarrow$ \textsf{false} & 3277 & 137 (4.2\%) & 69 (2.1\%) \\
+    Undefined predicate $\rightarrow$ \textsf{true} & 3277 & --- & 368 (11.2\%) \\
+    Deontic operator (all rules obligations) & 2282 & --- & 1837 (80.5\%) \\
+    Occurrence flag on a time window & 1800 & 26 (1.4\%) & --- \\
+    Three-valued verdict $\rightarrow$ single query & 4569 & --- & 1468 (32.1\%) \\
     \bottomrule
   \end{tabular}
 \end{table}
@@ -459,10 +462,11 @@ the argument for neither. Position determines which: substituting
 \textsf{false} for a predicate in the \emph{antecedent} narrows applicability
 and clears patients, while the same substitution in the \emph{consequent} makes
 the obligation unsatisfiable and manufactures alerts
-(Table~\ref{tab:holepos}). The headline rates understate both, because half the
+(Table~\ref{tab:holepos}). Both columns understate the effect, because half the
 generated rules are permissive and a permission cannot move to
-\textsc{certified-compliant} at all; restricted to obligations the rates are
-$12.6\%$ and $22.5\%$ rather than $6.3\%$ and $11.2\%$.
+\textsc{certified-compliant} at all. Restricted to obligations, substituting
+\textsf{false} clears $8.4\%$ of pairs and accuses $4.2\%$, and substituting
+\textsf{true} accuses $22.5\%$.
 
 \paragraph{Deontic force.}
 The largest effect measured: once a rule is permissive, dropping the operator
@@ -757,8 +761,8 @@ Each run writes one row per (rule, record, guard) with columns
 \texttt{source}, \texttt{rule\_id}, \texttt{deontic}, \texttt{holes},
 \texttt{pinned}, \texttt{ablation}, \texttt{applies}, \texttt{full},
 \texttt{ablated}, \texttt{direction} --- $22{,}845$ rows for the generated set.
-Both summary tables can be recomputed from these rows independently of the
-script's own counters, which is how they were checked.
+Table~\ref{tab:generated} can be recomputed from these rows independently of
+the script's own counters, which is how it was checked.
 
 \paragraph{Verdict transitions.}
 The two columns of Section~\ref{sec:necessity} record only whether a verdict
