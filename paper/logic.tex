@@ -17,9 +17,22 @@
 A rule $R$ denotes the material implication
 $\Phi_R = \llbracket \mathit{when} \rrbracket \rightarrow
           \llbracket \mathit{then} \rrbracket$
-over a signature of typed variables. $\mathcal{D}$ is the domain theory
-(plausible physiological ranges, code membership, $0 \le \mathsf{dse}_e \le H$,
-baseline positivity). A patient record is a \emph{partial} assignment $P$: it pins the values the
+over a signature of typed variables. \emph{Derived symbols.} Two constructs are interpreted over symbols the
+signature induces rather than ones a rule names directly. For each declared
+clinical event $e$: $\mathsf{occ}_e$, a boolean recording that $e$ occurred, and
+$\mathsf{dse}_e$, an integer counting days since it did. For each event $e$ and
+numeric variable $v$: $v@e$, the value $v$ held at the time of $e$. A recency
+window ``$e$ within the last $n$ days'' lowers to
+$\mathsf{occ}_e \wedge \mathsf{dse}_e \le n$, and a relative change ``reduce $v$
+by $p$'' to $v \le (1-p)\cdot v@e$. These symbols are produced by the lowering
+and never written by the generator, so each has exactly one definition.
+
+$\mathcal{D}$ is the domain theory: plausible physiological ranges for bound
+numeric variables, code membership for coded ones, $0 \le \mathsf{dse}_e \le H$
+for a fixed horizon $H$ (ten years in the implementation), and $v@e > 0$ for
+each induced baseline. Unbound symbols are deliberately unconstrained --- an
+axiom about a predicate the source never defined would be a claim the source
+does not make. A patient record is a \emph{partial} assignment $P$: it pins the values the
 record supplies and leaves every other symbol free, either because nothing
 measured it or because it is an undefined predicate no data source can supply.
 A \emph{completion} of the record is a model of $\mathcal{D} \wedge P$ --- one
@@ -191,8 +204,8 @@ real violation of a monitoring recommendation.
 
 \begin{proposition}[A free baseline cannot certify]
 \label{prop:baseline}
-Let $\mathsf{Delta}(v,e,\downarrow,p,\cdot)$ be the consequent, with $v@e$
-unpinned, $\mathcal{D} \models v@e > 0$, and $P$ pinning $v = c$ for some
+Let the consequent be a reduction of $v$ by a fraction $p$ measured from
+$v@e$, with $v@e$ unpinned, $\mathcal{D} \models v@e > 0$, and $P$ pinning $v = c$ for some
 $c>0$. If the antecedent is satisfiable then
 $\mathcal{D}\wedge P\wedge\neg\Phi_R$ is satisfiable, so
 $\mathrm{verdict}(R,P) \neq \textsc{certified-compliant}$.

@@ -516,6 +516,65 @@ figure double-counts the row above it.
   \end{tabular}
 \end{table}
 
+\subsection{What an undetermined verdict rests on}
+\label{sec:may}
+
+A verdict of \textsc{may-violate} is only useful if the reader is told what it
+turns on. The witness itself is not that: it assigns a value to every unstated
+variable, most of them incidental. \texttt{minimal\_counterexample\_core}
+returns instead the smallest set of those values that on its own forces the
+violation, by deletion-based extraction --- drop one assignment, keep the drop
+if the remainder still cannot be made compliant. Because the check leaves every
+non-core variable unconstrained, unsatisfiability quantifies over all their
+completions, so the core's values force a violation \emph{whatever the
+unmeasured variables turn out to be}. The result is minimal, not minimum: an
+irreducible set, not provably the smallest, so sizes are an upper bound.
+
+Over the $19$ rules the system has produced, $382$ records yielded $246$
+\textsc{may-violate} verdicts. The core is smaller than the set of unstated
+variables ($1.91$ against $2.64$ on average) and the reduction grows as the
+record thins, because the core is bounded by the rule's structure --- the number
+of atoms that must be forced --- and not by how much the record omits.
+
+\begin{center}
+\begin{tabular}{rrrrr}
+  \toprule
+  unstated variables & verdicts & mean core & reduction & single-variable core \\
+  \midrule
+  1 & 46 & 1.00 & 1.00$\times$ & 100.0\% \\
+  2 & 75 & 1.51 & 1.33$\times$ & 49.3\% \\
+  3 & 68 & 2.15 & 1.40$\times$ & 14.7\% \\
+  4 & 38 & 2.68 & 1.49$\times$ & 10.5\% \\
+  5 & 17 & 3.24 & 1.55$\times$ & 0.0\% \\
+  6 &  2 & 4.00 & 1.50$\times$ & 0.0\% \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+\paragraph{Not every explanation names something a clinician can go and get.}
+$97$ of the $246$ undetermined verdicts ($39.4\%$) rest on a single variable.
+But $21$ of those name an \emph{undefined predicate} --- \textsf{has\_low\_risk},
+\textsf{has\_high\_risk}, \textsf{has\_lower\_risk\_complications} --- a phrase
+the source states and never defines. No measurement resolves those, because
+there is nothing to measure. Splitting the $246$:
+$76$ ($30.9\%$) turn on a single bound concept, $21$ ($8.5\%$) on a single
+undefined predicate, and across all core sizes $80$ ($32.5\%$) involve at least
+one undefined predicate somewhere.
+
+That split is the residue reappearing at the point of care. A system that
+substituted a value for those predicates would report a definite verdict for
+$32.5\%$ of undetermined cases and would be asserting something the guideline
+does not say in every one of them.
+
+\paragraph{The core is not a measurement plan.}
+It is a sufficient condition for one outcome. A reader who measures the named
+variable and finds a different value has learned nothing conclusive: the verdict
+may remain undetermined, and a variable outside the core may then decide it.
+Answering ``what should be measured next'' requires a sweep over which
+observations most reduce uncertainty, which we do not attempt. Nor is the core
+unique --- it is extracted from one witness, and another witness may give a
+disjoint set that forces a violation by a different route.
+
 \subsection{Robustness and threats}
 
 The generated vocabulary assigns every numeric variable a plausible
@@ -788,97 +847,6 @@ pipeline does call one, and a recorded run is replayed offline by
 hashes with their responses, so the pipeline can be re-executed without an API
 key and without redistributing source documents. A tape that no longer matches
 the code \emph{skips} rather than passes.
-
-\section{Explanation size}
-\label{app:explanation}
-
-When a verdict is \textsc{may-violate}, the checker owes the reader a reason.
-The unhelpful reason is the witness itself: a value for every unstated variable,
-most of them incidental. \texttt{api.minimal\_counterexample\_core} instead
-returns the smallest set of those values that on its own forces the violation,
-by deletion-based extraction --- drop one assignment, keep the drop if the
-remainder still cannot be made compliant. That yields a \emph{minimal} core, not
-a \emph{minimum} one, so the sizes below are an upper bound on the smallest
-possible explanation.
-
-Measured over the generated rules, $144$ rules and $4{,}570$ records, of which
-$1{,}472$ returned \textsc{may-violate}:
-
-\begin{center}
-\begin{tabular}{lrr}
-  \toprule
-   & generated & the system's own rules \\
-  \midrule
-  rules                          & 144   & 19 \\
-  records                        & 4570  & 382 \\
-  \textsc{may-violate} verdicts  & 1472  & 246 \\
-  \addlinespace
-  unstated variables, mean       & 2.53  & 2.64 \\
-  core size, mean                & 1.34  & 1.91 \\
-  core size, median              & 1     & 2 \\
-  reduction                      & 1.89$\times$ & 1.38$\times$ \\
-  explanations of one fact       & 68.9\% & 39.4\% \\
-  \bottomrule
-\end{tabular}
-\end{center}
-
-\paragraph{What the core claims, and what it does not.}
-The claim is one-directional and worth stating carefully, because the natural
-misreading is a stronger and false one. Because the check leaves every
-non-core variable unconstrained, unsatisfiability quantifies over all their
-completions: if the core's values hold, the violation is certain \emph{whatever
-the unmeasured variables turn out to be}. On one measured instance the rule
-$(\textsf{on\_acei} \wedge \textsf{has\_ckd}) \rightarrow$ \emph{potassium
-checked within 14 days} left four variables unstated and produced a core of
-three (a gap of $125$ days, and both antecedent conjuncts true); the fourth,
-whether a check occurred at all, remains free, and the result is unsatisfiable
-for both of its values, because no occurrence flag rescues a $125$-day gap.
-
-What the core is not is a measurement plan. It is a sufficient condition for
-\emph{one} outcome: values that guarantee a violation. A reader who measures
-those variables and finds different values has learned nothing conclusive --- the
-verdict may remain undetermined, and a variable outside the core may then be the
-one that decides it. Answering ``what should be measured next'' is a different
-question, requiring a sweep over which observations most reduce uncertainty,
-which we do not attempt. Nor is the core unique: it is extracted from a single
-witness, and a different witness may yield a different, possibly disjoint, set
-of values that force a violation by another route. The output is therefore
-\emph{an} explanation of how the rule could be broken, not \emph{the}
-explanation, and not a recommendation.
-
-\paragraph{The core cannot collapse to one.}
-For the assumptions to make $\mathcal{D} \wedge P \wedge \Phi_R$ unsatisfiable
-they must force $\Phi_R$ false, which requires the antecedent true \emph{and}
-the consequent false. A single value suffices only when the record already pins
-the other side. Measured: over records that pinned nothing, a core of size one
-occurs $0$ times in $72$; over records that pinned four variables it occurs
-$95$ times in $95$. Nor can a core be empty --- \textsc{may-violate} means some
-completion complies, so at least one assignment is needed to exclude compliance,
-and the observed minimum over $1{,}718$ verdicts is $1$.
-
-\paragraph{Core size grows more slowly than the record thins.}
-\begin{center}
-\begin{tabular}{rrrrr}
-  \toprule
-  unstated variables & pairs & mean core & reduction & one-fact \\
-  \midrule
-  1 & 277 & 1.00 & 1.00$\times$ & 100.0\% \\
-  2 & 497 & 1.21 & 1.65$\times$ & 78.7\% \\
-  3 & 420 & 1.44 & 2.08$\times$ & 58.8\% \\
-  4 & 202 & 1.70 & 2.35$\times$ & 38.6\% \\
-  5 &  68 & 1.82 & 2.74$\times$ & 30.9\% \\
-  6 &   8 & 2.50 & 2.40$\times$ &   0.0\% \\
-  \bottomrule
-\end{tabular}
-\end{center}
-The core is bounded below by the rule's structure --- the number of atoms that
-must be forced --- and not by the size of the record, so as a record thins the
-numerator grows while the denominator approaches that structural floor. Over the
-range measured the core grows at roughly a third the rate of the unstated count.
-This is the property that matters in deployment, where a real record leaves far
-more than three things unstated; it is also a short extrapolation, from a
-maximum of six unstated variables with only eight records at that end, and we do
-not fit a curve to it.
 
 \section{Engineering log}
 \note{One paragraph pointing at \texttt{Part A/RESULTS.md} in the anonymised
