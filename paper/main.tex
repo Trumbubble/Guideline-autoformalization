@@ -569,6 +569,47 @@ that design. What the measurement does establish is that the distinction is
 \emph{visible} --- the system can say which undetermined verdicts are waiting on
 a measurement and which are waiting on a definition the source never gave.
 
+\paragraph{Supplying the core resolves the verdict.}
+Pinning the values the core named and re-reading the verdict gives
+\textsc{must-violate} in $1{,}470$ of $1{,}470$ cases. This is true by
+construction --- the core is extracted precisely as a set whose values make
+compliance unsatisfiable --- so it is reported as a check on the implementation
+rather than as a result. It rules out a minimiser that returns cores which do
+not do what they claim, which is worth ruling out.
+
+\paragraph{Would measuring the named variable settle it?}
+That a core is a single variable does not mean measuring it answers the
+question. The core is sufficient for \emph{one} outcome: those values force a
+violation, while a different value may leave the verdict open. The claim a
+clinical reader takes from ``measure $X$'' is stronger --- that \emph{every}
+value of $X$ determines the verdict --- and it is decidable without enumerating
+values. A verdict is undetermined at $x$ exactly when some completion complies
+and some completion violates, so take two copies of the remaining free
+variables, share $X$ between them, and ask whether both can hold at once:
+\[
+  \mathrm{SAT}\bigl[\;
+    (\mathcal{D} \wedge P \wedge \Phi_R)[\bar{R} \mapsto \bar{R}_1]
+    \;\wedge\;
+    (\mathcal{D} \wedge P \wedge \neg\Phi_R)[\bar{R} \mapsto \bar{R}_2]
+  \;\bigr]
+\]
+Satisfiable means some value of $X$ still leaves the verdict open; unsatisfiable
+means measuring $X$ resolves the case whatever comes back.
+
+Of the $1{,}011$ single-variable cores, measuring the named variable determines
+the verdict in $708$ ($70.0\%$), which is $48.2\%$ of all undetermined verdicts.
+In the other $303$ ($30.0\%$) some value of it leaves the case open. The naive
+reading --- counting single-variable cores as resolvable measurements --- would
+have claimed $68.8\%$ and overstated by nearly a third.
+
+Which of the two holds is a property of the record, not of the rule. For
+$(\textsf{potassium} < 5.0 \vee \textsf{has\_ckd}) \rightarrow \textsf{on\_acei}$
+one record yields a core of \textsf{potassium} that does not settle the case ---
+a reading at or above the threshold leaves \textsf{has\_ckd} free to make the
+antecedent true anyway --- while another record on the same rule yields a core of
+\textsf{on\_acei} that does, because the antecedent is already pinned true and
+the consequent is the only thing left to decide.
+
 \paragraph{The core is not a measurement plan.}
 It is a sufficient condition for one outcome. A reader who measures the named
 variable and finds a different value has learned nothing conclusive: the verdict

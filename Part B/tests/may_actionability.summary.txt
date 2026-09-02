@@ -1,0 +1,13 @@
+metric,value
+may_violate_verdicts,1470
+
+# EXPERIMENT 3 -- supply the core's values, re-read the verdict
+after_supplying_core_MUST-violate,1470,100.0%
+resolved_to_a_definite_verdict_pct,100.0
+
+# EXPERIMENT 2 -- would measuring the named variable determine it?
+single_variable_cores,1011,68.8%
+  measuring_it_determines_the_verdict,708,70.0% of single-variable cores,48.2% of all MAY
+  some_value_leaves_it_undetermined,303,30.0%
+  of which name an undefined predicate,116,11.5% of single-variable cores
+csv,may_actionability.csv
