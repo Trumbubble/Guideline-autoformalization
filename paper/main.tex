@@ -137,6 +137,10 @@
         columns=fullflexible, breaklines=true, xleftmargin=0pt}
 
 % Required by logic.tex, which states the guards as propositions.
+% NOTE: logic.tex is NOT \input yet. Two places refer to its content in prose
+% rather than by \ref, so nothing dangles; if you merge it in, turn
+% "the determinacy proposition" (Sec. 5) and the propositions row in the
+% reproducibility table back into real \ref's.
 \newtheorem{proposition}{Proposition}
 \newtheorem{corollary}[proposition]{Corollary}
 
@@ -408,7 +412,8 @@ configurations --- so no annotation is required to observe that the
 configurations disagree. Whether the full system is the correct one is a
 separate claim, and its warrant differs by row. For the three-valued verdict it
 is a theorem: the three cases are mutually exclusive and exhaustive
-(Proposition~1), and a single satisfiability call cannot separate two of them.
+(the determinacy proposition), and a single satisfiability call cannot
+separate two of them.
 For the undefined-predicate rows it is an argument, not a proof: substituting a
 value asserts something the source does not state, whereas leaving the symbol
 free asserts nothing. For the deontic row it rests on a human judgement --- that
@@ -801,18 +806,32 @@ document statement counts, and the DSL grammar.}
 \label{app:repro}
 
 \paragraph{Commands.}
-Section~\ref{sec:necessity} is produced by one command, which makes no model
-call and needs no API key.
+Every number in Section~\ref{sec:necessity} comes from one of four scripts in
+\texttt{Part B/tests}. None makes a model call; none needs an API key.
 \begin{center}
-\texttt{cd "Part B/tests"}\\
-\texttt{python3 ablation.py -{}-generated -{}-plans 50 -{}-seed 0 -{}-out generated\_ablation.csv}
+\begin{tabular}{ll}
+  \toprule
+  Produces & Command \\
+  \midrule
+  Tables \ref{tab:generated}, \ref{tab:holepos}
+    & \texttt{ablation.py -{}-generated -{}-plans 50 -{}-seed 0} \\
+  Core sizes, \S\ref{sec:may}
+    & \texttt{explanation\_size.py -{}-plans 50 -{}-seed 0} \\
+  Both \textsc{may} experiments, \S\ref{sec:may}
+    & \texttt{may\_actionability.py -{}-plans 50 -{}-seed 0} \\
+  The rule set itself
+    & \texttt{generated\_rules.py -{}-list} \\
+  \addlinespace
+  The propositions stated in \texttt{logic.tex}
+    & \texttt{propositions.py} \\
+  \bottomrule
+\end{tabular}
 \end{center}
-The same harness runs over the rules the system itself produced
-(\texttt{python3 ablation.py -{}-plans 50 -{}-seed 0}) and over the generated
-set with the plausible ranges stripped (\texttt{-{}-no-ranges}); neither is
-reported in the paper, and both are in the artefact.
-The generated rule set is printed by
-\texttt{python3 generated\_rules.py -{}-list}.
+Each writes a CSV of per-verdict rows beside a short summary, both in the
+artefact; the summaries are what the tables quote. Two variants are runnable and
+not reported: \texttt{ablation.py} without \texttt{-{}-generated} runs over the
+rules the pipeline itself produced, and \texttt{-{}-no-ranges} strips the
+plausible ranges from the generated vocabulary.
 
 \paragraph{Environment.}
 Python 3.14.2, \texttt{z3-solver} 5.1.0, macOS 15.5 (arm64). The commit is
@@ -829,6 +848,16 @@ against $104$). The sampler now sorts the names. Anyone reproducing a
 solver-driven measurement in Python should check this specifically --- the
 symptom is a stable seed with unstable output, and it is invisible within a
 single process.
+
+A second limit bounds that guarantee. Each script is reproducible \emph{in its
+own process}, but calling the record sampler twice inside one process is not:
+the same seed gave $4{,}568$ records and then $4{,}570$. The cause is below our
+code --- Z3 carries global state that constructing a fresh solver does not reset,
+so the second pass draws different models. Two consequences. Each script must be
+invoked separately, which is how the commands above are written. And two scripts
+at the same seed do not see an identical record set, so figures from
+\texttt{ablation.py} and \texttt{may\_actionability.py} are two samples from one
+sampler rather than two views of one sample, and are not row-for-row comparable.
 
 \paragraph{Record counts.}
 \texttt{-{}-plans} is a \emph{ceiling}, not a quantity. A record pins a subset
@@ -866,12 +895,16 @@ dilute every rate by the rules the guard cannot touch --- on the generated set
 that is $1{,}292$ of $4{,}569$ pairs for the substitution rows alone.
 
 \paragraph{Artefacts.}
-Each run writes one row per (rule, record, guard) with columns
+\texttt{ablation.py} writes one row per (rule, record, guard) with columns
 \texttt{source}, \texttt{rule\_id}, \texttt{deontic}, \texttt{holes},
 \texttt{pinned}, \texttt{ablation}, \texttt{applies}, \texttt{full},
-\texttt{ablated}, \texttt{direction} --- $22{,}845$ rows for the generated set.
-Table~\ref{tab:generated} can be recomputed from these rows independently of
-the script's own counters, which is how it was checked.
+\texttt{ablated}, \texttt{direction} --- $22{,}845$ rows.
+\texttt{explanation\_size.py} writes one row per undetermined verdict with the
+count of unstated variables, the core size, and the core's variable names.
+\texttt{may\_actionability.py} adds, per verdict, the verdict after the core is
+supplied and whether measuring a single-variable core determines the outcome.
+Every table in Section~\ref{sec:necessity} can be recomputed from these rows
+independently of the scripts' own counters, which is how they were checked.
 
 \paragraph{Verdict transitions.}
 The two columns of Section~\ref{sec:necessity} record only whether a verdict
