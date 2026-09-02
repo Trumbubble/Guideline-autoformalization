@@ -5,14 +5,31 @@
 ## Overleaf setup
 1. New Project → Upload Project → zip this `paper/` folder.
 2. Add `neurips_2026.sty` from the workshop/NeurIPS site (not included here).
-3. Menu → Compiler: **pdfLaTeX**. Enable **shell-escape** if `\includesvg` errors.
+3. Menu → Compiler: **pdfLaTeX**.
 4. `\draftmodetrue` shows the guidance notes; set `\draftmodefalse` to see the
    true page count. **Submit with notes off and `neurips_2026` un-optioned.**
 
-## Figures
-`figures/*.svg` are standalone and theme-resolved for print (white ground).
-Overleaf runs Inkscape, so `\includesvg` keeps them vector. If that fails,
-convert once and swap in `\includegraphics`:
+## Figures — OFF by default
+
+`main.tex` ships with `\usesvgfalse`, so it compiles to labelled placeholder
+boxes with no external tooling. To turn the real figures on:
+
+1. `\usesvgtrue` in the preamble
+2. Overleaf → Menu → Compiler → **Allow shell escape** (the `svg` package
+   shells out to Inkscape)
+3. Overleaf → Menu → **Clear cached files** — a failed run leaves a stale
+   `svg-inkscape/` directory that gets reused and fails again
+
+**Why it failed the first time:** `\includesvg` defaults to Inkscape's
+`--export-latex` mode, which pulls the SVG's text labels out and typesets them
+with LaTeX — so every `−`, `φ`, `∧`, `∈` in the diagrams became
+"Unicode character not set up for use with LaTeX", and `unbound_concept` became
+"Missing $ inserted". Fixed two ways: `inkscapelatex=false` (Inkscape renders
+the text into the PDF itself), and `\DeclareUnicodeCharacter` for all 12
+non-ASCII glyphs the figures contain, so either mode works.
+
+No shell-escape available? Convert once outside Overleaf and swap `\figsvg` for
+`\includegraphics`:
 
     rsvg-convert -f pdf -o architecture.pdf architecture.svg
 
