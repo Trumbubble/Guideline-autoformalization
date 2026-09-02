@@ -18,6 +18,17 @@ against 2.  This script records both, per verdict.
     python3 explanation_size.py --existing         # the system's own rules
     python3 explanation_size.py --plans 50 --seed 0 --out explanation.csv
 
+DETERMINISM, AND ITS LIMIT.  This script is reproducible across processes: the
+same seed gives a byte-identical CSV.  What is NOT stable is calling the record
+sampler twice inside ONE process -- the second call returns a different number
+of records (measured: 4568 then 4570 for the same seed), because Z3 carries
+global state that a fresh Solver does not reset.  Two consequences.  First, each
+script must be run in its own process, which is how they are invoked.  Second,
+this script and `ablation.py` do NOT see an identical record set even at the
+same seed (4570 against 4569 on the generated rules), so figures here are not
+row-for-row comparable with that table; they are two samples from the same
+sampler, not the same sample.
+
 NOT A MINIMUM CORE.  The minimiser drops one assumption at a time and keeps the
 drop if the remainder still cannot be made compliant.  That yields a MINIMAL
 core -- one nothing further can be removed from -- not a MINIMUM one, which
