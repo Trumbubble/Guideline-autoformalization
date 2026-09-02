@@ -530,41 +530,44 @@ completions, so the core's values force a violation \emph{whatever the
 unmeasured variables turn out to be}. The result is minimal, not minimum: an
 irreducible set, not provably the smallest, so sizes are an upper bound.
 
-Over the $19$ rules the system has produced, $382$ records yielded $246$
-\textsc{may-violate} verdicts. The core is smaller than the set of unstated
-variables ($1.91$ against $2.64$ on average) and the reduction grows as the
-record thins, because the core is bounded by the rule's structure --- the number
-of atoms that must be forced --- and not by how much the record omits.
+Of $4{,}570$ records, $1{,}472$ returned \textsc{may-violate}. The core is
+smaller than the set of unstated variables ($1.34$ against $2.53$ on average),
+and the reduction grows as the record thins, because the core is bounded by the
+rule's structure --- the number of atoms that must be forced --- and not by how
+much the record omits.
 
 \begin{center}
 \begin{tabular}{rrrrr}
   \toprule
   unstated variables & verdicts & mean core & reduction & single-variable core \\
   \midrule
-  1 & 46 & 1.00 & 1.00$\times$ & 100.0\% \\
-  2 & 75 & 1.51 & 1.33$\times$ & 49.3\% \\
-  3 & 68 & 2.15 & 1.40$\times$ & 14.7\% \\
-  4 & 38 & 2.68 & 1.49$\times$ & 10.5\% \\
-  5 & 17 & 3.24 & 1.55$\times$ & 0.0\% \\
-  6 &  2 & 4.00 & 1.50$\times$ & 0.0\% \\
+  1 & 277 & 1.00 & 1.00$\times$ & 100.0\% \\
+  2 & 497 & 1.21 & 1.65$\times$ & 78.7\% \\
+  3 & 420 & 1.44 & 2.08$\times$ & 58.8\% \\
+  4 & 202 & 1.70 & 2.35$\times$ & 38.6\% \\
+  5 &  68 & 1.82 & 2.74$\times$ & 30.9\% \\
+  6 &   8 & 2.50 & 2.40$\times$ & 0.0\% \\
   \bottomrule
 \end{tabular}
 \end{center}
 
-\paragraph{Not every explanation names something a clinician can go and get.}
-$97$ of the $246$ undetermined verdicts ($39.4\%$) rest on a single variable.
-But $21$ of those name an \emph{undefined predicate} --- \textsf{has\_low\_risk},
-\textsf{has\_high\_risk}, \textsf{has\_lower\_risk\_complications} --- a phrase
-the source states and never defines. No measurement resolves those, because
-there is nothing to measure. Splitting the $246$:
-$76$ ($30.9\%$) turn on a single bound concept, $21$ ($8.5\%$) on a single
-undefined predicate, and across all core sizes $80$ ($32.5\%$) involve at least
-one undefined predicate somewhere.
+\paragraph{Not every explanation names something that can be measured.}
+$1{,}014$ of the $1{,}472$ undetermined verdicts ($68.9\%$) rest on a single
+variable, but $97$ of those name an \emph{undefined predicate} --- a phrase a
+source states and never defines --- which no measurement resolves, because
+there is nothing to measure. Splitting them: $917$ ($62.3\%$) turn on a single
+bound concept, $97$ ($6.6\%$) on a single undefined predicate, and across all
+core sizes $176$ ($12.0\%$) involve an undefined predicate somewhere. A system
+that substituted a value for those predicates would return a definite verdict
+in every one of those cases, and would be asserting something the source does
+not say each time.
 
-That split is the residue reappearing at the point of care. A system that
-substituted a value for those predicates would report a definite verdict for
-$32.5\%$ of undetermined cases and would be asserting something the guideline
-does not say in every one of them.
+These proportions are a property of the rule set, not a finding about
+guidelines: undefined predicates were placed in two thirds of the generated
+rules by construction, so how often they end up carrying a verdict follows from
+that design. What the measurement does establish is that the distinction is
+\emph{visible} --- the system can say which undetermined verdicts are waiting on
+a measurement and which are waiting on a definition the source never gave.
 
 \paragraph{The core is not a measurement plan.}
 It is a sufficient condition for one outcome. A reader who measures the named

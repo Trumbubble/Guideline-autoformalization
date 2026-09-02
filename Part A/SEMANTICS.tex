@@ -197,17 +197,17 @@ language and are refused rather than approximated.
 
 A \emph{rule} is $R = (\mathit{id},\ \varphi_{\mathrm{when}},\
 \varphi_{\mathrm{then}},\ \delta,\ \pi)$ with
-$\delta \in \{\mathsf{O},\mathsf{P}\}$ and $\pi$ provenance (source span, page).
+$\delta \in \{\mathsf{Obl},\mathsf{Per}\}$ and $\pi$ provenance (source span, page).
 Its denotation is the material implication
 \[
   \Phi_R \;=\; \llbracket \varphi_{\mathrm{when}} \rrbracket
                \;\rightarrow\; \llbracket \varphi_{\mathrm{then}} \rrbracket .
 \]
-$\delta$ is a conditional deontic operator: $\mathsf{O}(\mathrm{then}\mid
-\mathrm{when})$ for an obligation, $\mathsf{P}(\mathrm{then}\mid\mathrm{when})$
+$\delta$ is a conditional deontic operator: $\mathsf{Obl}(\mathrm{then}\mid
+\mathrm{when})$ for an obligation, $\mathsf{Per}(\mathrm{then}\mid\mathrm{when})$
 for a permission. We use the dyadic form and never nest deontic operators, which
 avoids the paradoxes of monadic standard deontic logic. Prohibition is not a
-third case: $\mathsf{F}(p) = \mathsf{O}(\neg p)$, written with a negated
+third case: $\mathsf{F}(p) = \mathsf{Obl}(\neg p)$, written with a negated
 consequent. Human-readable fields (an action verb, a target gloss, a GRADE
 strength) accompany a rule for review but carry no semantics.
 
@@ -217,8 +217,8 @@ The \emph{violation condition} is
   \begin{cases}
     \llbracket \varphi_{\mathrm{when}} \rrbracket \wedge
       \neg \llbracket \varphi_{\mathrm{then}} \rrbracket
-      & \delta = \mathsf{O} \\
-    \bot & \delta = \mathsf{P}
+      & \delta = \mathsf{Obl} \\
+    \bot & \delta = \mathsf{Per}
   \end{cases}
 \]
 so that no patient, and no completion of a partial $I$, yields a violation of a
@@ -253,7 +253,7 @@ supplies. Unsupplied symbols remain free, so $\mathcal{D}_\Sigma \wedge P$
 denotes the set of \emph{completions} of the record.
 
 \begin{definition}[Verdict]
-For a rule $R$ with $\delta = \mathsf{O}$,
+For a rule $R$ with $\delta = \mathsf{Obl}$,
 \[
 \mathrm{verdict}(R,P) =
 \begin{cases}

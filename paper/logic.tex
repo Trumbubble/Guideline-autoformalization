@@ -17,7 +17,10 @@
 A rule $R$ denotes the material implication
 $\Phi_R = \llbracket \mathit{when} \rrbracket \rightarrow
           \llbracket \mathit{then} \rrbracket$
-over a signature of typed variables. \emph{Derived symbols.} Two constructs are interpreted over symbols the
+over a signature of typed variables.
+
+\paragraph{Derived symbols.}
+Two constructs are interpreted over symbols the
 signature induces rather than ones a rule names directly. For each declared
 clinical event $e$: $\mathsf{occ}_e$, a boolean recording that $e$ occurred, and
 $\mathsf{dse}_e$, an integer counting days since it did. For each event $e$ and
@@ -27,7 +30,8 @@ $\mathsf{occ}_e \wedge \mathsf{dse}_e \le n$, and a relative change ``reduce $v$
 by $p$'' to $v \le (1-p)\cdot v@e$. These symbols are produced by the lowering
 and never written by the generator, so each has exactly one definition.
 
-$\mathcal{D}$ is the domain theory: plausible physiological ranges for bound
+\paragraph{The domain theory.}
+$\mathcal{D}$ collects plausible physiological ranges for bound
 numeric variables, code membership for coded ones, $0 \le \mathsf{dse}_e \le H$
 for a fixed horizon $H$ (ten years in the implementation), and $v@e > 0$ for
 each induced baseline. Unbound symbols are deliberately unconstrained --- an
@@ -101,6 +105,8 @@ satisfiable. Then
 \mathrm{verdict}(R,P)=\textsc{may-violate}$.
 \end{proposition}
 \begin{proof}
+Writing $\mathrm{Mod}(\chi)$ for the set of completions satisfying $\chi$,
+pinning more symbols can only remove completions:
 $\mathrm{Mod}(\mathcal{D}\wedge P') \subseteq \mathrm{Mod}(\mathcal{D}\wedge P)$.
 An unsatisfiable conjunction stays unsatisfiable under a subset, giving (i) and
 (ii); (iii) is their contrapositive.
@@ -161,19 +167,24 @@ missing datum, the second is a deviation.
 
 \subsection{Why deontic force is an operator and not a label}
 
-The violation condition is
+Each rule carries a \emph{deontic force} $\delta \in \{\mathsf{Obl},
+\mathsf{Per}\}$: an obligation requires the action of a patient the rule applies
+to, whereas a permission offers it, so a patient who declines has deviated from
+nothing. The force is a conditional operator, not an annotation, and it enters
+the logic at exactly one point --- the condition under which the rule counts as
+broken:
 \[
   \mathrm{viol}(R) =
   \begin{cases}
     \llbracket \mathit{when} \rrbracket \wedge
-      \neg\llbracket \mathit{then} \rrbracket & \delta = \mathsf{O} \\
-    \bot & \delta = \mathsf{P.}
+      \neg\llbracket \mathit{then} \rrbracket & \delta = \mathsf{Obl} \\
+    \bot & \delta = \mathsf{Per.}
   \end{cases}
 \]
 
 \begin{proposition}[Permissions accuse no one]
 \label{prop:permission}
-If $\delta = \mathsf{P}$ then $\mathcal{D}\wedge P\wedge\mathrm{viol}(R)$ is
+If $\delta = \mathsf{Per}$ then $\mathcal{D}\wedge P\wedge\mathrm{viol}(R)$ is
 unsatisfiable for every $\mathcal{D}$ and every $P$.
 \end{proposition}
 \begin{proof}
