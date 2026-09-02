@@ -950,6 +950,13 @@ concept. Two jobs, and the second matters more:
       "epidural analgesia"   -> "epidural anaesthesia"
   Prefer the noun form of a procedure ("mobilisation", not "mobilising").
 
+  A verb like "lowering"/"raising" applied to a NUMBER ("lowering systolic BP
+  < 140 mmHg") is a THRESHOLD on that lab/vital value, not a separate
+  procedure -- list only the lab ("systolic BP"), never also "lowering
+  systolic BP" as its own procedure mention. The "BP lowering ->
+  antihypertensive therapy" mapping above is for when the guideline is
+  deciding WHETHER to treat, with no accompanying number.
+
 This is used only to SEARCH a terminology index; the code itself still comes
 from that index, never from you -- so a wrong guess here costs a wasted query,
 never a wrong code. Use null when the phrase is already the standard name."""
@@ -1018,7 +1025,7 @@ def _drop_overlaps(ms: list[Mention]) -> list[Mention]:
 
 SELECT_SCHEMA = {
     "type": "object",
-    "required": ["choice", "reason"],
+    "required": ["choice", "reason", "data_capturable"],
     "additionalProperties": False,
     "properties": {
         # An INDEX into the candidate list, or -1 to abstain. Never a code.
@@ -1026,6 +1033,16 @@ SELECT_SCHEMA = {
         # select() range-checks the value instead.
         "choice": {"type": "integer"},
         "reason": {"type": "string"},
+        # Only meaningful when choice is -1. classify_unbound() used to
+        # re-derive this by re-searching the bare phrase alone, with no
+        # sentence context -- which cannot tell a coin-flip miss on a real
+        # concept ("at start LRD") apart from a confident, context-aware
+        # rejection of a lexically-similar but wrong concept ("Exhaling" for
+        # a weightlifting breathing cue). select() already has the sentence
+        # in view; asking it directly is a structured signal, not a second
+        # guess. Measured (6/6 clean separation on a known set, see
+        # BACKLOG.md item 5) before this field existed in production.
+        "data_capturable": {"type": "boolean"},
     },
 }
 
@@ -1049,7 +1066,18 @@ refusal report, which is a correct and expected outcome -- a wrong binding is
 far worse, because nothing downstream can detect it.
 
 Watch the near-misses: mass ratio vs molar ratio, hyper- vs hypo-, type 1 vs
-type 2, with vs without complication, measurement vs finding."""
+type 2, with vs without complication, measurement vs finding.
+
+Also answer `data_capturable`. If you abstained (choice -1): is the concept
+named in the phrase something a structured health record would ever capture
+as a discrete, coded fact -- even if none of the candidates shown happens to
+be it -- or is it inherently not that kind of thing, e.g. a momentary
+technique cue or instruction during an activity, not a fact about the
+patient? A candidate existing is not enough on its own: "Exhaling" may be an
+exact-term match for a breathing-technique cue during a specific exercise
+and still not be data_capturable, because the SENTENCE is instructing a
+technique, not recording a patient fact. If you selected a candidate
+(choice >= 0), set this true."""
 
 def build_select_prompt(mention: Mention, sentence: str,
                         cands: list[Candidate]) -> str:
@@ -1070,26 +1098,37 @@ POSITIVE_EVIDENCE = {"exact_term", "unit_match", "all_query_tokens"}
 
 def _heuristic_select(mention: Mention, cands: list[Candidate]) -> dict:
     """Offline fallback. Abstains unless there is positive evidence AND no
-    near-tie -- a near-tie is exactly the minimal-pair case."""
+    near-tie -- a near-tie is exactly the minimal-pair case.
+
+    No model is available here to judge `data_capturable`, so it defaults to
+    matching what `classify_unbound` used to infer on its own: False only
+    when there was nothing to choose from at all, True whenever real
+    candidates existed -- preserving the offline/test-mode behavior exactly,
+    since the new signal only improves on the old one when a real model
+    (with sentence context) is actually answering it."""
     if not cands:
-        return {"choice": -1, "reason": "no candidates"}
+        return {"choice": -1, "reason": "no candidates", "data_capturable": False}
     best = cands[0]
     evidence = set(best.why) & POSITIVE_EVIDENCE
     if not evidence:
         return {"choice": -1,
                 "reason": f"no positive evidence for {best.concept.term!r}: the phrase "
-                          f"matched only loosely ({', '.join(best.why) or 'nothing'})"}
+                          f"matched only loosely ({', '.join(best.why) or 'nothing'})",
+                "data_capturable": True}
     if "unit_mismatch" in best.why:
         return {"choice": -1,
                 "reason": f"unit mismatch: sentence says {mention.unit}, "
-                          f"{best.concept.term!r} is in {best.concept.unit}"}
+                          f"{best.concept.term!r} is in {best.concept.unit}",
+                "data_capturable": True}
     runner = cands[1].score if len(cands) > 1 else float("-inf")
     if best.score - runner < 1.0:
         return {"choice": -1,
                 "reason": f"ambiguous: {best.concept.term!r} vs {cands[1].concept.term!r} "
-                          f"({best.score:.2f} vs {runner:.2f})"}
+                          f"({best.score:.2f} vs {runner:.2f})",
+                "data_capturable": True}
     return {"choice": 0,
-            "reason": f"{'/'.join(sorted(evidence))} ({best.score:.2f})"}
+            "reason": f"{'/'.join(sorted(evidence))} ({best.score:.2f})",
+            "data_capturable": True}
 
 def select(mention: Mention, sentence: str, cands: list[Candidate],
            llm: Callable[[str], dict] | None = None) -> tuple[dict, str]:
@@ -1145,13 +1184,18 @@ def bind(mention: Mention, sentence: str, index: TerminologyIndex,
     shown = tuple(f"{c.concept.term} ({c.concept.curie})" for c in cands)
     verdict, selector = select(mention, sentence, cands, llm)
     choice, reason = verdict.get("choice", -1), verdict.get("reason", "")
+    # Carried straight from select(), which saw the full sentence -- not
+    # re-derived later from the bare phrase alone. See SELECT_SCHEMA's
+    # docstring and BACKLOG.md item 5.
+    data_capturable = bool(verdict.get("data_capturable", bool(cands)))
 
     if choice == -1 or not cands:
         return dsl.Refusal(
             rule_id=ref_id or mention.text, reason_code="unbound_concept",
             reason_text=(f"no terminology binding for {mention.text!r} "
                          f"({mention.kind}): {reason}"),
-            source_span=mention.text, confidence=None)
+            source_span=mention.text, confidence=None,
+            evidence=(f"data_capturable={data_capturable}",))
 
     c = cands[choice].concept
     # A value set that expands to NOTHING is not a usable binding: every

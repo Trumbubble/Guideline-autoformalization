@@ -226,11 +226,37 @@ Never encode the modality as a variable. "may", "should", "consider" describe
 the recommendation, not the patient, and no data source can populate them.
 `deontic` and `strength` are where that information belongs.
 
-If the recommendation cannot be faithfully encoded -- an unstated threshold
-("adequate", "high risk", "significant"), an exception or discretion the logic
-cannot carry, a statement about services rather than a patient -- return a
-refusal with the reason code that fits. DO NOT invent a threshold the source
-text does not state. A refusal is a correct and expected answer.
+If the recommendation cannot be faithfully encoded, return a refusal with the
+reason code that fits -- pick precisely, these are NOT interchangeable:
+
+  unbound_concept    -- a concept the recommendation needs (a drug, condition,
+                        procedure, or lab) has no terminology code available.
+                        A VOCABULARY gap: the concept is real, just uncoded.
+  vague_predicate    -- a condition or threshold IS named but is inherently
+                        undefined ("adequate", "high risk", "significant") --
+                        not a missing code, a missing DEFINITION.
+  defeasible         -- the recommendation is explicitly hedged or overridable
+                        BY DESIGN (shared decision-making, "at clinician
+                        discretion", a preference-sensitive decision) -- the
+                        FORCE of the recommendation is optional, not just one
+                        of its details.
+  not_patient_level  -- the statement is not about an individual patient's
+                        care plan at all -- a health-system, service, or
+                        policy statement, or meta-guidance about the
+                        guideline itself.
+  unsupported_temporal -- the timing described is more complex than a single
+                        "N days since an event" window can express (a
+                        multi-phase schedule, a cadence that changes over
+                        time).
+  beyond_dsl         -- even if every concept named could bind, the
+                        recommendation's LOGICAL STRUCTURE does not fit
+                        `when -> then` at all -- e.g. guidance about how to
+                        INTERPRET a result rather than what action to take,
+                        or a rule that would certify every patient or forbid
+                        nothing.
+
+DO NOT invent a threshold the source text does not state. A refusal is a
+correct and expected answer.
 
 When you refuse, list in `undefined_predicates` the exact phrases that made it
 unencodable, copied VERBATIM from the recommendation -- "at high risk", "an

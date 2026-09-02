@@ -482,12 +482,33 @@ def validate(expr: Expr, reg: Registry, path: str = "when") -> list[Issue]:
         out.append(Issue(path, "BAD_NODE", f"not an expression node: {expr!r}"))
     return out
 
-def _action_atoms(expr: Expr, reg: Registry) -> set[str]:
+def _action_atoms(expr: Expr, reg: Registry, action: str | None = None,
+                  no_action_dropped: bool = False) -> set[str]:
     """Atoms in an obligation that a care plan can actually decide. A Since
     node counts: in a `then`, "potassium checked within 14 days" is a demand
-    that the plan order the test, not an observation of patient state."""
+    that the plan order the test, not an observation of patient state.
+
+    `no_action_dropped` is precomputed by the caller, which alone has both
+    `when` and `then`: True only when EVERY action-role variable in the
+    registry is referenced somewhere in the rule (as a decision atom OR as a
+    Since/Delta anchor). An action-role var bound but referenced NOWHERE is
+    the PMC13270348:0143 shape this check exists to catch (the real action
+    dropped, a precondition promoted in its place -- see
+    test_the_recommended_action_going_missing_is_flagged), and must keep
+    failing. One bound ONLY as a Since baseline (like `mechanical_thrombectomy`
+    in "avoid lowering BP < 140 in the 24h after thrombectomy") is accounted
+    for, not dropped -- it was never the action this rule is about."""
     if isinstance(expr, (Cmp, Between)):
-        return {expr.var} if expr.var in reg and reg.role_of(expr.var) == "action" else set()
+        if expr.var in reg and reg.role_of(expr.var) == "action":
+            return {expr.var}
+        # A numeric threshold IS the action for avoid/hold/monitor -- "avoid
+        # systolic BP < 140" has no drug or procedure to point to, the target
+        # value itself is what the plan manages toward. Restricted to those
+        # three verbs (never "recommend", which needs a real action).
+        if (action in {"avoid", "hold", "monitor"} and expr.var in reg
+                and reg.type_of(expr.var) in NUMERIC and no_action_dropped):
+            return {expr.var}
+        return set()
     if isinstance(expr, Since):
         return {expr.event} if reg.has_event(expr.event) else set()
     if isinstance(expr, Delta):
@@ -497,9 +518,11 @@ def _action_atoms(expr: Expr, reg: Registry) -> set[str]:
         # rule, since the dose is also an observation of the patient.
         return {expr.var} if expr.var in reg else set()
     if isinstance(expr, Not):
-        return _action_atoms(expr.operand, reg)
+        return _action_atoms(expr.operand, reg, action, no_action_dropped)
     if isinstance(expr, (And, Or)):
-        return set().union(*(_action_atoms(o, reg) for o in expr.operands)) if expr.operands else set()
+        return (set().union(*(_action_atoms(o, reg, action, no_action_dropped)
+                              for o in expr.operands))
+                if expr.operands else set())
     return set()
 
 # Words in a `target` gloss that carry no identity -- matching on them would
@@ -924,7 +947,9 @@ def validate_rule(rule: Rule, reg: Registry) -> list[Issue]:
     # action in a different vocabulary than the variable does
     # ("thromboprophylaxis" vs `on_lmwh`), so a hard rejection here would
     # discard good rules. It belongs in the report, where a human decides.
-    acts = _action_atoms(rule.then, reg)
+    _referenced = _vars_in(rule.when) | _vars_in(rule.then) | set(events_in(rule))
+    _no_action_dropped = all(n in _referenced for n in reg.actions())
+    acts = _action_atoms(rule.then, reg, rule.action, _no_action_dropped)
     if acts and rule.target:
         want = {w for w in re.findall(r"[a-z]+", rule.target.lower())
                 if len(w) > 3 and w not in _TARGET_STOP}
@@ -957,7 +982,7 @@ def validate_rule(rule: Rule, reg: Registry) -> list[Issue]:
                             "the recommendation, it is a different one -- check "
                             "whether the quantity belongs in `when` or `then`",
                             severity="warn"))
-    if not _action_atoms(rule.then, reg):
+    if not _action_atoms(rule.then, reg, rule.action, _no_action_dropped):
         issues.append(Issue("then", "NO_ACTION_ATOM",
                             "the obligation mentions no action variable or event",
                             f"actions: {', '.join(reg.actions()) or '(none)'}; "
@@ -1348,9 +1373,25 @@ MODAL_PREDICATES = frozenset({
 MODAL_VERBS = frozenset({"may", "might", "could", "would", "should", "shall",
                          "must", "can", "ought"})
 
+# Discretion expressed as a NOUN PHRASE describing the decision process
+# itself ("shared decision-making"), not a modal verb or a hedging adjective
+# describing a value. MODAL_PREDICATES' token-by-token match can't catch
+# this shape no matter how many individual words get added to it, because
+# none of the words ("preference", "shared", "decision", "making") are
+# themselves hedging -- it's the phrase as a whole that signals discretion.
+# Matched by substring, like VAGUE_HINTS, rather than requiring every token
+# to match. Measured on PMC13054209:0005: "a preference-sensitive decision,
+# requiring a shared decision-making approach" produced
+# `has_preference_sensitive_decision` and `shared_decision_making_approach`
+# as PARTIAL holes instead of the `defeasible` refusal this is.
+MODAL_PHRASES = ("preference_sensitive", "shared_decision_making")
+
 def modal_only(name: str) -> bool:
     """True if a variable name says nothing but 'the guideline is hedging'."""
-    toks = [t for t in _stem(name).split("_") if t]
+    stem = _stem(name)
+    if any(p in stem for p in MODAL_PHRASES):
+        return True
+    toks = [t for t in stem.split("_") if t]
     if not toks:
         return False
     if any(t in MODAL_VERBS for t in toks):
@@ -1763,16 +1804,24 @@ def decoding_schema(reg: Registry, max_depth: int = MAX_DECODING_DEPTH) -> dict:
         return {"type": "object", "required": required,
                 "additionalProperties": False, "properties": props}
 
+    # `between` means a NUMERIC range -- offering it against every variable,
+    # booleans included, let the model pick a boolean action var (drugs and
+    # procedures always bind as booleans) with nowhere to attach `lo`/`hi`,
+    # caught only afterward as a TYPE_ERROR. Gated the same way `delta` is
+    # already gated on `reg.event_names()`: no numeric variable, no leaf.
+    numeric_names = [n for n in reg.names() if reg.type_of(n) in NUMERIC]
     leaves = [
         obj(["kind", "var", "op", "value"],
             {"kind": {"const": "cmp"}, "var": {"$ref": "#/$defs/var"},
              "op": {"enum": sorted(CMP)},
              "value": {"type": ["number", "boolean", "string"]}}),
-        obj(["kind", "var", "lo", "hi", "lo_inclusive", "hi_inclusive"],
-            {"kind": {"const": "between"}, "var": {"$ref": "#/$defs/var"},
-             "lo": {"type": "number"}, "hi": {"type": "number"},
-             "lo_inclusive": {"type": "boolean"}, "hi_inclusive": {"type": "boolean"}}),
     ]
+    if numeric_names:
+        leaves.append(obj(
+            ["kind", "var", "lo", "hi", "lo_inclusive", "hi_inclusive"],
+            {"kind": {"const": "between"}, "var": {"$ref": "#/$defs/numvar"},
+             "lo": {"type": "number"}, "hi": {"type": "number"},
+             "lo_inclusive": {"type": "boolean"}, "hi_inclusive": {"type": "boolean"}}))
     if reg.event_names():
         # Only offered when the registry has both an event to measure from and
         # a numeric variable to change -- a titration node with nowhere to
@@ -1792,6 +1841,8 @@ def decoding_schema(reg: Registry, max_depth: int = MAX_DECODING_DEPTH) -> dict:
                            "inclusive": {"type": "boolean"}}))
 
     defs: dict = {"var": {"enum": reg.names()}}
+    if numeric_names:
+        defs["numvar"] = {"enum": numeric_names}
     if reg.event_names():
         defs["event"] = {"enum": reg.event_names()}
     # Leaves are defined ONCE and referenced. Inlining them at every level

@@ -120,7 +120,7 @@ single-guideline API.
 
 ```sh
 python3 -m pip install -r ../requirements.txt
-python3 api.py
+../.venv/bin/python3 api.py
 
 curl -s localhost:8000/guidelines/fixtures/rules | python3 -m json.tool
 
@@ -182,7 +182,7 @@ request as `api_key`, used for that one call via
 process. Leave it blank to fall back to the server's own `.env`.
 
 ```sh
-python3 api.py
+../.venv/bin/python3 api.py
 # open http://localhost:8000/
 ```
 

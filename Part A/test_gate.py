@@ -62,6 +62,45 @@ def test_a_retrieval_failure_is_not_a_hole():
                         source_span="at high risk")
     assert [h.name for h in holes_from(S_HOLE, [vague], [])] == ["has_high_risk"]
 
+def test_a_selector_miss_with_real_candidates_becomes_a_hole():
+    """'refer to nephrology' failed to bind, but candidates existed and the
+    single-shot selector just didn't commit to one (unbound_unselected).
+    Unlike a genuine index gap, that's close enough to legitimate ambiguity
+    to become a hole rather than discard the whole statement over one
+    unlucky pick -- measured on PMC13074134's basal-insulin statements."""
+    miss = dsl.Refusal("s", "unbound_concept", "no candidates",
+                       source_span="refer to nephrology")
+    holes = holes_from(S_HOLE, [miss], [], ["unbound_unselected"])
+    assert [h.description for h in holes] == ["refer to nephrology"]
+
+def test_an_index_gap_classification_does_not_unlock_a_hole():
+    """Passing SOME classification isn't enough on its own -- only
+    'unbound_unselected' unlocks a hole. A true index gap stays excluded
+    exactly as before, so a real retrieval bug still surfaces as a refusal
+    instead of being laundered into a finding."""
+    miss = dsl.Refusal("s", "unbound_concept", "no candidates",
+                       source_span="refer to nephrology")
+    assert holes_from(S_HOLE, [miss], [], ["unbound_index_gap"]) == ()
+
+def test_unbound_kinds_is_matched_to_refusals_by_position():
+    """Two refusals, only one classified unselected -- only that one becomes
+    a hole, confirming the classifications line up by position and aren't
+    applied to every refusal once any one of them qualifies."""
+    gap = dsl.Refusal("s", "unbound_concept", "no candidates",
+                      source_span="refer to nephrology")
+    unselected = dsl.Refusal("s", "unbound_concept", "no candidates",
+                             source_span="serum ferritin")
+    holes = holes_from(S_HOLE, [gap, unselected], [],
+                       ["unbound_index_gap", "unbound_unselected"])
+    assert [h.description for h in holes] == ["serum ferritin"]
+
+def test_holes_from_without_unbound_kinds_is_unchanged():
+    """Callers that don't pass the new parameter (e.g. the offline/no-model
+    path) must see exactly the old, VAGUE_HINTS-only behavior."""
+    miss = dsl.Refusal("s", "unbound_concept", "no candidates",
+                       source_span="refer to nephrology")
+    assert holes_from(S_HOLE, [miss], []) == ()
+
 def test_is_vague_lexicon():
     assert is_vague("at high risk") and is_vague("an adequate trial")
     assert not is_vague("serum potassium") and not is_vague("refer to nephrology")
