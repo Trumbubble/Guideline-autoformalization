@@ -3,9 +3,32 @@
 **Deadline: 5 Sep 2026, 11:59pm AoE. 5 pages max (excl. refs/appendix). Double-blind.**
 
 ## Overleaf setup
-1. New Project → Upload Project → zip this `paper/` folder.
-2. Add `neurips_2026.sty` from the workshop/NeurIPS site (not included here).
-3. Menu → Compiler: **pdfLaTeX**.
+1. New Project → Upload Project → zip this `paper/` folder. It is self-contained:
+   `neurips_2026.sty` and `checklist.tex` are already in here.
+2. Menu → Compiler: **pdfLaTeX**.
+
+### Venue options — already set, don't change them by accident
+This is a **double-blind workshop**, so the package option is `dblblindworkshop`:
+
+    \usepackage[dblblindworkshop]{neurips_2026}
+    \workshoptitle{GenAI for Health}
+
+- **not** `[final]` — that de-anonymises you (desk-reject risk for a
+  double-blind track)
+- **not** the bare `{neurips_2026}` — that formats for the main conference
+- `\workshoptitle` is required, or the page footer reads `Workshop: .`
+- for the camera-ready in October: `[dblblindworkshop, final]`
+- in anonymous mode the style file **ignores** `\author` and prints its own
+  block, so fill the real details in now and they appear when you add `final`
+- the style loads `natbib`, hence `\bibliographystyle{plainnat}`
+
+### Checklist — VERIFY THIS
+`checklist.tex` ships with the NeurIPS template and states in bold that papers
+without it are **desk rejected**. That is the *main conference* rule, and the
+GenAI4Health CFP does not mention a checklist for the demonstration track.
+**Check the OpenReview submission form before the deadline.** It does not count
+against the page limit, so if in any doubt, uncomment `\input{checklist}` at the
+bottom of `main.tex` and fill it in.
 4. `\draftmodetrue` shows the guidance notes; set `\draftmodefalse` to see the
    true page count. **Submit with notes off and `neurips_2026` un-optioned.**
 

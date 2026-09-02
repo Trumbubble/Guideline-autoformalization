@@ -242,3 +242,5 @@ Part A/terms.db
 Part A/semantic/
 *.npy
 paper.zip
+.DS_Store
+Formatting_Instructions_For_NeurIPS_2026/

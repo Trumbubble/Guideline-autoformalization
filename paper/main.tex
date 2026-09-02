@@ -24,9 +24,13 @@
 
 \documentclass{article}
 
-\usepackage[final]{neurips_2026}   % `final` = non-anonymous. For SUBMISSION use
-                                    % \usepackage{neurips_2026} with no option.
-                                    % <-- SWITCH THIS BEFORE YOU SUBMIT.
+% THIS venue is a double-blind WORKSHOP, so the option is `dblblindworkshop`
+% (not `final`, which would de-anonymise you, and not the bare package, which
+% formats for the main track).  For the camera-ready in October, add `final`:
+%     \usepackage[dblblindworkshop, final]{neurips_2026}
+\usepackage[dblblindworkshop]{neurips_2026}
+\workshoptitle{GenAI for Health}   % printed in the page footer; required by the
+                                   % workshop options or the footer reads "Workshop: ."
 
 \usepackage[utf8]{inputenc}
 \usepackage[T1]{fontenc}
@@ -139,10 +143,14 @@
 %   Don't Stub, Don't Guess: Formalising Clinical Guidelines with Named Holes
 % Pick one and stop -- the title is not where your remaining hours go.
 
+% In anonymous mode the style file IGNORES this block and prints its own
+% "Anonymous Author(s)" instead -- so put the real details here now and they
+% will simply appear when you add the `final` option for the camera-ready.
 \author{%
-  Anonymous Author(s)\\
-  Affiliation\\
-  \texttt{email}
+  Author Name \\                    % <-- REPLACE (plain text, not \todo:
+  Department \\                     %     \todo vanishes when draft mode is off,
+  Institution, City, Country \\     %     which would leave this block empty in
+  \texttt{name@institution.edu}     %     the camera-ready)
 }
 
 \begin{document}
@@ -545,7 +553,8 @@ python3 -m pytest test_replay.py -q                # replays a real run
 \fi
 
 %==============================================================================
-\bibliographystyle{plain}
+% neurips_2026 loads natbib, so use a natbib-aware style.
+\bibliographystyle{plainnat}
 \bibliography{refs}
 \note{refs.bib needs: PathWISE (the false-stub baseline); the K-sample /
 disagreement method; the $\sim$0.71 F1 error-categorisation result; the
@@ -600,5 +609,19 @@ check that now catches it'', with 5--6 rows. That table is the strongest thing i
 the log, because it shows you can enumerate the failure classes precisely
 BECAUSE you built detectors for them. Presented as a closed arc it reads as
 rigour; presented as a list of past bugs it reads as a confession.}
+
+%==============================================================================
+% NeurIPS CHECKLIST
+%
+% VERIFY WHETHER THIS TRACK REQUIRES IT.  checklist.tex ships with the template
+% and says in bold "papers not including the checklist will be desk rejected" --
+% but that is the MAIN CONFERENCE instruction, and the GenAI4Health CFP does not
+% mention a checklist for the demonstration track.  Check the OpenReview
+% submission form before the deadline; it costs nothing to include and a desk
+% rejection costs everything.  It does NOT count against the page limit.
+%
+% To include:  \input{checklist}   (checklist.tex is in this folder)
+%==============================================================================
+%\input{checklist}
 
 \end{document}
