@@ -165,9 +165,25 @@ def holes_from(statement: str, refusals, declined,
     return tuple(out)
 
 def classify_unbound(refusal, index) -> str:
-    """`index_gap` when retrieval returned nothing to choose from; `unselected`
-    when it returned candidates and none was right. Free to compute -- the
-    terminology endpoints cost nothing and the query is already cached."""
+    """`index_gap` when the concept isn't the kind of thing a data source
+    would capture (or nothing was even found); `unselected` when it is, and
+    a single-shot select() call just didn't commit to a candidate.
+
+    Prefers `refusal.evidence`'s `data_capturable` flag when present --
+    carried straight from `select()`, which judged this WITH the full
+    sentence in view (see `bind.py`'s SELECT_SCHEMA and BACKLOG.md item 5:
+    "did any candidate exist at all" was measured to NOT distinguish a
+    genuine coverage gap from a lexically-similar-but-wrong candidate the
+    model correctly rejected -- "at start LRD" and "Exhaling" both had
+    candidates; only the sentence-aware judgment tells them apart). Falls
+    back to the old blind re-search only for refusals that never went
+    through that path (e.g. a code rejected by `index.validate` after
+    selection)."""
+    for e in refusal.evidence or ():
+        if e == "data_capturable=True":
+            return "unbound_unselected"
+        if e == "data_capturable=False":
+            return "unbound_index_gap"
     phrase = (refusal.source_span or "").strip()
     if not phrase:
         return "unbound_unknown"

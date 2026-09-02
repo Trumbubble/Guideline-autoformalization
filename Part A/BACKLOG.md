@@ -244,6 +244,54 @@ caveat: the fix is correct and verified at the unit level; live
 confirmation on this specific statement is currently blocked by a separate,
 already-tracked issue, not a failure of this fix.
 
+### R7. `classify_unbound` re-checked a phrase with NO sentence context -- FIXED 2026-09-02
+
+PMC13090725:0503 ("avoid holding their breath during the exertion phase of
+weightlifting...") should REFUSE -- gold's own note is explicit: this isn't
+recorded in any real health record, it's a technique cue, not clinical
+data. Instead returned PARTIAL, promoting "Exhaling" (an exact term match,
+`overlap=1.00`) and "Breath holding attack" (a pediatric behavioral
+condition, 50% overlap) into holes. Two prior fix attempts failed on closer
+inspection: a stricter lexical-overlap requirement changed nothing (these
+candidates were never lexically weak), and restricting the rescue to
+`kind in {"drug","drug_class"}` was caught before implementing -- it would
+have regressed `PMC13074134:0010`'s "at start LRD" (`procedure`-kind, this
+session's first fix), which has the identical shape of weak-but-real
+candidates.
+
+**Measured before implementing anything, per the plan.** `bind.select()`
+already asks the model for a free-text `reason` WITH the sentence in view
+on every call -- but `classify_unbound` never used it, re-deriving a guess
+from the bare phrase alone instead. Tested two designs against a known
+6-phrase set (3 that must stay rescuable, 3 that must not) before writing
+production code for either:
+- Explicit confidence field on `select()`'s existing schema: **6/6 clean
+  separation**, cheaply ($0.036, 6 calls). Every should-rescue phrase
+  answered `data_capturable=True`, every should-NOT-rescue phrase answered
+  `False` -- including correctly noting that "Exhaling" exists as an exact
+  match but doesn't apply here, given the sentence.
+- (K-sample consistency voting was the other candidate; not tested, since
+  the first design already gave an unambiguous, cheap result.)
+
+Implemented: `SELECT_SCHEMA` (`bind.py`) gained a required `data_capturable`
+boolean, asked directly in `SELECT_INSTRUCTIONS` ("even though none of the
+candidates matched, is this the kind of fact a structured health record
+would ever capture?"). `bind()` now carries the answer straight onto the
+`Refusal`'s `evidence` field instead of leaving it implicit.
+`classify_unbound` (`gate.py`) reads that field first, falling back to the
+old blind re-search only for refusals that never went through `select()`
+(e.g. a code rejected post-selection by `index.validate`). The offline
+heuristic fallback (`_heuristic_select`) defaults to the OLD behavior
+exactly (`False` only when there were zero candidates at all), so
+offline/test-mode behavior is unchanged -- only the live path, where a real
+model can actually answer the question, changes.
+
+Verified live, both directions (mandatory given the near-miss regression
+above): `PMC13090725:0503` now REFUSEs correctly. `PMC13074134:0010`
+("at start LRD") and `:0018` (all 8 drug brands) both still PARTIAL exactly
+as before, full `Delta` rules intact -- zero regression on the session's
+first and most important fix. 155/155 offline tests pass throughout.
+
 ## Open
 
 ### 1. Grammar-too-large ceiling: event cap helps, doesn't fully close it
@@ -313,51 +361,7 @@ session. Run instructions now live only in `Part B/CHECKER.md`. Nobody has
 decided whether to recreate a root README or leave documentation split this
 way -- open question, not a bug.
 
-### 5. `classify_unbound` re-checks a phrase with NO sentence context, so it can't tell a confident correct rejection from a coin-flip miss
-
-PMC13090725:0503 ("avoid holding their breath during the exertion phase of
-weightlifting...") should REFUSE -- gold's own note is explicit: this isn't
-recorded in any real health record, it's a technique cue, not clinical
-data. Instead it returns PARTIAL with 2 holes.
-
-**First hypothesis was wrong -- corrected after checking the raw data.**
-Assumed the promoted candidates ("Exhaling," "Breath holding attack") were
-weak, generic, lexically-loose matches, and tried fixing it by requiring
-`classify_unbound` to demand real token overlap (an exact term, all query
-tokens present, or nonzero overlap) before calling something
-`unbound_unselected`. Checked directly against `terms.db`: these candidates
-are NOT weak matches -- "Exhaling" is an exact term match (`overlap=1.00`),
-"Breath holding attack" has genuine 50% token overlap. The fix changed
-nothing for this statement and was reverted (155/155 tests still passed,
-but it didn't solve the actual bug, so keeping it added complexity for no
-benefit). Confirmed via a free, no-LLM-cost sweep against every relevant
-phrase from this session that the revert didn't regress the ORIGINAL
-PMC13074134 rescue cases either way.
-
-**The real problem**: these are strong lexical matches to the wrong
-CONTEXT -- "Breath holding attack" is a pediatric behavioral condition, not
-a weightlifting technique cue, and "Exhaling" as a generic physiological
-code doesn't capture "exhale during the concentric phase of this specific
-exercise." The original `select()` call actually got this right the first
-time -- it saw these candidates WITH the full sentence and correctly
-abstained. `classify_unbound` re-checks the bare phrase alone, with no
-sentence context at all, so it structurally cannot distinguish "select()
-made a lucky/unlucky single-shot guess" from "select() correctly rejected a
-lexically-similar-but-wrong candidate with full context." This is item 2's
-underlying cause (single-shot binder judgment) wearing a different hat, not
-an independently-fixable lexical-scoring problem.
-
-Two designs discussed, neither implemented: (A) restrict the hole-eligibility
-rescue to `kind in {"drug", "drug_class"}` only, where "a candidate exists"
-is a much more reliable signal (drug brand names are close to
-context-independent) -- cheap, safe, but blunt (also stops rescuing valid
-`procedure`/`condition` cases). (B) have `select()` report its own
-confidence when it abstains, in the SAME call it already makes (a new field
-on its output schema), and use that direct signal instead of a second,
-context-blind guess -- more correct, but touches `bind.py`'s schema, new
-territory this session hasn't modified. No decision made yet.
-
-### 6. A phrase can fail to bind because the index has only MORE SPECIFIC candidates than what the sentence generically said (the mirror image of item 5)
+### 5. A phrase can fail to bind because the index has only MORE SPECIFIC candidates than what the sentence generically said (the mirror image of R7)
 
 PMC13270348:0024 ("we recommend epidural analgesia... provided local
 expertise is available") should PARTIAL (epidural analgesia is a real,
@@ -369,18 +373,25 @@ candidate is a generic 'epidural analgesia' concept" -- the index only has
 SPECIFIC variants (by route/level), and none of them is a fair match for the
 sentence's deliberately generic phrasing, so binding correctly fails.
 
-Item 5 is a context-blind check letting a WRONG candidate rescue a phrase it
-shouldn't. This is the same underlying gap (matching needs sentence-level
-judgment a bare candidate/index lookup can't provide) producing the OPPOSITE
-symptom: a RIGHT concept failing to bind because reality's terminology is
-more granular than the guideline's own wording. Not investigated further
-this session -- noting the relationship to item 5 rather than proposing a
-fix, since a real fix likely needs the same missing piece (design B above)
-either way.
+R7 was a context-blind check letting a WRONG candidate rescue a phrase it
+shouldn't -- fixed by having `select()` report `data_capturable` directly,
+with the sentence in view. This is the same underlying gap producing the
+OPPOSITE symptom: a RIGHT concept failing to bind because reality's
+terminology is more granular than the guideline's own wording.
+
+R7's fix may partially help this case (untested) -- `data_capturable` for
+"epidural analgesia" would very plausibly be True (it's a real bindable
+concept, not a technique cue), which would at least promote it to a hole
+instead of a hard refusal, turning this into a PARTIAL. But that's a lesser
+outcome than gold's ideal (epidural analgesia as a properly bound ACTION
+variable, not a boolean hole) -- full resolution would need something more:
+recognizing that a generic phrase over several specific same-family
+candidates (route/level variants of the same procedure) should bind to the
+FAMILY, not abstain entirely. Not investigated further this session.
 
 ## Known, not pursued further
 
-### 7. Pre-existing PDF/pymupdf test failures
+### 6. Pre-existing PDF/pymupdf test failures
 
 `test_segment.py::test_pdf_box_recovery_finds_the_callout` and
 `test_pdf_statements_carry_page_and_bbox` fail with
