@@ -86,7 +86,7 @@ $2$ are permissive --- which is the reason for the first set.
 
 \begin{table}[t]
   \centering
-  \caption{Designed sweep: $144$ rules $\times$ $50$ records $=$ $4{,}567$
+  \caption{Designed sweep: $144$ rules $\times$ $50$ records $=$ $4{,}569$
   pairs. Percentages are of pairs, over a sample enriched for disagreement.}
   \label{tab:generated}
   \begin{tabular}{lrr}
@@ -136,7 +136,7 @@ effect --- and why a system evaluated on those rules alone would not discover
 the second.
 
 \paragraph{Deontic force.}
-The gap between $40.1\%$ and $2.6\%$ is not a disagreement. Half the designed
+The gap between $40.2\%$ and $2.6\%$ is not a disagreement. Half the designed
 sweep is permissive by construction; $2$ of $19$ extracted rules are. The
 designed figure is the effect when the guard applies; the extracted figure is
 how often it applies to this corpus. Both are needed, and quoting either alone
@@ -167,15 +167,15 @@ it reports both as violations. Roughly two thirds of pairs are affected.
   \label{tab:holepos}
   \begin{tabular}{llrrr}
     \toprule
-    Substitution & Predicate sits in & pairs & to compliant & to violation \\
+    Substitution & Predicate sits in & pairs & $\rightarrow$ \textsc{certified} & $\rightarrow$ \textsc{must-violate} \\
     \midrule
-    \textsf{false} & the antecedent & 1642 & 8.2\% & 0.0\% \\
-    \textsf{false} & the consequent & 1634 & 0.0\% & 3.7\% \\
-    \textsf{false} & --- (control)  & 1291 & 0.0\% & 0.0\% \\
+    \textsf{false} & the antecedent & 1642 & 8.3\% & 0.0\% \\
+    \textsf{false} & the consequent & 1635 & 0.0\% & 4.2\% \\
+    \textsf{false} & --- (control) & 1292 & 0.0\% & 0.0\% \\
     \addlinespace
-    \textsf{true}  & the antecedent & 1642 & 0.0\% & 22.3\% \\
-    \textsf{true}  & the consequent & 1634 & 0.0\% & 0.0\% \\
-    \textsf{true}  & --- (control)  & 1291 & 0.0\% & 0.0\% \\
+    \textsf{true} & the antecedent & 1642 & 0.0\% & 22.4\% \\
+    \textsf{true} & the consequent & 1635 & 0.0\% & 0.0\% \\
+    \textsf{true} & --- (control) & 1292 & 0.0\% & 0.0\% \\
     \bottomrule
   \end{tabular}
 \end{table}
