@@ -193,11 +193,19 @@ it reports both as violations. Roughly two thirds of pairs are affected.
         moves $56.0\%$ of applicable existing-rule pairs and $6.3\%$ of applicable
         generated pairs. The directions agree; the magnitudes do not, and we do not claim
         one predicts the other.
-  \item \textbf{The generated vocabulary carries plausible ranges; the pipeline
-        supplies none.} Existing rules are therefore checked against a weaker
-        domain theory, admitting completions no clinician would accept. This is
-        a defect in the pipeline, not in the measurement, and it is one reason
-        the two samples differ.
+  \item \textbf{We cannot account for the gap between the two samples.} Under
+        substitution of \textsf{false} the rate is $59.2\%$ on existing rules
+        and $12.6\%$ on generated ones (obligations only, the comparable
+        subset). Three candidate explanations were tested and none accounts for
+        it: removing the plausible ranges from the generated vocabulary, to
+        match what the pipeline supplies, moves the rate from $6.3\%$ to
+        $8.7\%$; the two sets have near-identical rule sizes ($4.4$ against
+        $4.7$ variables per rule); and restricting both to obligations with the
+        undefined predicate in the antecedent leaves them diverging in opposite
+        directions ($16.7\%$ against $59.2\%$ for \textsf{false}, $44.8\%$
+        against $19.7\%$ for \textsf{true}). The directions of harm agree
+        across both samples; the magnitudes do not, and we do not claim the
+        generated set predicts behaviour on real material.
   \item \textbf{Records are enriched for disagreement.} Rates are conditional
         on that sampling and are not incidence in a patient population.
   \item \textbf{Rules are weighted unequally.} The unit is the rule--record

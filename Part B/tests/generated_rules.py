@@ -169,7 +169,7 @@ def _build_one(hole_pos, deontic, kind, shape, i):
     return rule, reg
 
 
-def build(verbose: bool = False):
+def build(verbose: bool = False, ranges: bool = True):
     """Sweep the grid.  Returns (rules, stats).
 
     `stats["source"]` maps rule_id -> (dsl.Rule, dsl.Registry) so the sweep can
@@ -186,6 +186,15 @@ def build(verbose: bool = False):
             except Exception as exc:
                 rejected.append((key, i, f"build error: {exc}"))
                 continue
+            if not ranges:
+                # Strip the plausible ranges, matching what the live pipeline
+                # actually supplies (nothing). Isolates how much of the gap
+                # between the two result tables is the domain theory rather
+                # than a difference between the rules themselves.
+                import dataclasses as _dc
+                reg = dsl.Registry(
+                    [_dc.replace(reg[n], plausible=None) for n in reg.names()],
+                    [reg.event(e) for e in reg.event_names()])
             issues = dsl.validate_rule(rule, reg)
             if not [x for x in issues if x.severity == "error"]:
                 issues = issues + dsl.check_nondegenerate(rule, reg)

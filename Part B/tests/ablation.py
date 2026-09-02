@@ -350,6 +350,9 @@ def main(argv=None) -> int:
     ap.add_argument("--out", default="ablation.csv", help="per-pair CSV")
     ap.add_argument("--no-fixtures", action="store_true",
                     help="Track A bundles only")
+    ap.add_argument("--no-ranges", action="store_true",
+                    help="generated rules without plausible ranges, as the live "
+                         "pipeline supplies them")
     ap.add_argument("--generated", action="store_true",
                     help="run over the designed sweep instead of the real rules")
     a = ap.parse_args(argv)
@@ -358,7 +361,7 @@ def main(argv=None) -> int:
     here = Path(__file__).resolve().parent
     if a.generated:
         from generated_rules import build as build_generated
-        rules, gen_stats = build_generated()
+        rules, gen_stats = build_generated(ranges=not a.no_ranges)
         sources = ["generated"] * len(rules)
         bundles = []
     else:
