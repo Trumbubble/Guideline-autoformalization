@@ -1,0 +1,164 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="880" viewBox="0 0 1400 880" role="img" aria-label="The rule language in three layers. Layer one: a registry of variable and event declarations, each carrying a version-pinned terminology binding, a role, a plausible range, and an unbound flag marking a named hole. Layer two: a grammar of four leaf nodes — comparison, interval, recency, relative change — plus not, and, or; a worked example is drawn as an expression tree whose leaves are tagged with the logical fragment each requires, and the rule's fragment is the maximum over the tree. Layer three: the rule is an implication under a deontic operator, with action and target carrying no semantics, and refusal available as an alternative outcome of the same decode.">
+        <defs>
+          <marker id="d1" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="mk" d="M0 0 L8 4 L0 8 z"/></marker>
+          <marker id="d2" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="mk-a" d="M0 0 L8 4 L0 8 z"/></marker>
+        </defs>
+<style><![CDATA[
+.card{fill:#FFFFFF; stroke:#6E7975; stroke-width:1}
+.card-2{fill:#E6EAE5; stroke:#C2CAC5; stroke-width:1}
+.node{fill:#FFFFFF; stroke:#6E7975; stroke-width:1.2}
+.node-op{fill:#DDEBE7; stroke:#0B5F55; stroke-width:1.6}
+.hole{fill:#F0DFD8; stroke:#8E3D22; stroke-width:1.2}
+.f0{fill:#E6EAE5; stroke:#6E7975; stroke-width:1}
+.f1{fill:#B7D6CE; stroke:#0B5F55; stroke-width:1}
+.f2{fill:#0B5F55; stroke:#0B5F55; stroke-width:1}
+.t-band{font-family:JetBrains Mono, DejaVu Sans Mono, monospace; font-weight:700; font-size:11px;
+  fill:#0B5F55; letter-spacing:.12em}
+.t-bandn{font-family:Archivo, Helvetica, Arial, sans-serif; font-weight:700; font-size:13px; fill:#111614}
+.t-cap{font-family:Archivo, Helvetica, Arial, sans-serif; font-weight:650; font-size:11.5px; fill:#111614}
+.t-code{font-family:JetBrains Mono, DejaVu Sans Mono, monospace; font-size:10px; fill:#4A5450}
+.t-code-k{font-family:JetBrains Mono, DejaVu Sans Mono, monospace; font-weight:700; font-size:10px; fill:#111614}
+.t-big{font-family:JetBrains Mono, DejaVu Sans Mono, monospace; font-weight:700; font-size:15px; fill:#111614}
+.t-note{font-family:Archivo, Helvetica, Arial, sans-serif; font-size:10.5px; font-style:italic; fill:#7C8783}
+.t-edge{font-family:JetBrains Mono, DejaVu Sans Mono, monospace; font-size:9.5px; fill:#4A5450}
+.t-frag{font-family:JetBrains Mono, DejaVu Sans Mono, monospace; font-weight:700; font-size:8.5px; fill:#111614}
+.t-frag-i{font-family:JetBrains Mono, DejaVu Sans Mono, monospace; font-weight:700; font-size:8.5px; fill:#FFFFFF}
+.edge{stroke:#6E7975; stroke-width:1.3; fill:none}
+.edge-a{stroke:#0B5F55; stroke-width:1.6; fill:none}
+.div{stroke:#C2CAC5; stroke-width:1}
+.mk{fill:#6E7975}
+.mk-a{fill:#0B5F55}
+]]></style>
+
+        <!-- ================= LAYER 1 ================= -->
+        <text class="t-band" x="24" y="26">01 · REGISTRY</text>
+        <text class="t-bandn" x="146" y="26">nothing can be named that was not first bound to a code</text>
+        <path class="div" d="M24 36 H1376"/>
+
+        <rect class="card" x="24" y="48" width="430" height="196" rx="5"/>
+        <text class="t-cap" x="38" y="68">a variable declaration</text>
+        <text class="t-code" x="38" y="88"><tspan x="38" dy="0"><tspan class="t-code-k">name       </tspan>acr_mg_g</tspan><tspan x="38" dy="15"><tspan class="t-code-k">type       </tspan>real | int | bool | code | date</tspan><tspan x="38" dy="15"><tspan class="t-code-k">unit       </tspan>mg/g</tspan><tspan x="38" dy="15"><tspan class="t-code-k">binding    </tspan>system | code | version</tspan><tspan x="38" dy="15"><tspan class="t-code-k">role       </tspan>observation | action</tspan><tspan x="38" dy="15"><tspan class="t-code-k">codes      </tspan>the value-set expansion</tspan><tspan x="38" dy="15"><tspan class="t-code-k">plausible  </tspan>a physiological range</tspan><tspan x="38" dy="15"><tspan class="t-code-k">unbound    </tspan>true = a named hole</tspan></text>
+        <text class="t-note" x="38" y="226">role is why an obligation must constrain something</text>
+        <text class="t-note" x="38" y="238">a care plan can actually change.</text>
+
+        <rect class="card" x="478" y="48" width="430" height="196" rx="5"/>
+        <text class="t-cap" x="492" y="68">as the binder emits it</text>
+        <text class="t-code" x="492" y="88"><tspan x="492" dy="0">VarDef(name="acr_mg_g", type="real",</tspan><tspan x="492" dy="15">    unit="mg/g",</tspan><tspan x="492" dy="15">    binding="http://loinc.org|9318-7|2.78",</tspan><tspan x="492" dy="15">    role="observation",</tspan><tspan x="492" dy="15">    plausible=(0, 3000))</tspan></text>
+        <path class="div" d="M492 172 H894"/>
+        <text class="t-note" x="492" y="190">LOINC 14585-4 is the same ratio in mg/mmol.</text>
+        <text class="t-note" x="492" y="204">The two score identically on every text signal</text>
+        <text class="t-note" x="492" y="218">and are a factor of 8.84 apart, so the unit in</text>
+        <text class="t-note" x="492" y="232">the declaration is part of the meaning.</text>
+
+        <rect class="card" x="932" y="48" width="444" height="196" rx="5"/>
+        <text class="t-cap" x="946" y="68">events, and the two kinds of hole</text>
+        <text class="t-code" x="946" y="88"><tspan x="946" dy="0">EventDef("potassium_check",</tspan><tspan x="946" dy="15">    binding="http://loinc.org|2823-3|2.78")</tspan></text>
+        <rect class="hole" x="946" y="112" width="416" height="58" rx="4"/>
+        <text class="t-code" x="956" y="128"><tspan x="956" dy="0">VarDef("has_high_risk", unbound=True)</tspan><tspan x="956" dy="14">EventDef("start_lrd",   unbound=True)</tspan></text>
+        <text class="t-note" x="956" y="162">a predicate, and an anchor, the sentence names</text>
+        <text class="t-note" x="946" y="190">A hole is a real free variable: no binding, no data</text>
+        <text class="t-note" x="946" y="204">source, and no domain axiom — constraining it</text>
+        <text class="t-note" x="946" y="218">would assert something the guideline never said.</text>
+        <text class="t-note" x="946" y="232">It is a property of a declaration, not a new node.</text>
+
+        <path class="edge-a" marker-end="url(#d2)" d="M24 258 H1376"/>
+        <text class="t-edge" x="700" y="272" text-anchor="middle">the decoder's variable and event enums ARE these lists of names — an unbound concept is not expressible, only refusable</text>
+
+        <!-- ================= LAYER 2 ================= -->
+        <text class="t-band" x="24" y="308">02 · GRAMMAR</text>
+        <text class="t-bandn" x="146" y="308">four leaves, three connectives — and that is all of it</text>
+        <path class="div" d="M24 318 H1376"/>
+
+        <rect class="card" x="24" y="330" width="430" height="258" rx="5"/>
+        <text class="t-code-k" x="38" y="350">LEAVES</text>
+        <text class="t-code" x="38" y="368"><tspan x="38" dy="0">Cmp(var, op, value)</tspan><tspan x="38" dy="15">Between(var, lo, hi, lo_incl, hi_incl)</tspan><tspan x="38" dy="15">Since(event, days)</tspan><tspan x="38" dy="15">Delta(var, baseline, direction,</tspan><tspan x="38" dy="14">      lo_pct, hi_pct)</tspan></text>
+        <rect class="f0" x="330" y="357" width="40" height="13" rx="2"/><text class="t-frag" x="336" y="367">PROP</text>
+        <rect class="f1" x="374" y="357" width="30" height="13" rx="2"/><text class="t-frag" x="380" y="367">LIA</text>
+        <rect class="f1" x="374" y="372" width="30" height="13" rx="2"/><text class="t-frag" x="380" y="382">LIA</text>
+        <rect class="f2" x="374" y="387" width="30" height="13" rx="2"/><text class="t-frag-i" x="379" y="397">MTL</text>
+        <rect class="f1" x="374" y="402" width="30" height="13" rx="2"/><text class="t-frag" x="380" y="412">LIA</text>
+        <path class="div" d="M38 438 H440"/>
+        <text class="t-code-k" x="38" y="458">CONNECTIVES</text>
+        <text class="t-code" x="38" y="476"><tspan x="38" dy="0">Not(e)     And([e, …])     Or([e, …])</tspan></text>
+        <path class="div" d="M38 492 H440"/>
+        <text class="t-note" x="38" y="510">Or is mandatory, not a convenience. An expression</text>
+        <text class="t-note" x="38" y="524">language without disjunction does not remove</text>
+        <text class="t-note" x="38" y="538">disjunctions — it converts them into conjunctions.</text>
+        <text class="t-note" x="38" y="552">One AND-for-OR substitution gave the wrong referral</text>
+        <text class="t-note" x="38" y="566">verdict across 69.5% of the plausible patient box,</text>
+        <text class="t-note" x="38" y="580">and it typechecked.</text>
+
+        <text class="t-note" x="478" y="342">“In patients with diabetes and an ACR ≥ 30 mg/g, treat with an ACEi or ARB and check serum potassium within 14 days.”</text>
+
+        <rect class="node-op" x="832" y="358" width="190" height="38" rx="4"/>
+        <text class="t-big" x="927" y="383" text-anchor="middle">when → then</text>
+
+        <path class="edge" marker-end="url(#d1)" d="M880 396 V412 H700 V428"/>
+        <path class="edge" marker-end="url(#d1)" d="M974 396 V412 H1160 V428"/>
+        <text class="t-edge" x="775" y="408">when</text>
+        <text class="t-edge" x="1077" y="408">then</text>
+
+        <rect class="node" x="655" y="430" width="90" height="34" rx="4"/>
+        <text class="t-code-k" x="700" y="452" text-anchor="middle">And</text>
+        <rect class="node" x="1115" y="430" width="90" height="34" rx="4"/>
+        <text class="t-code-k" x="1160" y="452" text-anchor="middle">And</text>
+
+        <path class="edge" marker-end="url(#d1)" d="M678 464 V478 H600 V492"/>
+        <path class="edge" marker-end="url(#d1)" d="M722 464 V478 H800 V492"/>
+        <path class="edge" marker-end="url(#d1)" d="M1138 464 V478 H1060 V492"/>
+        <path class="edge" marker-end="url(#d1)" d="M1182 464 V478 H1265 V492"/>
+
+        <rect class="node" x="505" y="494" width="190" height="76" rx="4"/>
+        <text class="t-code-k" x="517" y="512">Cmp</text>
+        <text class="t-code" x="517" y="530"><tspan x="517" dy="0">has_diabetes</tspan><tspan x="517" dy="14">== true</tspan></text>
+        <rect class="f0" x="517" y="548" width="40" height="14" rx="2"/><text class="t-frag" x="523" y="558">PROP</text>
+
+        <rect class="node" x="705" y="494" width="190" height="76" rx="4"/>
+        <text class="t-code-k" x="717" y="512">Cmp</text>
+        <text class="t-code" x="717" y="530"><tspan x="717" dy="0">acr_mg_g</tspan><tspan x="717" dy="14">&gt;= 30 'mg/g'</tspan></text>
+        <rect class="f1" x="717" y="548" width="30" height="14" rx="2"/><text class="t-frag" x="723" y="558">LIA</text>
+
+        <rect class="node" x="965" y="494" width="190" height="76" rx="4"/>
+        <text class="t-code-k" x="977" y="512">Cmp</text>
+        <text class="t-code" x="977" y="530"><tspan x="977" dy="0">on_acei_arb</tspan><tspan x="977" dy="14">== true</tspan></text>
+        <rect class="f0" x="977" y="548" width="40" height="14" rx="2"/><text class="t-frag" x="983" y="558">PROP</text>
+
+        <rect class="node" x="1170" y="494" width="190" height="76" rx="4"/>
+        <text class="t-code-k" x="1182" y="512">Since</text>
+        <text class="t-code" x="1182" y="530"><tspan x="1182" dy="0">potassium_check</tspan><tspan x="1182" dy="14">within 14 days</tspan></text>
+        <rect class="f2" x="1182" y="548" width="30" height="14" rx="2"/><text class="t-frag-i" x="1187" y="558">MTL</text>
+
+        <path class="div" d="M478 586 H1376"/>
+        <text class="t-edge" x="478" y="604">fragment_of walks the tree and returns the weakest fragment that contains it — here the maximum is MTL.</text>
+        <text class="t-note" x="478" y="618">Computed from the tree, never inferred from variable names, so the formalizability spectrum is a function of the output rather than of an annotator.</text>
+
+        <!-- ================= LAYER 3 ================= -->
+        <text class="t-band" x="24" y="666">03 · THE RULE</text>
+        <text class="t-bandn" x="146" y="666">a formula under an operator, not a labelled action</text>
+        <path class="div" d="M24 676 H1376"/>
+
+        <rect class="card" x="24" y="688" width="430" height="164" rx="5"/>
+        <text class="t-cap" x="38" y="708">the whole of it</text>
+        <text class="t-big" x="38" y="736">φ  =  ( when → then )</text>
+        <text class="t-code" x="38" y="760"><tspan x="38" dy="0">under a deontic operator:</tspan><tspan x="38" dy="16"><tspan class="t-code-k">obligation  </tspan>O(then | when)</tspan><tspan x="38" dy="15"><tspan class="t-code-k">permission  </tspan>P(then | when)</tspan></text>
+        <text class="t-note" x="38" y="822">Prohibition is not a third case:</text>
+        <text class="t-note" x="38" y="836">F(p) = O(¬p), a negated consequent.</text>
+
+        <rect class="card-2" x="478" y="688" width="430" height="164" rx="5"/>
+        <text class="t-cap" x="492" y="708">carried alongside, and carrying no semantics</text>
+        <text class="t-code" x="492" y="730"><tspan x="492" dy="0">action    recommend | avoid | hold |</tspan><tspan x="492" dy="14">          monitor | refer | screen</tspan><tspan x="492" dy="14">target    "an ACEi or ARB"</tspan><tspan x="492" dy="14">strength  "1B"</tspan><tspan x="492" dy="14">source    page + the verbatim sentence</tspan></text>
+        <text class="t-note" x="492" y="812">These exist so a reviewer can check the formula</text>
+        <text class="t-note" x="492" y="826">against the sentence. Branching on action in</text>
+        <text class="t-note" x="492" y="840">verification code means something has gone wrong.</text>
+
+        <rect class="card" x="932" y="688" width="444" height="164" rx="5"/>
+        <text class="t-cap" x="946" y="708">refusal is a value of the same decode</text>
+        <text class="t-code" x="946" y="730"><tspan x="946" dy="0">outcome ∈ { "rule", "refusal" }</tspan></text>
+        <rect class="hole" x="946" y="742" width="416" height="46" rx="4"/>
+        <text class="t-code" x="956" y="758"><tspan x="956" dy="0">reason_code ∈ { vague_predicate, defeasible,</tspan><tspan x="956" dy="13">  not_patient_level, unsupported_temporal,</tspan><tspan x="956" dy="13">  unbound_concept, beyond_dsl }</tspan></text>
+        <text class="t-note" x="946" y="806">A discriminator rather than a top-level union,</text>
+        <text class="t-note" x="946" y="820">because the decoder cannot express oneOf. The</text>
+        <text class="t-note" x="946" y="834">model still has to commit to one or the other —</text>
+        <text class="t-note" x="946" y="848">abstaining is an answer, not a failed call.</text>
+      </svg>

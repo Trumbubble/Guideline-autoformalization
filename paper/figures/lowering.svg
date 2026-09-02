@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="340" viewBox="0 0 1400 340" role="img" aria-label="The recency node lowers two ways. For Z3 it flattens to an occurrence flag conjoined with a day count, because a solver has no patient timeline. For CQL it becomes a retrieve with a temporal where clause, which already is the bounded existential, so no unrolling is needed.">
+        <defs><marker id="d4" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="mk" d="M0 0 L8 4 L0 8 z"/></marker></defs>
+<style><![CDATA[
+.card{fill:#FFFFFF; stroke:#6E7975; stroke-width:1}
+.card-2{fill:#E6EAE5; stroke:#C2CAC5; stroke-width:1}
+.node{fill:#FFFFFF; stroke:#6E7975; stroke-width:1.2}
+.node-op{fill:#DDEBE7; stroke:#0B5F55; stroke-width:1.6}
+.hole{fill:#F0DFD8; stroke:#8E3D22; stroke-width:1.2}
+.f0{fill:#E6EAE5; stroke:#6E7975; stroke-width:1}
+.f1{fill:#B7D6CE; stroke:#0B5F55; stroke-width:1}
+.f2{fill:#0B5F55; stroke:#0B5F55; stroke-width:1}
+.t-band{font-family:JetBrains Mono, DejaVu Sans Mono, monospace; font-weight:700; font-size:11px;
+  fill:#0B5F55; letter-spacing:.12em}
+.t-bandn{font-family:Archivo, Helvetica, Arial, sans-serif; font-weight:700; font-size:13px; fill:#111614}
+.t-cap{font-family:Archivo, Helvetica, Arial, sans-serif; font-weight:650; font-size:11.5px; fill:#111614}
+.t-code{font-family:JetBrains Mono, DejaVu Sans Mono, monospace; font-size:10px; fill:#4A5450}
+.t-code-k{font-family:JetBrains Mono, DejaVu Sans Mono, monospace; font-weight:700; font-size:10px; fill:#111614}
+.t-big{font-family:JetBrains Mono, DejaVu Sans Mono, monospace; font-weight:700; font-size:15px; fill:#111614}
+.t-note{font-family:Archivo, Helvetica, Arial, sans-serif; font-size:10.5px; font-style:italic; fill:#7C8783}
+.t-edge{font-family:JetBrains Mono, DejaVu Sans Mono, monospace; font-size:9.5px; fill:#4A5450}
+.t-frag{font-family:JetBrains Mono, DejaVu Sans Mono, monospace; font-weight:700; font-size:8.5px; fill:#111614}
+.t-frag-i{font-family:JetBrains Mono, DejaVu Sans Mono, monospace; font-weight:700; font-size:8.5px; fill:#FFFFFF}
+.edge{stroke:#6E7975; stroke-width:1.3; fill:none}
+.edge-a{stroke:#0B5F55; stroke-width:1.6; fill:none}
+.div{stroke:#C2CAC5; stroke-width:1}
+.mk{fill:#6E7975}
+.mk-a{fill:#0B5F55}
+]]></style>
+
+        <rect class="node-op" x="540" y="16" width="320" height="38" rx="4"/>
+        <text class="t-big" x="700" y="41" text-anchor="middle">Since(potassium_check, 14)</text>
+
+        <path class="edge" marker-end="url(#d4)" d="M640 54 V78 H350 V100"/>
+        <path class="edge" marker-end="url(#d4)" d="M760 54 V78 H1050 V100"/>
+
+        <rect class="card" x="40" y="102" width="620" height="162" rx="5"/>
+        <text class="t-cap" x="56" y="124">to Z3 — for reasoning about a hypothetical patient</text>
+        <text class="t-code-k" x="56" y="150">potassium_check_occurred</text>
+        <text class="t-code-k" x="56" y="166">  ∧ days_since_potassium_check &lt;= 14</text>
+        <text class="t-note" x="56" y="192">A solver has no timeline, so the temporal layer flattens to derived</text>
+        <text class="t-note" x="56" y="206">state — bounded unrolling at a single visit.</text>
+        <text class="t-note" x="56" y="230">The occurrence flag is load-bearing: a bare day count is satisfiable</text>
+        <text class="t-note" x="56" y="244">for a patient never checked at all, because the solver simply picks 3</text>
+        <text class="t-note" x="56" y="258">— and “never checked” is the commonest real monitoring violation.</text>
+
+        <rect class="card" x="740" y="102" width="620" height="162" rx="5"/>
+        <text class="t-cap" x="756" y="124">to CQL — for execution against a real record</text>
+        <text class="t-code-k" x="756" y="150">exists ([Observation: "Serum potassium"] O</text>
+        <text class="t-code-k" x="756" y="166">  where O.effective during</text>
+        <text class="t-code-k" x="756" y="182">    Interval[Today() - 14 days, Today()])</text>
+        <text class="t-note" x="756" y="208">An engine evaluates over the record, so the retrieve plus a temporal</text>
+        <text class="t-note" x="756" y="222">where clause already IS the bounded existential. Nothing is unrolled.</text>
+        <text class="t-note" x="756" y="246">Absence of a matching resource is absence of the event, so the flag</text>
+        <text class="t-note" x="756" y="260">is not needed here — the record answers the question directly.</text>
+
+        <path class="div" d="M40 286 H1360"/>
+        <text class="t-edge" x="40" y="306">Consequence: the DSL does not need time-indexed variables for the CQL to be faithful, which is what made deferring that decision safe rather than merely convenient.</text>
+        <text class="t-note" x="40" y="322">Genuinely multi-visit predicates — “eGFR &lt; 60 on two occasions ≥ 90 days apart”, which is the definition of CKD — remain out of fragment and route to unsupported_temporal.</text>
+      </svg>

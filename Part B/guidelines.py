@@ -9,6 +9,7 @@ import contextlib
 import json
 import os
 import re
+import shutil
 import sys
 import tempfile
 import time
@@ -260,7 +261,13 @@ def ingest(title: str, *, file_bytes=None, filename=None, text=None,
 
     STORE_DIR.mkdir(exist_ok=True)
     bundle_path = STORE_DIR / f"{guideline_id}.json"
-    dsl.write_bundle(str(bundle_path), reg, rules, refusals)
+    # Findings travel with the bundle so /guidelines/<id>/report can show the
+    # cautions -- a rule that compiled but that a check flagged. Same builder
+    # demo.py uses; the alternative is a second copy of it, which is exactly
+    # how the same walker bug appeared in three files (RESULTS.md R34).
+    import report as _report
+    findings = [_report.finding(t, reg) for t in triages]
+    dsl.write_bundle(str(bundle_path), reg, rules, refusals, findings)
 
     # Re-load through the same path get_guideline() uses, so the stored
     # counts match what /guidelines/<id>/rules will actually serve -- a rule
@@ -284,6 +291,53 @@ def ingest(title: str, *, file_bytes=None, filename=None, text=None,
     entries = _load_index()
     entries.append(entry)
     _save_index(entries)
+    return entry
+
+
+def register_bundle(bundle_path, title: str | None = None,
+                    guideline_id: str | None = None) -> dict:
+    """Put a bundle Track A wrote on disk into the library the UI serves.
+
+    demo.py and this module both produce bundles, but only this one's landed in
+    the store -- so a document formalized from the CLI was invisible to the
+    dashboard, and its report (which the UI has a route for) unreachable. The
+    two halves were never actually connected.
+
+    Copies rather than referencing in place: the store is what `get_guideline`
+    reads, and a bundle that can be moved or overwritten out from under the
+    index is a stale-read waiting to happen. Re-registering the same id
+    replaces it, so re-running a document updates the library instead of
+    stacking duplicates."""
+    from from_dsl import load_bundle
+
+    src = Path(bundle_path)
+    if not src.exists():
+        raise IngestError(f"no bundle at {src}")
+    stem = src.stem
+    guideline_id = guideline_id or _slug(stem.replace("bundle.", "") or "bundle")
+    title = title or stem.replace("bundle.", "").replace("_", " ")
+
+    STORE_DIR.mkdir(exist_ok=True)
+    dest = STORE_DIR / f"{guideline_id}.json"
+    shutil.copyfile(src, dest)
+
+    with dest.open(encoding="utf-8") as fh:
+        raw = json.load(fh)
+    loaded_rules, refusals, _reg, rejected = load_bundle(str(dest))
+    entry = {
+        "id": guideline_id,
+        "title": title,
+        "created_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "source_filename": src.name,
+        "live": True,
+        "statements": len(raw.get("findings") or []) or None,
+        "rule_count": len(loaded_rules),
+        "refusal_count": len(refusals),
+        "needs_model_count": 0,
+        "rejected_count": len(rejected),
+    }
+    entries = [e for e in _load_index() if e.get("id") != guideline_id]
+    _save_index(entries + [entry])
     return entry
 
 

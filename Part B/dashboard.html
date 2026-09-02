@@ -79,6 +79,15 @@
   .pill.pending { color: var(--may); background: var(--may-bg); }
   .pill.builtin { color: var(--accent); background: transparent; border: 1px solid var(--accent); }
 
+  /* Wrapper so a card can carry a second destination. The card keeps its own
+     box; the wrapper only stacks. */
+  .g-wrap { display: flex; flex-direction: column; }
+  .g-wrap .g-card { flex: 1; }
+  .g-report {
+    display: block; margin-top: 0.4rem; font-size: 0.82rem;
+    color: var(--muted); text-decoration: none;
+  }
+  .g-report:hover { color: var(--accent); text-decoration: underline; }
   .g-card.upload {
     border: 2px dashed var(--border);
     background: transparent;
@@ -262,12 +271,18 @@ function renderCard(g) {
   if (g.needs_model_count) pills.push(pill("pending", `${g.needs_model_count} awaiting model`));
   if (g.rejected_count) pills.push(pill("refused", `${g.rejected_count} rejected on verification`));
   if (g.builtin) pills.push(pill("builtin", "built in"));
+  // The card links to the checker; the report is a second destination, so the
+  // card is wrapped rather than nested (an <a> inside an <a> is invalid).
   return `
-    <a class="g-card" href="/check?guideline=${encodeURIComponent(g.id)}">
-      <h3>${g.title}</h3>
-      <div class="counts">${g.builtin ? "Always available" : (g.created_at || "").slice(0, 10)}</div>
-      <div class="badges">${pills.join("")}</div>
-    </a>`;
+    <div class="g-wrap">
+      <a class="g-card" href="/check?guideline=${encodeURIComponent(g.id)}">
+        <h3>${g.title}</h3>
+        <div class="counts">${g.builtin ? "Always available" : (g.created_at || "").slice(0, 10)}</div>
+        <div class="badges">${pills.join("")}</div>
+      </a>
+      <a class="g-report" href="/guidelines/${encodeURIComponent(g.id)}/report"
+         target="_blank" rel="noopener">Formalization report &rarr;</a>
+    </div>`;
 }
 
 async function loadGuidelines() {

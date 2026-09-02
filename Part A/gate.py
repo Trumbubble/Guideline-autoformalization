@@ -8,16 +8,63 @@ and whatever recall that buys is what it buys.
 
 WHAT THIS IS NOT. It is not an LLM asked "is this vague?". That is circular
 (arXiv:2607.04655 puts purpose-built diagnostic models at ~0.71 F1 on error
-categorisation), and it is unnecessary: most of the decision is already made by
-machinery stages 1-2 produce. The gate AGGREGATES evidence and only then asks a
-model to try.
+categorisation). The gate AGGREGATES deterministic evidence first -- what the
+binder could not resolve, what the validator rejects, what the solver shows to
+be degenerate -- and asks a model to encode only after that, then checks what
+comes back.
 
-                          evidence                          maps to
-  binder could not bind a concept   (deterministic)   unbound_concept
-  obligation names no action        (deterministic)   not_patient_level
-  multi-visit predicate             (deterministic)   unsupported_temporal
-  rule never fires / forbids nothing(deterministic)   beyond_dsl
-  the model declines to encode      (model)           vague_predicate / defeasible
+But be precise about how much that buys, because the earlier claim here ("most
+of the decision is already made by machinery stages 1-2 produce") was not true.
+Of the six refusal codes, ONE is deterministic evidence from stages 1-2
+(`unbound_concept`) and one more is deterministic from this stage's validator
+(`defeasible`). The rest need the model, either to decline or -- for
+`not_patient_level` -- to have classified the statement upstream. The
+deterministic machinery is a GATE ON the model's answer, not a replacement for
+it.
+
+  reason_code            who decides           what actually sets it
+  ---------------------- --------------------- -----------------------------
+  unbound_concept        DETERMINISTIC         `bind.bind()` when the selector
+                         (binder)              returns -1, no candidate
+                                               survives, or a value set
+                                               expands to no codes; and the
+                                               fallback here when a statement
+                                               refuses with binder refusals
+                                               outstanding.
+  defeasible             DETERMINISTIC         MODAL_PREDICATE among the
+                         (validator)           blocking codes -- the guideline
+                                               hedged, so the "predicate" is
+                                               its deontic force wearing a
+                                               patient fact's clothes.
+                                               The model may also name it.
+  beyond_dsl             MIXED                 VACUOUS_RULE deterministically;
+                                               otherwise the model's own
+                                               refusal code, or the fallback
+                                               when nothing bound-specific
+                                               applies.
+  not_patient_level      MODEL                 `is_patient_level is False`,
+                         (segmenter's          which is the SEGMENTER'S
+                          classifier)          CLASSIFIER -- an LLM call on a
+                                               live run, heuristic only when
+                                               it errors or its quote is not
+                                               verbatim. Never derived here.
+  vague_predicate        MODEL                 the formalizer declining.
+  unsupported_temporal   MODEL                 the formalizer declining. NO
+                                               deterministic check produces
+                                               it: there is no fragment test
+                                               for "multi-visit", only the
+                                               model recognising one. Seen
+                                               twice across the real bundles,
+                                               both model-authored.
+
+THIS TABLE WAS WRONG FOR A LONG TIME, and being wrong here is expensive: it is
+what an architecture diagram gets drawn from, so the error propagates into
+anything describing the system. It claimed `not_patient_level` came from
+"obligation names no action" (it does not -- NO_ACTION_ATOM is a validator
+error that causes rejection, and never sets this code) and that
+`unsupported_temporal` was deterministic (nothing assigns it). Both read as
+guarantees the pipeline does not make. `test_gate.py` now pins which codes are
+reachable without a model, so the claim cannot drift again.
 
 MEASURED, AND IT SHAPED THIS FILE. On 20 statements x K=8 real samples, all 80
 vague samples were REFUSED and 0 of the encoded statements produced more than
@@ -42,6 +89,7 @@ from dataclasses import dataclass, field, replace
 from typing import Callable, Iterable
 
 import bind
+import cassette
 import dsl
 
 Decision = str          # encode | partial | refuse
@@ -264,6 +312,48 @@ _DOSE_CHANGE = re.compile(
     r"down-?titrat\w+|titrat\w+|adjust\w*|escalat\w+|de-?escalat\w+)\b"
     r"[^.]{0,60}?(\b\d+\s*%|\bdose\b|\bdosage\b)", re.I)
 
+# A hole whose phrase names a POINT IN TIME rather than a patient property.
+# "at start LRD", "pre-operatively", "on admission" -- the thing a relative
+# change is measured from.
+_ANCHOR = re.compile(
+    r"\b(?:at|after|before|from|on|during|post|pre|prior\s+to|by)\b[^.]{0,30}?"
+    r"\b(start\w*|initiat\w+|commenc\w+|onset|admission|discharge|operation|"
+    r"surgery|induction|baseline|presentation|diagnosis|day\s*\d+)\b"
+    r"|\bpre-?(?:op\w*|operative\w*|treatment|dose|[A-Z]{2,})\b"
+    r"|\bbaseline\b", re.I)
+
+_HOLE_PREFIX = ("has_", "is_", "on_")
+
+def anchor_events(holes) -> list:
+    """Unbound EventDefs for the holes that name a point in time.
+
+    Without this the only events on offer were the bound concepts themselves,
+    so "reduce basal insulin by 50% at start LRD" had nothing to anchor to
+    except *being on basal insulin*. The model dutifully wrote that, twelve
+    times across one document, and every one was circular -- a dose measured
+    from itself, satisfiable by any value, and it typechecked and compiled.
+
+    The anchor the sentence actually names is already in `holes`, as a plain
+    boolean the DSL cannot measure from. Declared here as an event as well, so
+    a `Delta` can use it. It stays UNBOUND: no terminology holds "start of the
+    liver reduction diet", and claiming otherwise would be the guess this whole
+    pipeline exists to avoid. The lowering emits it as a named null with the
+    site query to bind -- the same treatment an unbound predicate gets."""
+    out, seen = [], set()
+    for h in holes:
+        phrase = getattr(h, "description", "") or h.name
+        if not _ANCHOR.search(phrase):
+            continue
+        name = h.name
+        for p in _HOLE_PREFIX:
+            if name.startswith(p):
+                name = name[len(p):]
+                break
+        if not name or name in seen:
+            continue
+        seen.add(name)
+        out.append(dsl.EventDef(name, phrase.strip(), None, unbound=True))
+    return out
 # A stated RANGE ("150-240 min", "450-720 MET-min"), not a bare number. A
 # single number ("the dose was 5 mg") is reporting a fact, not asking for a
 # quantity target -- requiring two numbers joined by a dash/"to" is what
@@ -533,23 +623,31 @@ def triage(statement: str, index, *, statement_id: str = "s",
             ev.append(Evidence("gate", "REGISTRY_TRUNCATED",
                                f"{len(holes) - len(kept_holes)} of {len(holes)} holes "
                                f"dropped to keep the decoding grammar compilable"))
-        # The event enum is its own `$defs` entry in decoding_schema (needed
-        # for `since`/`delta`), so it inflates the compiled grammar the same
-        # way the var enum does -- but nothing capped it here. A statement
-        # with many datable concepts (e.g. 8 drug-brand mentions, each its own
-        # event) can blow the grammar ceiling on the event enum ALONE, even at
-        # decoding depth 0 -- dropping depth buys nothing there, since the
-        # leaf node still needs the full event enum. Same treatment as holes:
-        # cap it, keep the first N, and say so rather than truncating silently.
+        # Cap the event enum for the same reason the holes are capped: it is
+        # its own `$defs` entry in decoding_schema, so it inflates the compiled
+        # grammar independently of the variable enum, and a statement with many
+        # datable concepts can blow the ceiling on the event enum ALONE.
+        #
+        # Bound events keep their slots first and the anchors fill what is
+        # left, matching how bound variables outrank holes above.
+        #
+        # `reg.event(e)`, not `EventDef(e)`: rebuilding them bare dropped every
+        # event's description and its `unbound` flag on the way into the very
+        # attempt that uses them.
+        anchors = anchor_events(kept_holes)
         event_names = reg.event_names()
         kept_events = event_names[:MAX_DECODE_VARS]
-        if len(kept_events) < len(event_names):
+        kept_anchors = anchors[:max(0, MAX_DECODE_VARS - len(kept_events))]
+        _dropped = ((len(event_names) - len(kept_events))
+                    + (len(anchors) - len(kept_anchors)))
+        if _dropped:
             ev.append(Evidence("gate", "REGISTRY_TRUNCATED",
-                               f"{len(event_names) - len(kept_events)} of "
-                               f"{len(event_names)} events dropped to keep the "
-                               f"decoding grammar compilable"))
-        wide = dsl.Registry([reg[n] for n in reg.names()] + kept_holes,
-                            [dsl.EventDef(e) for e in kept_events])
+                               f"{_dropped} of {len(event_names) + len(anchors)} "
+                               f"events dropped to keep the decoding grammar "
+                               f"compilable"))
+        wide = dsl.Registry(
+            [reg[n] for n in reg.names()] + kept_holes,
+            [reg.event(e) for e in kept_events] + kept_anchors)
         outs = _attempt_k(statement, wide, formalize, statement_id,
                           source_page, source_span, max(1, samples))
         prules = [o for o in outs if isinstance(o, dsl.Rule)]
@@ -561,6 +659,13 @@ def triage(statement: str, index, *, statement_id: str = "s",
         prate = sum(1 for o in outs if isinstance(o, dsl.Refusal)) / len(outs)
         if prules:
             rule, iss = _best(prules, wide)
+            # Record them. Only `blocked_codes` was kept here, so every
+            # validator WARNING raised on the partial path was discarded --
+            # a rule with a CIRCULAR_BASELINE reached the bundle reporting
+            # nothing wrong, while the identical finding on the strict path
+            # printed. Third time this branch has silently dropped evidence the
+            # other one keeps.
+            ev += [Evidence("validator", i.code, i.message) for i in iss]
             blocked_codes |= {i.code for i in iss if i.severity == "error"}
             if not [i for i in iss if i.severity == "error"]:
                 open_ = dsl.open_holes(rule, wide)
@@ -660,12 +765,25 @@ def _shrink_registry(reg: dsl.Registry) -> dsl.Registry:
 def _attempt(statement, reg, formalize, sid, page, span):
     try:
         obj = dsl.from_decoded(formalize(statement, reg))
+    except cassette.CassetteMiss:
+        # NEVER swallowed. A stale tape must stop the replay harness, not turn
+        # into a refusal that makes the harness report success -- which is what
+        # it did: the first run after the registry changed replayed "green"
+        # while every single call was missing.
+        raise
     except Exception as exc:
         # `formalize()` already steps the decode DEPTH down to 0 before
         # raising `GrammarTooLarge` -- if it still fails, the REGISTRY itself
         # is too big, not the depth. Recognized by message, not by class:
         # gate.py stays decoupled from llm.py so it can be tested offline
         # with a fake `formalize` and no model. One shrink-and-retry.
+        #
+        # Both give-ups below are LABELLED, not the plain "beyond_dsl:
+        # encoding attempt failed" this used to read. That message is
+        # indistinguishable from the DSL genuinely lacking a construct, so an
+        # auth failure, a rate limit or a malformed JSON body all inflated the
+        # formalizability residue with our own outages. That number is a
+        # headline result; it cannot quietly include our downtime.
         if "will not compile at any depth" in str(exc):
             shrunk = _shrink_registry(reg)
             if shrunk.names() != reg.names() or shrunk.event_names() != reg.event_names():
@@ -673,12 +791,15 @@ def _attempt(statement, reg, formalize, sid, page, span):
                     obj = dsl.from_decoded(formalize(statement, shrunk))
                 except Exception as exc2:
                     return dsl.Refusal(sid, "beyond_dsl",
-                                       f"encoding attempt failed after registry "
-                                       f"shrink: {exc2}")
+                                       f"ENCODER FAILURE (ours, not the guideline's): "
+                                       f"encoding attempt failed after registry shrink: "
+                                       f"{type(exc2).__name__}: {exc2}")
                 if isinstance(obj, dsl.Rule):
                     return replace(obj, rule_id=sid, source_page=page, source_span=span)
                 return obj
-        return dsl.Refusal(sid, "beyond_dsl", f"encoding attempt failed: {exc}")
+        return dsl.Refusal(sid, "beyond_dsl",
+                           f"ENCODER FAILURE (ours, not the guideline's): "
+                           f"{type(exc).__name__}: {exc}")
     if isinstance(obj, dsl.Rule):
         return replace(obj, rule_id=sid, source_page=page, source_span=span)
     return obj

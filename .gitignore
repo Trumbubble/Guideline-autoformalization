@@ -241,3 +241,14 @@ Part A/terms.db
 # terms.db. Derived data, never source.
 Part A/semantic/
 *.npy
+paper.zip
+.DS_Store
+Formatting_Instructions_For_NeurIPS_2026/
+
+# ablation output
+Part B/tests/ablation.csv
+# real-rule results are not reported; the --existing flag still produces them
+Part B/tests/generated_ablation.csv
+Part B/tests/explanation_*.csv
+# summaries ARE tracked: small, and they are what the paper quotes
+!Part B/tests/*.summary.txt

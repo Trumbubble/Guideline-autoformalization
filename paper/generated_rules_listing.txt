@@ -1,0 +1,720 @@
+
+# hole:none  obli  threshold  single
+  gen-none-obli-threshold-single-0
+      potassium < 5.0
+    →  on_acei = true
+      deontic=obligation  holes=()  fragment=LIA
+  gen-none-obli-threshold-single-1
+      egfr < 30.0
+    →  dose_reduced = true
+      deontic=obligation  holes=()  fragment=LIA
+
+# hole:none  obli  threshold  and
+  gen-none-obli-threshold-and-0
+      potassium < 5.0 ∧ has_ckd = true
+    →  on_acei = true
+      deontic=obligation  holes=()  fragment=LIA
+  gen-none-obli-threshold-and-1
+      egfr < 30.0 ∧ has_diabetes = true
+    →  dose_reduced = true
+      deontic=obligation  holes=()  fragment=LIA
+
+# hole:none  obli  threshold  or
+  gen-none-obli-threshold-or-0
+      potassium < 5.0 ∨ has_ckd = true
+    →  on_acei = true
+      deontic=obligation  holes=()  fragment=LIA
+  gen-none-obli-threshold-or-1
+      egfr < 30.0 ∨ has_diabetes = true
+    →  dose_reduced = true
+      deontic=obligation  holes=()  fragment=LIA
+
+# hole:none  obli  boolean  single
+  gen-none-obli-boolean-single-0
+      has_diabetes = true
+    →  on_acei = true
+      deontic=obligation  holes=()  fragment=PROP
+  gen-none-obli-boolean-single-1
+      has_ckd = true
+    →  dose_reduced = true
+      deontic=obligation  holes=()  fragment=PROP
+
+# hole:none  obli  boolean  and
+  gen-none-obli-boolean-and-0
+      has_diabetes = true ∧ has_ckd = true
+    →  on_acei = true
+      deontic=obligation  holes=()  fragment=PROP
+  gen-none-obli-boolean-and-1
+      has_ckd = true ∧ has_diabetes = true
+    →  dose_reduced = true
+      deontic=obligation  holes=()  fragment=PROP
+
+# hole:none  obli  boolean  or
+  gen-none-obli-boolean-or-0
+      has_diabetes = true ∨ has_ckd = true
+    →  on_acei = true
+      deontic=obligation  holes=()  fragment=PROP
+  gen-none-obli-boolean-or-1
+      has_ckd = true ∨ has_diabetes = true
+    →  dose_reduced = true
+      deontic=obligation  holes=()  fragment=PROP
+
+# hole:none  obli  window  single
+  gen-none-obli-window-single-0
+      on_acei = true
+    →  since(potassium_check) ≤ 14d
+      deontic=obligation  holes=()  fragment=MTL
+  gen-none-obli-window-single-1
+      dose_reduced = true
+    →  since(renal_review) ≤ 30d
+      deontic=obligation  holes=()  fragment=MTL
+
+# hole:none  obli  window  and
+  gen-none-obli-window-and-0
+      on_acei = true ∧ has_ckd = true
+    →  since(potassium_check) ≤ 14d
+      deontic=obligation  holes=()  fragment=MTL
+  gen-none-obli-window-and-1
+      dose_reduced = true ∧ has_diabetes = true
+    →  since(renal_review) ≤ 30d
+      deontic=obligation  holes=()  fragment=MTL
+
+# hole:none  obli  window  or
+  gen-none-obli-window-or-0
+      on_acei = true ∨ has_ckd = true
+    →  since(potassium_check) ≤ 14d
+      deontic=obligation  holes=()  fragment=MTL
+  gen-none-obli-window-or-1
+      dose_reduced = true ∨ has_diabetes = true
+    →  since(renal_review) ≤ 30d
+      deontic=obligation  holes=()  fragment=MTL
+
+# hole:none  obli  change  single
+  gen-none-obli-change-single-0
+      has_diabetes = true
+    →  Δinsulin_dose −50% vs insulin_dose@therapy_start ∧ on_acei = true
+      deontic=obligation  holes=('insulin_dose_at_therapy_start',)  fragment=LIA
+  gen-none-obli-change-single-1
+      has_ckd = true
+    →  Δinsulin_dose −50% vs insulin_dose@therapy_start ∧ dose_reduced = true
+      deontic=obligation  holes=('insulin_dose_at_therapy_start',)  fragment=LIA
+
+# hole:none  obli  change  and
+  gen-none-obli-change-and-0
+      has_diabetes = true
+    →  (Δinsulin_dose −50% vs insulin_dose@therapy_start ∧ has_ckd = true) ∧ on_acei = true
+      deontic=obligation  holes=('insulin_dose_at_therapy_start',)  fragment=LIA
+  gen-none-obli-change-and-1
+      has_ckd = true
+    →  (Δinsulin_dose −50% vs insulin_dose@therapy_start ∧ has_diabetes = true) ∧ dose_reduced = true
+      deontic=obligation  holes=('insulin_dose_at_therapy_start',)  fragment=LIA
+
+# hole:none  obli  change  or
+  gen-none-obli-change-or-0
+      has_diabetes = true
+    →  (Δinsulin_dose −50% vs insulin_dose@therapy_start ∨ has_ckd = true) ∧ on_acei = true
+      deontic=obligation  holes=('insulin_dose_at_therapy_start',)  fragment=LIA
+  gen-none-obli-change-or-1
+      has_ckd = true
+    →  (Δinsulin_dose −50% vs insulin_dose@therapy_start ∨ has_diabetes = true) ∧ dose_reduced = true
+      deontic=obligation  holes=('insulin_dose_at_therapy_start',)  fragment=LIA
+
+# hole:none  perm  threshold  single
+  gen-none-perm-threshold-single-0
+      potassium < 5.0
+    →  on_acei = true
+      deontic=permission  holes=()  fragment=LIA
+  gen-none-perm-threshold-single-1
+      egfr < 30.0
+    →  dose_reduced = true
+      deontic=permission  holes=()  fragment=LIA
+
+# hole:none  perm  threshold  and
+  gen-none-perm-threshold-and-0
+      potassium < 5.0 ∧ has_ckd = true
+    →  on_acei = true
+      deontic=permission  holes=()  fragment=LIA
+  gen-none-perm-threshold-and-1
+      egfr < 30.0 ∧ has_diabetes = true
+    →  dose_reduced = true
+      deontic=permission  holes=()  fragment=LIA
+
+# hole:none  perm  threshold  or
+  gen-none-perm-threshold-or-0
+      potassium < 5.0 ∨ has_ckd = true
+    →  on_acei = true
+      deontic=permission  holes=()  fragment=LIA
+  gen-none-perm-threshold-or-1
+      egfr < 30.0 ∨ has_diabetes = true
+    →  dose_reduced = true
+      deontic=permission  holes=()  fragment=LIA
+
+# hole:none  perm  boolean  single
+  gen-none-perm-boolean-single-0
+      has_diabetes = true
+    →  on_acei = true
+      deontic=permission  holes=()  fragment=PROP
+  gen-none-perm-boolean-single-1
+      has_ckd = true
+    →  dose_reduced = true
+      deontic=permission  holes=()  fragment=PROP
+
+# hole:none  perm  boolean  and
+  gen-none-perm-boolean-and-0
+      has_diabetes = true ∧ has_ckd = true
+    →  on_acei = true
+      deontic=permission  holes=()  fragment=PROP
+  gen-none-perm-boolean-and-1
+      has_ckd = true ∧ has_diabetes = true
+    →  dose_reduced = true
+      deontic=permission  holes=()  fragment=PROP
+
+# hole:none  perm  boolean  or
+  gen-none-perm-boolean-or-0
+      has_diabetes = true ∨ has_ckd = true
+    →  on_acei = true
+      deontic=permission  holes=()  fragment=PROP
+  gen-none-perm-boolean-or-1
+      has_ckd = true ∨ has_diabetes = true
+    →  dose_reduced = true
+      deontic=permission  holes=()  fragment=PROP
+
+# hole:none  perm  window  single
+  gen-none-perm-window-single-0
+      on_acei = true
+    →  since(potassium_check) ≤ 14d
+      deontic=permission  holes=()  fragment=MTL
+  gen-none-perm-window-single-1
+      dose_reduced = true
+    →  since(renal_review) ≤ 30d
+      deontic=permission  holes=()  fragment=MTL
+
+# hole:none  perm  window  and
+  gen-none-perm-window-and-0
+      on_acei = true ∧ has_ckd = true
+    →  since(potassium_check) ≤ 14d
+      deontic=permission  holes=()  fragment=MTL
+  gen-none-perm-window-and-1
+      dose_reduced = true ∧ has_diabetes = true
+    →  since(renal_review) ≤ 30d
+      deontic=permission  holes=()  fragment=MTL
+
+# hole:none  perm  window  or
+  gen-none-perm-window-or-0
+      on_acei = true ∨ has_ckd = true
+    →  since(potassium_check) ≤ 14d
+      deontic=permission  holes=()  fragment=MTL
+  gen-none-perm-window-or-1
+      dose_reduced = true ∨ has_diabetes = true
+    →  since(renal_review) ≤ 30d
+      deontic=permission  holes=()  fragment=MTL
+
+# hole:none  perm  change  single
+  gen-none-perm-change-single-0
+      has_diabetes = true
+    →  Δinsulin_dose −50% vs insulin_dose@therapy_start ∧ on_acei = true
+      deontic=permission  holes=('insulin_dose_at_therapy_start',)  fragment=LIA
+  gen-none-perm-change-single-1
+      has_ckd = true
+    →  Δinsulin_dose −50% vs insulin_dose@therapy_start ∧ dose_reduced = true
+      deontic=permission  holes=('insulin_dose_at_therapy_start',)  fragment=LIA
+
+# hole:none  perm  change  and
+  gen-none-perm-change-and-0
+      has_diabetes = true
+    →  (Δinsulin_dose −50% vs insulin_dose@therapy_start ∧ has_ckd = true) ∧ on_acei = true
+      deontic=permission  holes=('insulin_dose_at_therapy_start',)  fragment=LIA
+  gen-none-perm-change-and-1
+      has_ckd = true
+    →  (Δinsulin_dose −50% vs insulin_dose@therapy_start ∧ has_diabetes = true) ∧ dose_reduced = true
+      deontic=permission  holes=('insulin_dose_at_therapy_start',)  fragment=LIA
+
+# hole:none  perm  change  or
+  gen-none-perm-change-or-0
+      has_diabetes = true
+    →  (Δinsulin_dose −50% vs insulin_dose@therapy_start ∨ has_ckd = true) ∧ on_acei = true
+      deontic=permission  holes=('insulin_dose_at_therapy_start',)  fragment=LIA
+  gen-none-perm-change-or-1
+      has_ckd = true
+    →  (Δinsulin_dose −50% vs insulin_dose@therapy_start ∨ has_diabetes = true) ∧ dose_reduced = true
+      deontic=permission  holes=('insulin_dose_at_therapy_start',)  fragment=LIA
+
+# hole:when  obli  threshold  single
+  gen-when-obli-threshold-single-0
+      potassium < 5.0 ∨ has_high_risk = true
+    →  on_acei = true
+      deontic=obligation  holes=('has_high_risk',)  fragment=LIA
+  gen-when-obli-threshold-single-1
+      egfr < 30.0 ∨ has_adequate_trial = true
+    →  dose_reduced = true
+      deontic=obligation  holes=('has_adequate_trial',)  fragment=LIA
+
+# hole:when  obli  threshold  and
+  gen-when-obli-threshold-and-0
+      (potassium < 5.0 ∧ has_ckd = true) ∨ has_high_risk = true
+    →  on_acei = true
+      deontic=obligation  holes=('has_high_risk',)  fragment=LIA
+  gen-when-obli-threshold-and-1
+      (egfr < 30.0 ∧ has_diabetes = true) ∨ has_adequate_trial = true
+    →  dose_reduced = true
+      deontic=obligation  holes=('has_adequate_trial',)  fragment=LIA
+
+# hole:when  obli  threshold  or
+  gen-when-obli-threshold-or-0
+      (potassium < 5.0 ∨ has_ckd = true) ∨ has_high_risk = true
+    →  on_acei = true
+      deontic=obligation  holes=('has_high_risk',)  fragment=LIA
+  gen-when-obli-threshold-or-1
+      (egfr < 30.0 ∨ has_diabetes = true) ∨ has_adequate_trial = true
+    →  dose_reduced = true
+      deontic=obligation  holes=('has_adequate_trial',)  fragment=LIA
+
+# hole:when  obli  boolean  single
+  gen-when-obli-boolean-single-0
+      has_diabetes = true ∨ has_high_risk = true
+    →  on_acei = true
+      deontic=obligation  holes=('has_high_risk',)  fragment=PROP
+  gen-when-obli-boolean-single-1
+      has_ckd = true ∨ has_adequate_trial = true
+    →  dose_reduced = true
+      deontic=obligation  holes=('has_adequate_trial',)  fragment=PROP
+
+# hole:when  obli  boolean  and
+  gen-when-obli-boolean-and-0
+      (has_diabetes = true ∧ has_ckd = true) ∨ has_high_risk = true
+    →  on_acei = true
+      deontic=obligation  holes=('has_high_risk',)  fragment=PROP
+  gen-when-obli-boolean-and-1
+      (has_ckd = true ∧ has_diabetes = true) ∨ has_adequate_trial = true
+    →  dose_reduced = true
+      deontic=obligation  holes=('has_adequate_trial',)  fragment=PROP
+
+# hole:when  obli  boolean  or
+  gen-when-obli-boolean-or-0
+      (has_diabetes = true ∨ has_ckd = true) ∨ has_high_risk = true
+    →  on_acei = true
+      deontic=obligation  holes=('has_high_risk',)  fragment=PROP
+  gen-when-obli-boolean-or-1
+      (has_ckd = true ∨ has_diabetes = true) ∨ has_adequate_trial = true
+    →  dose_reduced = true
+      deontic=obligation  holes=('has_adequate_trial',)  fragment=PROP
+
+# hole:when  obli  window  single
+  gen-when-obli-window-single-0
+      on_acei = true ∨ has_high_risk = true
+    →  since(potassium_check) ≤ 14d
+      deontic=obligation  holes=('has_high_risk',)  fragment=MTL
+  gen-when-obli-window-single-1
+      dose_reduced = true ∨ has_adequate_trial = true
+    →  since(renal_review) ≤ 30d
+      deontic=obligation  holes=('has_adequate_trial',)  fragment=MTL
+
+# hole:when  obli  window  and
+  gen-when-obli-window-and-0
+      (on_acei = true ∧ has_ckd = true) ∨ has_high_risk = true
+    →  since(potassium_check) ≤ 14d
+      deontic=obligation  holes=('has_high_risk',)  fragment=MTL
+  gen-when-obli-window-and-1
+      (dose_reduced = true ∧ has_diabetes = true) ∨ has_adequate_trial = true
+    →  since(renal_review) ≤ 30d
+      deontic=obligation  holes=('has_adequate_trial',)  fragment=MTL
+
+# hole:when  obli  window  or
+  gen-when-obli-window-or-0
+      (on_acei = true ∨ has_ckd = true) ∨ has_high_risk = true
+    →  since(potassium_check) ≤ 14d
+      deontic=obligation  holes=('has_high_risk',)  fragment=MTL
+  gen-when-obli-window-or-1
+      (dose_reduced = true ∨ has_diabetes = true) ∨ has_adequate_trial = true
+    →  since(renal_review) ≤ 30d
+      deontic=obligation  holes=('has_adequate_trial',)  fragment=MTL
+
+# hole:when  obli  change  single
+  gen-when-obli-change-single-0
+      has_diabetes = true ∨ has_high_risk = true
+    →  Δinsulin_dose −50% vs insulin_dose@therapy_start ∧ on_acei = true
+      deontic=obligation  holes=('has_high_risk', 'insulin_dose_at_therapy_start')  fragment=LIA
+  gen-when-obli-change-single-1
+      has_ckd = true ∨ has_adequate_trial = true
+    →  Δinsulin_dose −50% vs insulin_dose@therapy_start ∧ dose_reduced = true
+      deontic=obligation  holes=('has_adequate_trial', 'insulin_dose_at_therapy_start')  fragment=LIA
+
+# hole:when  obli  change  and
+  gen-when-obli-change-and-0
+      has_diabetes = true ∨ has_high_risk = true
+    →  (Δinsulin_dose −50% vs insulin_dose@therapy_start ∧ has_ckd = true) ∧ on_acei = true
+      deontic=obligation  holes=('has_high_risk', 'insulin_dose_at_therapy_start')  fragment=LIA
+  gen-when-obli-change-and-1
+      has_ckd = true ∨ has_adequate_trial = true
+    →  (Δinsulin_dose −50% vs insulin_dose@therapy_start ∧ has_diabetes = true) ∧ dose_reduced = true
+      deontic=obligation  holes=('has_adequate_trial', 'insulin_dose_at_therapy_start')  fragment=LIA
+
+# hole:when  obli  change  or
+  gen-when-obli-change-or-0
+      has_diabetes = true ∨ has_high_risk = true
+    →  (Δinsulin_dose −50% vs insulin_dose@therapy_start ∨ has_ckd = true) ∧ on_acei = true
+      deontic=obligation  holes=('has_high_risk', 'insulin_dose_at_therapy_start')  fragment=LIA
+  gen-when-obli-change-or-1
+      has_ckd = true ∨ has_adequate_trial = true
+    →  (Δinsulin_dose −50% vs insulin_dose@therapy_start ∨ has_diabetes = true) ∧ dose_reduced = true
+      deontic=obligation  holes=('has_adequate_trial', 'insulin_dose_at_therapy_start')  fragment=LIA
+
+# hole:when  perm  threshold  single
+  gen-when-perm-threshold-single-0
+      potassium < 5.0 ∨ has_high_risk = true
+    →  on_acei = true
+      deontic=permission  holes=('has_high_risk',)  fragment=LIA
+  gen-when-perm-threshold-single-1
+      egfr < 30.0 ∨ has_adequate_trial = true
+    →  dose_reduced = true
+      deontic=permission  holes=('has_adequate_trial',)  fragment=LIA
+
+# hole:when  perm  threshold  and
+  gen-when-perm-threshold-and-0
+      (potassium < 5.0 ∧ has_ckd = true) ∨ has_high_risk = true
+    →  on_acei = true
+      deontic=permission  holes=('has_high_risk',)  fragment=LIA
+  gen-when-perm-threshold-and-1
+      (egfr < 30.0 ∧ has_diabetes = true) ∨ has_adequate_trial = true
+    →  dose_reduced = true
+      deontic=permission  holes=('has_adequate_trial',)  fragment=LIA
+
+# hole:when  perm  threshold  or
+  gen-when-perm-threshold-or-0
+      (potassium < 5.0 ∨ has_ckd = true) ∨ has_high_risk = true
+    →  on_acei = true
+      deontic=permission  holes=('has_high_risk',)  fragment=LIA
+  gen-when-perm-threshold-or-1
+      (egfr < 30.0 ∨ has_diabetes = true) ∨ has_adequate_trial = true
+    →  dose_reduced = true
+      deontic=permission  holes=('has_adequate_trial',)  fragment=LIA
+
+# hole:when  perm  boolean  single
+  gen-when-perm-boolean-single-0
+      has_diabetes = true ∨ has_high_risk = true
+    →  on_acei = true
+      deontic=permission  holes=('has_high_risk',)  fragment=PROP
+  gen-when-perm-boolean-single-1
+      has_ckd = true ∨ has_adequate_trial = true
+    →  dose_reduced = true
+      deontic=permission  holes=('has_adequate_trial',)  fragment=PROP
+
+# hole:when  perm  boolean  and
+  gen-when-perm-boolean-and-0
+      (has_diabetes = true ∧ has_ckd = true) ∨ has_high_risk = true
+    →  on_acei = true
+      deontic=permission  holes=('has_high_risk',)  fragment=PROP
+  gen-when-perm-boolean-and-1
+      (has_ckd = true ∧ has_diabetes = true) ∨ has_adequate_trial = true
+    →  dose_reduced = true
+      deontic=permission  holes=('has_adequate_trial',)  fragment=PROP
+
+# hole:when  perm  boolean  or
+  gen-when-perm-boolean-or-0
+      (has_diabetes = true ∨ has_ckd = true) ∨ has_high_risk = true
+    →  on_acei = true
+      deontic=permission  holes=('has_high_risk',)  fragment=PROP
+  gen-when-perm-boolean-or-1
+      (has_ckd = true ∨ has_diabetes = true) ∨ has_adequate_trial = true
+    →  dose_reduced = true
+      deontic=permission  holes=('has_adequate_trial',)  fragment=PROP
+
+# hole:when  perm  window  single
+  gen-when-perm-window-single-0
+      on_acei = true ∨ has_high_risk = true
+    →  since(potassium_check) ≤ 14d
+      deontic=permission  holes=('has_high_risk',)  fragment=MTL
+  gen-when-perm-window-single-1
+      dose_reduced = true ∨ has_adequate_trial = true
+    →  since(renal_review) ≤ 30d
+      deontic=permission  holes=('has_adequate_trial',)  fragment=MTL
+
+# hole:when  perm  window  and
+  gen-when-perm-window-and-0
+      (on_acei = true ∧ has_ckd = true) ∨ has_high_risk = true
+    →  since(potassium_check) ≤ 14d
+      deontic=permission  holes=('has_high_risk',)  fragment=MTL
+  gen-when-perm-window-and-1
+      (dose_reduced = true ∧ has_diabetes = true) ∨ has_adequate_trial = true
+    →  since(renal_review) ≤ 30d
+      deontic=permission  holes=('has_adequate_trial',)  fragment=MTL
+
+# hole:when  perm  window  or
+  gen-when-perm-window-or-0
+      (on_acei = true ∨ has_ckd = true) ∨ has_high_risk = true
+    →  since(potassium_check) ≤ 14d
+      deontic=permission  holes=('has_high_risk',)  fragment=MTL
+  gen-when-perm-window-or-1
+      (dose_reduced = true ∨ has_diabetes = true) ∨ has_adequate_trial = true
+    →  since(renal_review) ≤ 30d
+      deontic=permission  holes=('has_adequate_trial',)  fragment=MTL
+
+# hole:when  perm  change  single
+  gen-when-perm-change-single-0
+      has_diabetes = true ∨ has_high_risk = true
+    →  Δinsulin_dose −50% vs insulin_dose@therapy_start ∧ on_acei = true
+      deontic=permission  holes=('has_high_risk', 'insulin_dose_at_therapy_start')  fragment=LIA
+  gen-when-perm-change-single-1
+      has_ckd = true ∨ has_adequate_trial = true
+    →  Δinsulin_dose −50% vs insulin_dose@therapy_start ∧ dose_reduced = true
+      deontic=permission  holes=('has_adequate_trial', 'insulin_dose_at_therapy_start')  fragment=LIA
+
+# hole:when  perm  change  and
+  gen-when-perm-change-and-0
+      has_diabetes = true ∨ has_high_risk = true
+    →  (Δinsulin_dose −50% vs insulin_dose@therapy_start ∧ has_ckd = true) ∧ on_acei = true
+      deontic=permission  holes=('has_high_risk', 'insulin_dose_at_therapy_start')  fragment=LIA
+  gen-when-perm-change-and-1
+      has_ckd = true ∨ has_adequate_trial = true
+    →  (Δinsulin_dose −50% vs insulin_dose@therapy_start ∧ has_diabetes = true) ∧ dose_reduced = true
+      deontic=permission  holes=('has_adequate_trial', 'insulin_dose_at_therapy_start')  fragment=LIA
+
+# hole:when  perm  change  or
+  gen-when-perm-change-or-0
+      has_diabetes = true ∨ has_high_risk = true
+    →  (Δinsulin_dose −50% vs insulin_dose@therapy_start ∨ has_ckd = true) ∧ on_acei = true
+      deontic=permission  holes=('has_high_risk', 'insulin_dose_at_therapy_start')  fragment=LIA
+  gen-when-perm-change-or-1
+      has_ckd = true ∨ has_adequate_trial = true
+    →  (Δinsulin_dose −50% vs insulin_dose@therapy_start ∨ has_diabetes = true) ∧ dose_reduced = true
+      deontic=permission  holes=('has_adequate_trial', 'insulin_dose_at_therapy_start')  fragment=LIA
+
+# hole:then  obli  threshold  single
+  gen-then-obli-threshold-single-0
+      potassium < 5.0
+    →  on_acei = true ∧ has_high_risk = true
+      deontic=obligation  holes=('has_high_risk',)  fragment=LIA
+  gen-then-obli-threshold-single-1
+      egfr < 30.0
+    →  dose_reduced = true ∧ has_adequate_trial = true
+      deontic=obligation  holes=('has_adequate_trial',)  fragment=LIA
+
+# hole:then  obli  threshold  and
+  gen-then-obli-threshold-and-0
+      potassium < 5.0 ∧ has_ckd = true
+    →  on_acei = true ∧ has_high_risk = true
+      deontic=obligation  holes=('has_high_risk',)  fragment=LIA
+  gen-then-obli-threshold-and-1
+      egfr < 30.0 ∧ has_diabetes = true
+    →  dose_reduced = true ∧ has_adequate_trial = true
+      deontic=obligation  holes=('has_adequate_trial',)  fragment=LIA
+
+# hole:then  obli  threshold  or
+  gen-then-obli-threshold-or-0
+      potassium < 5.0 ∨ has_ckd = true
+    →  on_acei = true ∧ has_high_risk = true
+      deontic=obligation  holes=('has_high_risk',)  fragment=LIA
+  gen-then-obli-threshold-or-1
+      egfr < 30.0 ∨ has_diabetes = true
+    →  dose_reduced = true ∧ has_adequate_trial = true
+      deontic=obligation  holes=('has_adequate_trial',)  fragment=LIA
+
+# hole:then  obli  boolean  single
+  gen-then-obli-boolean-single-0
+      has_diabetes = true
+    →  on_acei = true ∧ has_high_risk = true
+      deontic=obligation  holes=('has_high_risk',)  fragment=PROP
+  gen-then-obli-boolean-single-1
+      has_ckd = true
+    →  dose_reduced = true ∧ has_adequate_trial = true
+      deontic=obligation  holes=('has_adequate_trial',)  fragment=PROP
+
+# hole:then  obli  boolean  and
+  gen-then-obli-boolean-and-0
+      has_diabetes = true ∧ has_ckd = true
+    →  on_acei = true ∧ has_high_risk = true
+      deontic=obligation  holes=('has_high_risk',)  fragment=PROP
+  gen-then-obli-boolean-and-1
+      has_ckd = true ∧ has_diabetes = true
+    →  dose_reduced = true ∧ has_adequate_trial = true
+      deontic=obligation  holes=('has_adequate_trial',)  fragment=PROP
+
+# hole:then  obli  boolean  or
+  gen-then-obli-boolean-or-0
+      has_diabetes = true ∨ has_ckd = true
+    →  on_acei = true ∧ has_high_risk = true
+      deontic=obligation  holes=('has_high_risk',)  fragment=PROP
+  gen-then-obli-boolean-or-1
+      has_ckd = true ∨ has_diabetes = true
+    →  dose_reduced = true ∧ has_adequate_trial = true
+      deontic=obligation  holes=('has_adequate_trial',)  fragment=PROP
+
+# hole:then  obli  window  single
+  gen-then-obli-window-single-0
+      on_acei = true
+    →  since(potassium_check) ≤ 14d ∧ has_high_risk = true
+      deontic=obligation  holes=('has_high_risk',)  fragment=MTL
+  gen-then-obli-window-single-1
+      dose_reduced = true
+    →  since(renal_review) ≤ 30d ∧ has_adequate_trial = true
+      deontic=obligation  holes=('has_adequate_trial',)  fragment=MTL
+
+# hole:then  obli  window  and
+  gen-then-obli-window-and-0
+      on_acei = true ∧ has_ckd = true
+    →  since(potassium_check) ≤ 14d ∧ has_high_risk = true
+      deontic=obligation  holes=('has_high_risk',)  fragment=MTL
+  gen-then-obli-window-and-1
+      dose_reduced = true ∧ has_diabetes = true
+    →  since(renal_review) ≤ 30d ∧ has_adequate_trial = true
+      deontic=obligation  holes=('has_adequate_trial',)  fragment=MTL
+
+# hole:then  obli  window  or
+  gen-then-obli-window-or-0
+      on_acei = true ∨ has_ckd = true
+    →  since(potassium_check) ≤ 14d ∧ has_high_risk = true
+      deontic=obligation  holes=('has_high_risk',)  fragment=MTL
+  gen-then-obli-window-or-1
+      dose_reduced = true ∨ has_diabetes = true
+    →  since(renal_review) ≤ 30d ∧ has_adequate_trial = true
+      deontic=obligation  holes=('has_adequate_trial',)  fragment=MTL
+
+# hole:then  obli  change  single
+  gen-then-obli-change-single-0
+      has_diabetes = true
+    →  (Δinsulin_dose −50% vs insulin_dose@therapy_start ∧ on_acei = true) ∧ has_high_risk = true
+      deontic=obligation  holes=('has_high_risk', 'insulin_dose_at_therapy_start')  fragment=LIA
+  gen-then-obli-change-single-1
+      has_ckd = true
+    →  (Δinsulin_dose −50% vs insulin_dose@therapy_start ∧ dose_reduced = true) ∧ has_adequate_trial = true
+      deontic=obligation  holes=('has_adequate_trial', 'insulin_dose_at_therapy_start')  fragment=LIA
+
+# hole:then  obli  change  and
+  gen-then-obli-change-and-0
+      has_diabetes = true
+    →  ((Δinsulin_dose −50% vs insulin_dose@therapy_start ∧ has_ckd = true) ∧ on_acei = true) ∧ has_high_risk = true
+      deontic=obligation  holes=('has_high_risk', 'insulin_dose_at_therapy_start')  fragment=LIA
+  gen-then-obli-change-and-1
+      has_ckd = true
+    →  ((Δinsulin_dose −50% vs insulin_dose@therapy_start ∧ has_diabetes = true) ∧ dose_reduced = true) ∧ has_adequate_trial = true
+      deontic=obligation  holes=('has_adequate_trial', 'insulin_dose_at_therapy_start')  fragment=LIA
+
+# hole:then  obli  change  or
+  gen-then-obli-change-or-0
+      has_diabetes = true
+    →  ((Δinsulin_dose −50% vs insulin_dose@therapy_start ∨ has_ckd = true) ∧ on_acei = true) ∧ has_high_risk = true
+      deontic=obligation  holes=('has_high_risk', 'insulin_dose_at_therapy_start')  fragment=LIA
+  gen-then-obli-change-or-1
+      has_ckd = true
+    →  ((Δinsulin_dose −50% vs insulin_dose@therapy_start ∨ has_diabetes = true) ∧ dose_reduced = true) ∧ has_adequate_trial = true
+      deontic=obligation  holes=('has_adequate_trial', 'insulin_dose_at_therapy_start')  fragment=LIA
+
+# hole:then  perm  threshold  single
+  gen-then-perm-threshold-single-0
+      potassium < 5.0
+    →  on_acei = true ∧ has_high_risk = true
+      deontic=permission  holes=('has_high_risk',)  fragment=LIA
+  gen-then-perm-threshold-single-1
+      egfr < 30.0
+    →  dose_reduced = true ∧ has_adequate_trial = true
+      deontic=permission  holes=('has_adequate_trial',)  fragment=LIA
+
+# hole:then  perm  threshold  and
+  gen-then-perm-threshold-and-0
+      potassium < 5.0 ∧ has_ckd = true
+    →  on_acei = true ∧ has_high_risk = true
+      deontic=permission  holes=('has_high_risk',)  fragment=LIA
+  gen-then-perm-threshold-and-1
+      egfr < 30.0 ∧ has_diabetes = true
+    →  dose_reduced = true ∧ has_adequate_trial = true
+      deontic=permission  holes=('has_adequate_trial',)  fragment=LIA
+
+# hole:then  perm  threshold  or
+  gen-then-perm-threshold-or-0
+      potassium < 5.0 ∨ has_ckd = true
+    →  on_acei = true ∧ has_high_risk = true
+      deontic=permission  holes=('has_high_risk',)  fragment=LIA
+  gen-then-perm-threshold-or-1
+      egfr < 30.0 ∨ has_diabetes = true
+    →  dose_reduced = true ∧ has_adequate_trial = true
+      deontic=permission  holes=('has_adequate_trial',)  fragment=LIA
+
+# hole:then  perm  boolean  single
+  gen-then-perm-boolean-single-0
+      has_diabetes = true
+    →  on_acei = true ∧ has_high_risk = true
+      deontic=permission  holes=('has_high_risk',)  fragment=PROP
+  gen-then-perm-boolean-single-1
+      has_ckd = true
+    →  dose_reduced = true ∧ has_adequate_trial = true
+      deontic=permission  holes=('has_adequate_trial',)  fragment=PROP
+
+# hole:then  perm  boolean  and
+  gen-then-perm-boolean-and-0
+      has_diabetes = true ∧ has_ckd = true
+    →  on_acei = true ∧ has_high_risk = true
+      deontic=permission  holes=('has_high_risk',)  fragment=PROP
+  gen-then-perm-boolean-and-1
+      has_ckd = true ∧ has_diabetes = true
+    →  dose_reduced = true ∧ has_adequate_trial = true
+      deontic=permission  holes=('has_adequate_trial',)  fragment=PROP
+
+# hole:then  perm  boolean  or
+  gen-then-perm-boolean-or-0
+      has_diabetes = true ∨ has_ckd = true
+    →  on_acei = true ∧ has_high_risk = true
+      deontic=permission  holes=('has_high_risk',)  fragment=PROP
+  gen-then-perm-boolean-or-1
+      has_ckd = true ∨ has_diabetes = true
+    →  dose_reduced = true ∧ has_adequate_trial = true
+      deontic=permission  holes=('has_adequate_trial',)  fragment=PROP
+
+# hole:then  perm  window  single
+  gen-then-perm-window-single-0
+      on_acei = true
+    →  since(potassium_check) ≤ 14d ∧ has_high_risk = true
+      deontic=permission  holes=('has_high_risk',)  fragment=MTL
+  gen-then-perm-window-single-1
+      dose_reduced = true
+    →  since(renal_review) ≤ 30d ∧ has_adequate_trial = true
+      deontic=permission  holes=('has_adequate_trial',)  fragment=MTL
+
+# hole:then  perm  window  and
+  gen-then-perm-window-and-0
+      on_acei = true ∧ has_ckd = true
+    →  since(potassium_check) ≤ 14d ∧ has_high_risk = true
+      deontic=permission  holes=('has_high_risk',)  fragment=MTL
+  gen-then-perm-window-and-1
+      dose_reduced = true ∧ has_diabetes = true
+    →  since(renal_review) ≤ 30d ∧ has_adequate_trial = true
+      deontic=permission  holes=('has_adequate_trial',)  fragment=MTL
+
+# hole:then  perm  window  or
+  gen-then-perm-window-or-0
+      on_acei = true ∨ has_ckd = true
+    →  since(potassium_check) ≤ 14d ∧ has_high_risk = true
+      deontic=permission  holes=('has_high_risk',)  fragment=MTL
+  gen-then-perm-window-or-1
+      dose_reduced = true ∨ has_diabetes = true
+    →  since(renal_review) ≤ 30d ∧ has_adequate_trial = true
+      deontic=permission  holes=('has_adequate_trial',)  fragment=MTL
+
+# hole:then  perm  change  single
+  gen-then-perm-change-single-0
+      has_diabetes = true
+    →  (Δinsulin_dose −50% vs insulin_dose@therapy_start ∧ on_acei = true) ∧ has_high_risk = true
+      deontic=permission  holes=('has_high_risk', 'insulin_dose_at_therapy_start')  fragment=LIA
+  gen-then-perm-change-single-1
+      has_ckd = true
+    →  (Δinsulin_dose −50% vs insulin_dose@therapy_start ∧ dose_reduced = true) ∧ has_adequate_trial = true
+      deontic=permission  holes=('has_adequate_trial', 'insulin_dose_at_therapy_start')  fragment=LIA
+
+# hole:then  perm  change  and
+  gen-then-perm-change-and-0
+      has_diabetes = true
+    →  ((Δinsulin_dose −50% vs insulin_dose@therapy_start ∧ has_ckd = true) ∧ on_acei = true) ∧ has_high_risk = true
+      deontic=permission  holes=('has_high_risk', 'insulin_dose_at_therapy_start')  fragment=LIA
+  gen-then-perm-change-and-1
+      has_ckd = true
+    →  ((Δinsulin_dose −50% vs insulin_dose@therapy_start ∧ has_diabetes = true) ∧ dose_reduced = true) ∧ has_adequate_trial = true
+      deontic=permission  holes=('has_adequate_trial', 'insulin_dose_at_therapy_start')  fragment=LIA
+
+# hole:then  perm  change  or
+  gen-then-perm-change-or-0
+      has_diabetes = true
+    →  ((Δinsulin_dose −50% vs insulin_dose@therapy_start ∨ has_ckd = true) ∧ on_acei = true) ∧ has_high_risk = true
+      deontic=permission  holes=('has_high_risk', 'insulin_dose_at_therapy_start')  fragment=LIA
+  gen-then-perm-change-or-1
+      has_ckd = true
+    →  ((Δinsulin_dose −50% vs insulin_dose@therapy_start ∨ has_diabetes = true) ∧ dose_reduced = true) ∧ has_adequate_trial = true
+      deontic=permission  holes=('has_adequate_trial', 'insulin_dose_at_therapy_start')  fragment=LIA

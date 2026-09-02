@@ -1,0 +1,28 @@
+metric,value
+rules,144
+rules_with_a_hole,108
+rules_permissive,72
+plans_per_rule,50
+rule_plan_pairs,4569
+seed,0
+generated_rules_rejected_by_the_validator,0
+grid_cells,72
+rules_with_a_time_window,36
+
+ablation,pairs,applies_to,to_certified,to_must_violate,rate_pct
+stub_false,4569,3277,137,69,6.3
+stub_true,4569,3277,0,368,11.2
+no_deontic,4569,2282,0,1837,80.5
+no_occurrence_flag,4569,1800,26,0,1.4
+naive_single_call,4569,4569,0,1468,32.1
+
+# canonicalise-before-the-vacuity-sweep is a rule-level guard, not a
+# per-plan one: without it these rules load clean and then certify
+# every patient they are ever tested against.
+rules_checked,0
+tautologies_caught_only_by_canonicalising,0
+
+# NOT MEASURED HERE: forcing the partial path after a binder refusal.
+# That guard changes what the FORMALIZER emits, not what verdict a
+# rule yields, so it needs a live gate re-run with the guard off.
+csv,generated_ablation.csv

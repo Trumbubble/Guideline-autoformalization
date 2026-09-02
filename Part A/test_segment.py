@@ -750,8 +750,10 @@ def test_no_non_builtin_open_carries_an_encoding_argument():
     document came back refused -- a self-inflicted outage that looked exactly
     like a guideline with no encodable content.
 
-    Cheap to assert, and it pins the whole family: urlopen, popen, gzip.open,
-    webbrowser.open. Only the builtin takes `encoding`."""
+    Pinned to the calls that genuinely REJECT `encoding`: `urlopen`,
+    `webbrowser.open`, `os.open`. Deliberately not `\w+\.open(` in general --
+    `pathlib.Path.open` and `gzip.open` both accept `encoding` in text mode, and
+    a check that flags correct code gets suppressed rather than fixed."""
     import glob
     import os
     import re
@@ -760,8 +762,7 @@ def test_no_non_builtin_open_carries_an_encoding_argument():
              os.path.join(os.path.dirname(here), "Part B", "*.py"),
              os.path.join(os.path.dirname(here), "demo.py")]
     bad = []
-    # `.open(` or `urlopen(` -- anything but a bare builtin `open(`.
-    pat = re.compile(r"(?:\w\.|url|p|gzip\.|webbrowser\.)open\([^()]*encoding=")
+    pat = re.compile(r"\b(?:urlopen|webbrowser\.open|os\.open)\([^()]*encoding=")
     for pattern in roots:
         for path in glob.glob(pattern):
             for i, line in enumerate(open(path, encoding="utf-8"), 1):

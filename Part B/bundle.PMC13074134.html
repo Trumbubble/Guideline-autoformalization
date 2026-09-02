@@ -1,0 +1,175 @@
+<title>PMC13074134 — formalization report</title>
+<style>
+:root{--bg:#fbfbfa;--fg:#1a1a1a;--muted:#6b6b6b;--line:#e3e1dd;--card:#fff;
+--ok:#1a7f4b;--part:#9a6700;--no:#a4342a;--accent:#2b5c8a;--code:#f5f4f1}
+@media(prefers-color-scheme:dark){:root{--bg:#16181c;--fg:#e8e6e3;--muted:#9a9a9a;
+--line:#2c2f36;--card:#1c1f24;--ok:#4ec48a;--part:#e0b341;--no:#f0857a;
+--accent:#7fb3e0;--code:#22252b}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);
+font:16px/1.6 ui-sans-serif,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+.wrap{max-width:920px;margin:0 auto;padding:40px 24px 80px}
+.back{display:inline-block;margin-bottom:18px;font-size:13.5px;color:var(--accent);
+text-decoration:none}
+.back:hover{text-decoration:underline}
+@media print{.back{display:none}}
+h1{font-size:26px;margin:0 0 4px;letter-spacing:-.01em}
+h2{font-size:15px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);
+margin:44px 0 14px;font-weight:600}
+.sub{color:var(--muted);font-size:14px;margin:0 0 28px}
+.bar{display:flex;height:10px;border-radius:5px;overflow:hidden;margin:18px 0 8px;
+background:var(--line)}
+.bar span{display:block}
+.legend{display:flex;gap:18px;flex-wrap:wrap;font-size:13px;color:var(--muted)}
+.dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;
+padding:18px 20px;margin:0 0 14px}
+details.card>summary{list-style:none;cursor:pointer;margin:-18px -20px;
+padding:18px 20px 18px 40px;border-radius:10px;position:relative}
+details.card>summary::-webkit-details-marker{display:none}
+details.card>summary::before{content:"\25B8";position:absolute;left:20px;top:18px;
+color:var(--muted);transition:transform .15s}
+details.card[open]>summary::before{transform:rotate(90deg)}
+details.card>summary:hover{background:color-mix(in srgb,var(--fg) 3%,transparent)}
+details.card>summary blockquote{margin-bottom:0;border-left:none;padding-left:0}
+details.card>summary .head{margin-bottom:6px}
+details.card>.body{padding-top:14px;margin-top:14px;border-top:1px solid var(--line)}
+.controls{display:flex;gap:10px;align-items:center;margin:0 0 14px}
+.controls button{font:13px inherit;color:var(--accent);background:none;
+border:1px solid var(--line);border-radius:6px;padding:4px 11px;cursor:pointer}
+.controls button:hover{border-color:var(--accent)}
+.hint{font-size:12.5px;color:var(--muted)}
+.card.encode{border-left:4px solid var(--ok)}
+.card.partial{border-left:4px solid var(--part)}
+.card.refuse{border-left:4px solid var(--no)}
+.head{display:flex;justify-content:space-between;align-items:baseline;gap:12px;
+margin-bottom:10px}
+.id{font:12px ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--muted)}
+.badge{font-size:12px;font-weight:600;padding:2px 9px;border-radius:20px;
+white-space:nowrap}
+.badge.encode{background:color-mix(in srgb,var(--ok) 16%,transparent);color:var(--ok)}
+.badge.partial{background:color-mix(in srgb,var(--part) 18%,transparent);color:var(--part)}
+.badge.refuse{background:color-mix(in srgb,var(--no) 15%,transparent);color:var(--no)}
+blockquote{margin:0 0 14px;padding:10px 0 10px 14px;border-left:2px solid var(--line);
+color:var(--fg);font-size:15px}
+.label{font-size:11px;text-transform:uppercase;letter-spacing:.07em;
+color:var(--muted);margin:14px 0 5px;font-weight:600}
+.rule.logic{font-size:13.5px;color:var(--accent)}
+.rule{font:14px/1.7 ui-monospace,SFMono-Regular,Menlo,monospace;background:var(--code);
+border-radius:7px;padding:12px 14px;white-space:pre-wrap;overflow-x:auto}
+.why{font-size:14px;color:var(--fg)}
+ul{margin:6px 0 0;padding-left:20px;font-size:14px}
+li{margin:3px 0}
+.hole{font:12px ui-monospace,Menlo,monospace;background:color-mix(in srgb,var(--part) 15%,transparent);
+padding:1px 6px;border-radius:4px;margin-right:5px;display:inline-block}
+.caution{border-left:3px solid var(--part);padding:8px 12px;margin:8px 0 0;
+background:color-mix(in srgb,var(--part) 7%,transparent);border-radius:0 6px 6px 0;
+font-size:13.5px}
+.caution code{font-weight:600;color:var(--part)}
+details{margin-top:14px}
+summary{cursor:pointer;font-size:13px;color:var(--accent);user-select:none}
+pre{background:var(--code);border-radius:7px;padding:14px;overflow-x:auto;
+font:12.5px/1.55 ui-monospace,SFMono-Regular,Menlo,monospace;margin:10px 0 0}
+table{border-collapse:collapse;width:100%;font-size:14px;margin-top:8px}
+th,td{text-align:left;padding:7px 10px;border-bottom:1px solid var(--line)}
+th{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+td.n{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+footer{margin-top:56px;padding-top:20px;border-top:1px solid var(--line);
+font-size:13px;color:var(--muted)}
+@media print{body{background:#fff}.card{break-inside:avoid}
+.controls{display:none}details.card>.body{display:block}
+details:not(.card){display:none}}
+</style>
+<div class="wrap">
+
+<h1>PMC13074134 — formalization report</h1>
+<p class="sub">5 recommendation statement(s) &middot; generated 2026-09-01 &middot; 5 bound variable(s)</p>
+<div class="bar"><span style="width:20.0%;background:var(--ok)"></span><span style="width:0.0%;background:var(--part)"></span><span style="width:80.0%;background:var(--no)"></span></div>
+<div class="legend"><span><i class="dot" style="background:var(--ok)"></i>1 encoded</span><span><i class="dot" style="background:var(--part)"></i>0 partial &mdash; encoded with a named gap</span><span><i class="dot" style="background:var(--no)"></i>4 refused</span></div>
+<h2>Why statements were refused</h2>
+<table><tr><th>Reason</th><th>Meaning</th><th class="n">n</th></tr>
+<tr><td><span class="id">unbound_concept</span></td><td>a clinical concept in the sentence could not be resolved to a terminology code</td><td class="n">3</td></tr>
+<tr><td><span class="id">beyond_dsl</span></td><td>the sentence needs a construct this logic does not have</td><td class="n">1</td></tr>
+</table>
+<h2>Statement by statement</h2>
+<div class="controls"><button type="button" onclick="setAll(true)">Expand all</button><button type="button" onclick="setAll(false)">Collapse all</button><span class="hint">or click any statement</span></div>
+<details class="card encode">
+<summary>
+<div class="head">
+<span class="id">PMC13074134:0010</span>
+<span class="badge encode">Encoded</span>
+</div>
+<blockquote>Action: Reduce basal insulin by 50% at start LRD. May need optimisation Depending on the carbohydrate intake, consider holding fast‐acting mealtime insulin or reduce dose by 50% Consideration should be given to the overall glycaemic control and insulin requirements which govern dose adjustment to optimise glycaemic control</blockquote>
+</summary>
+<div class="body">
+<div class="label">Encoded as</div>
+<div class="rule">IF at start LRD AND Insulin, Long-Acting
+THEN must: Insulin, Long-Acting dose is reduced by at least 50% from its value at on basal insulin</div>
+<div class="why" style="margin-top:8px"><strong>Action:</strong> recommend basal insulin dose</div>
+
+<details><summary>Show the logic and its bindings</summary>
+<div class="label">&phi; = when &rarr; then</div><div class="rule logic">has_start_lrd = true ∧ on_basal_insulin = true
+    →  Δon_basal_insulin_dose −50% vs on_basal_insulin_dose@on_basal_insulin</div><div class="label">What each name is bound to</div><table><tr><th>Variable</th><th>Type</th><th>Terminology</th></tr><tr><td><span class="id">has_start_lrd</span><br><span style="font-size:12.5px;color:var(--muted)">at start LRD</span></td><td>bool</td><td style="word-break:break-all"><em style="color:var(--part)">left free &mdash; no code</em></td></tr><tr><td><span class="id">on_basal_insulin</span><br><span style="font-size:12.5px;color:var(--muted)">Insulin, Long-Acting</span></td><td>bool</td><td style="word-break:break-all">http://www.whocc.no/atc|D049528</td></tr><tr><td><span class="id">on_basal_insulin_dose</span><br><span style="font-size:12.5px;color:var(--muted)">Insulin, Long-Acting dose</span></td><td>real</td><td style="word-break:break-all">http://www.whocc.no/atc|D049528</td></tr><tr><td><span class="id">on_basal_insulin</span><br><span style="font-size:12.5px;color:var(--muted)"></span></td><td>event</td><td style="word-break:break-all"><span class="id">&mdash;</span></td></tr></table>
+</details>
+</div></details>
+<details class="card refuse">
+<summary>
+<div class="head">
+<span class="id">PMC13074134:0008</span>
+<span class="badge refuse">Refused</span>
+</div>
+<blockquote>Class of medication: Basal insulin regimens; (not exhaustive list): Abasaglar® (once or twice daily), Humulin‐I® (once or twice daily), Insulatard® (once or twice daily), Lantus® (once or twice daily), Levemir® (once or twice daily), Semglee® (once or twice daily), Toujeo® (once daily), Tresiba® (once daily); Action: Reduce the total daily insulin dose by 50% at start LRD. May need optimisation Consideration should be given to the overall glycaemic control and insulin requirements which govern dose adjustment to optimise glycaemic control</blockquote>
+</summary>
+<div class="body">
+<div class="label">Not encoded because</div>
+<div class="why">a clinical concept in the sentence could not be resolved to a terminology code <span class="id">(unbound_concept)</span></div>
+<div class="why" style="margin-top:8px;color:var(--muted)">no terminology binding for &#x27;Basal insulin regimens&#x27; (drug_class): The phrase denotes the class of long-acting/intermediate-acting basal insulins (glargine, detemir, degludec, NPH). No candidate captures &#x27;basal insulin&#x27; as a class: the transgender regimen value sets are irrelevant, insulin glargine and lispro are single specific agents (lispro is rapid-acting, the opposite of basal), and generic &#x27;Insulin&#x27;/&#x27;Human insulin&#x27; are broader than basal regimens and would wrongly include prandial/mixed insulins. Abstaining rather than risking an over- or under-inclusive binding.; no terminology binding f</div>
+
+</div></details>
+<details class="card refuse">
+<summary>
+<div class="head">
+<span class="id">PMC13074134:0018</span>
+<span class="badge refuse">Refused</span>
+</div>
+<blockquote>Class of medication: Basal insulin regimen; (not exhaustive list): Abasaglar® (once or twice daily), Humulin‐I® (once or twice daily), Insulatard® (once or twice daily), Lantus® (once or twice daily), Levemir® (once or twice daily), Semglee® (once or twice daily), Toujeo® (once daily), Tresiba® (once daily); Action: Reduce dose by 35–50% of pre‐liver reduction diet (LRD) dose. Consider further reduction or discontinuation in those with type 2 diabetes. Consideration should be given to the individual&#x27;s glycaemic control and insulin requirements which govern dose adjustment to optimise glycaemic control</blockquote>
+</summary>
+<div class="body">
+<div class="label">Not encoded because</div>
+<div class="why">a clinical concept in the sentence could not be resolved to a terminology code <span class="id">(unbound_concept)</span></div>
+<div class="why" style="margin-top:8px;color:var(--muted)">no terminology binding for &#x27;Basal insulin regimen&#x27; (drug_class): The phrase denotes long-acting/basal insulin products specifically; no candidate captures that. &#x27;Insulin&#x27; (SNOMED 67866001) and &#x27;Human insulin&#x27; are too broad/incorrect (the list includes analogues such as glargine and degludec), and the regimen value sets are unrelated (gender-affirming, transplant prep, myeloma).; no terminology binding for &#x27;liver reduction diet (LRD)&#x27; (procedure): A liver reduction diet is a specific pre-bariatric-surgery low-calorie/low-carbohydrate diet intended to shrink hepatic volume; none of the candidate</div>
+
+</div></details>
+<details class="card refuse">
+<summary>
+<div class="head">
+<span class="id">PMC13074134:0019</span>
+<span class="badge refuse">Refused</span>
+</div>
+<blockquote>Class of medication: Premixed insulin regimen; (not exhaustive list): Humalog Mix 25®, Humalog Mix 50®, Humulin M3®, Novomix 30®; Action: Reduce dose by 35%–50% of pre‐LRD dose. Consider further reduction or discontinuation in those with type 2 diabetes. Consideration should be given to the individual&#x27;s glycaemic control and insulin requirements which govern dose adjustment to optimise glycaemic control Consider switching to a once‐a‐day basal insulin to avoid potential hypoglycaemia risk</blockquote>
+</summary>
+<div class="body">
+<div class="label">Not encoded because</div>
+<div class="why">a clinical concept in the sentence could not be resolved to a terminology code <span class="id">(unbound_concept)</span></div>
+<div class="why" style="margin-top:8px;color:var(--muted)">no terminology binding for &#x27;Premixed insulin regimen&#x27; (drug_class): The phrase denotes premixed (biphasic) insulin products specifically; no candidate represents that class &quot;Insulin&quot; (SNOMED 67866001) is the generic substance, too broad, and the regimen value sets are unrelated (gender-affirming, myeloma, transplant prep). Abstaining.; the change in &#x27;on_humalog_mix_25_dose&#x27; is measured from &#x27;on_humalog_mix_25&#x27;, which is the same concept; the change in &#x27;on_humalog_mix_50_dose&#x27; is measured from &#x27;on_humalog_mix_50&#x27;, which is the same concept; the change in &#x27;on_humulin_m3_dose&#x27; is measured from &#x27;o</div>
+
+</div></details>
+<details class="card refuse">
+<summary>
+<div class="head">
+<span class="id">lrd-basal-insulin-reduction</span>
+<span class="badge refuse">Refused</span>
+</div>
+<blockquote>Reduce basal insulin dose by 35%–50% of pre‐LRD dose. Consider further reduction or discontinuation of fast‐acting mealtime insulin in those with type 2 diabetes.</blockquote>
+</summary>
+<div class="body">
+<div class="label">Not encoded because</div>
+<div class="why">the sentence needs a construct this logic does not have <span class="id">(beyond_dsl)</span></div>
+<div class="why" style="margin-top:8px;color:var(--muted)">The core action is a relative dose change (reduce basal insulin by 35%-50% of the pre-LRD dose), which requires a delta construct and a basal_insulin_dose variable/LRD-start event; the available DSL exposes only comparisons on has_type_2_diabetes. The mealtime-insulin element is additionally permissive and governed by unstated individual glycaemic-control/insulin-requirement judgement.</div>
+
+</div></details>
+<footer>
+<strong>What this report does not claim.</strong> A refusal is a statement this tool declined to encode &mdash; it is not a judgement about the guideline. A rule shown here typechecked and compiled; that is not the same as being clinically correct, which is what the sentence beside it is for. Statements marked <em>partial</em> carry named free variables and answer <em>cannot tell</em> until those are supplied.
+
+</footer></div>
+<script>function setAll(open){document.querySelectorAll("details.card").forEach(function(d){d.open=open;});}</script>

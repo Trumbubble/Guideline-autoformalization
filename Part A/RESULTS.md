@@ -2178,3 +2178,155 @@ Every one of them was found by asking one question of each call site: *if this
 fails, what does the caller see?* That question, not a linter, is what this
 codebase needs applied routinely -- none of these produced a traceback, and the
 test suite passed with all fourteen present.
+
+## R34 · The titration arc: six runs, one defect, five symptoms
+
+`Delta` was added to the DSL as one dataclass. It has **fifteen consumers** --
+the decoding schema, the validator, the Z3 lowering, the CQL lowering, the
+variable walker, the event walker, the hole stubber, the canonicaliser, the
+quantity extractor, the serialiser, and Track B's loader and var-reference
+check. Python raises nothing when an `isinstance` chain omits a new variant:
+the walker falls through and returns as if the node were absent.
+
+So every consumer that had not been updated surfaced **one live run later, as a
+different symptom**, and each looked like a fresh unrelated bug. This section
+records the arc because the arc, not any individual fix, is the finding.
+
+| # | Run symptom | Root cause | Fix |
+|---|---|---|---|
+| 1 | `beyond_dsl`: "no delta construct exists" | no `EventDef` was ever created, so the decoder withheld the node | `gate.datable_events()` declares events from bound action/drug/procedure concepts |
+| 2 | still `beyond_dsl`, same words | the `delta` leaf also requires a NUMERIC variable, and a medication binds as a boolean (*is it prescribed*), so there was no quantity to change | `gate.dose_companions()` declares `<drug>_dose` (real) when the sentence carries a relative-change cue |
+| 3 | still `beyond_dsl`; model listed only booleans | **the run used stale code** -- `gate.py` was edited mid-run, and Python imports once at process start | process discipline; and `GRAMMAR_OFFERED` evidence now records what the decoder could actually emit, so this is never inferred again |
+| 4 | `TYPE_ERROR: on_basal_insulin_dose is real but value is bool`, and the boolean missing from the shipped registry | `canonical_aliases` merges variables sharing a terminology code. `on_basal_insulin` (bool) and `on_basal_insulin_dose` (real) carry the same ATC code, so the boolean was collapsed into the real and every comparison written against it was retyped | merge only within a type; a rewrite that changes a variable's type is never safe |
+| 4 | `UNKNOWN_EVENT`, bundle shipped `"events": []` | `demo.py` had its own event walker that handled `Since` and not `Delta` | one walker, `dsl.events_in`; the local copy deleted |
+| 4 | `Identifier "..._at_..." is already in use` -- the library did not translate at all | a `Delta` baseline is a DERIVED name that `rule_to_cql` already emits as a named null; `demo.py` was also stubbing it into the registry, as `bool` | `dsl.hole_defs()` skips derived names; a derived name is the lowering's to declare |
+| 5 | stage 4 crash: `expected a number, got the boolean True` | `_patients_for` guessed a variable's type by substring-matching its name (`"acr" not in n and "egfr" not in n`) and pinned everything else to `True` | patients are now SOLVED for -- a model of `domain and phi` and one of `domain and not phi`; z3 already knows every sort |
+| 5 | 12 `CIRCULAR_BASELINE` warnings across one document | the only events on offer were the drug bindings themselves, so "reduce basal insulin by 50% **at start LRD**" could only anchor to *being on basal insulin* -- circular, satisfiable by any dose, and it typechecked | `EventDef.unbound` + `gate.anchor_events()`: the anchor the sentence names becomes a declared, uncoded event. `CIRCULAR_BASELINE` raised from warn to **error** |
+| 5 | 0010 was circular and printed no caution | the PARTIAL branch computed the validator issues and kept only `blocked_codes`, discarding every warning | partial path records validator evidence (**third** time this branch has dropped evidence the strict one keeps -- see R28a) |
+
+### R34a · Three more of the same bug, found without a run
+
+After the fifth symptom, the codebase was scanned for every `isinstance` chain
+over the expression union. **15 walkers; 8 did not name every variant.** Five
+were deliberate. Three were live bugs that had not yet fired:
+
+| Site | Silent on | Consequence |
+|---|---|---|
+| `dsl.rule_quantities` | `Delta` | a titration's percentage invisible to the dropped-quantity check |
+| `Part B/real_rules._vars_and_events` | `Delta` | a delta rule's variable and baseline event invisible to Track B at load |
+| `Part B/guidelines._events_in` | `Delta` | a **third copy** of the same walker, with the same `Since`-only bug |
+
+### R34b · The measurement bug this exposed
+
+`gate._attempt` caught **every** exception and returned
+`Refusal("beyond_dsl", "encoding attempt failed")`. An auth error, a rate
+limit or a malformed JSON body was therefore indistinguishable from the DSL
+genuinely lacking a construct, and the formalizability residue -- a headline
+number -- had been silently absorbing our own outages.
+
+Infrastructure failures are now labelled `ENCODER FAILURE (ours, not the
+guideline's)`. This is R33g's shape again: a failure that returns a usable
+value.
+
+### R34c · What now catches this class
+
+Two harnesses, because unit tests over hand-built objects structurally cannot
+find "a walker nobody told about `Delta`" -- they test what their author
+already understood.
+
+- **`test_exhaustive.py`** reads the source, finds every dispatch over the
+  expression union, and fails if one does not name every variant. Deliberate
+  omissions require a written reason. A NEW walker is covered the moment it is
+  written, and adding a node to the DSL breaks the suite until every consumer
+  is updated. Verified by re-introducing the `real_rules.py` bug: it names the
+  file, line, function and missing node.
+- **`cassette.py` + `test_replay.py`** record one real run's model responses
+  and statement list, then replay the full pipeline offline. Every subsequent
+  change is checked against a real guideline before anyone runs anything. K
+  samples are stored as a list per prompt and replayed in order -- collapsing
+  them would delete the sampling-variance signal the confidence score is built
+  on. A stale tape **skips**, never passes.
+
+**The DSL is now frozen.** `Delta` was the last node. Anything inexpressible
+becomes a refusal with a named reason, which is the contribution anyway.
+
+## R35 · Class-level terms: the binder was never shown the answer
+
+Three statements in PMC13074134 refused as `unbound_concept` on
+"Basal insulin regimen(s)" and "Premixed insulin regimen", while a nearly
+identical sentence bound cleanly. The cassette settles it -- the selector's
+reasoning was identical every time:
+
+> *"No candidate represents that class... the specific agents are only members...
+> Under-determined, so abstaining."*
+
+It bound **only** when the mention proposer happened to emit
+`canonical: "long-acting insulin"`, which lexically matches ATC
+`Insulin, Long-Acting`. The non-determinism was one free-text field.
+
+| Defect | Evidence | Fix |
+|---|---|---|
+| A category word decided the candidate list | `regimens` occurs in **6** concepts, `insulin` in **1,638**; BM25 rewards the rare token, so "Basal insulin regimen" returned five *Transfeminine Regimens* value sets and nothing else | the zero-overlap filter now requires overlap on a **content** token; `_GENERIC_HEADS` was previously consulted only for head-noun backoff |
+| Reserved semantic slots spent on duplicates | `share = 2`, and the top two semantic hits were already in the lexical list, so `Insulin, Long-Acting` at rank 3 was cut | dedupe against the lexical list **before** truncating to the share |
+| Fallback-kind semantic hits unpenalised | SNOMED `Insulin` (a *drug*, 0.78) outranked ATC `Insulin, Long-Acting` (a drug *class*, 0.61) | `FALLBACK_KIND_PENALTY` now applied on both retrieval paths, not just the lexical one |
+
+**Measured honestly: the benchmark does not move** -- 4/10 on the fixable-failure
+set before and after, A/B'd for each fix independently and together. The
+already-binding regression check is 58/75, unchanged.
+
+The reason is the finding: the 97 mentions come from the 45 gold statements,
+and **none of them is an umbrella or class-level term**. The binding benchmark
+cannot see this failure mode at all -- which is precisely where a guideline's
+"Class of medication:" sections live. Justified as correctness (returning five
+gender-affirming value sets for an insulin query is wrong however it scores),
+pinned as a test rather than added to the gold set, so the benchmark number
+stays honest.
+
+## R36 · The outputs were not readable, and one was discarded
+
+The pipeline emitted a JSON bundle (an interface artifact for Track B) and
+terminal scrollback. Neither can be handed to a clinician.
+
+| Gap | Fix |
+|---|---|
+| **The CQL was never saved** -- generated, printed as a one-line status, discarded | written to `Part B/cql/<bundle>/<statement_id>.cql` |
+| Cautions never reached the bundle: only *refusals* carried evidence, so an encoded rule with a `CIRCULAR_BASELINE` looked clean in the artifact | optional `findings` key -- decision, holes and evidence per statement; additive, so an older consumer ignores it |
+| No human-readable output at all | `report.py`: a self-contained HTML page, source sentence beside the rule it became |
+| A rule was rendered as JSON or CQL, which nobody adjudicates | `dsl.to_english` / `rule_to_english` |
+| **A "weak recommendation against finerenone" rendered as `THEN must: NOT finerenone`** | `dsl.deontic_force` reads GRADE strength as well as the deontic operator, and the report prints the guideline's own wording verbatim beside ours |
+
+The report earns its keep immediately. In `PMC12355350:0048` the source ends
+*"...and a weak recommendation against finerenone in adults with CKD"* and the
+rule beside it is only about SGLT-2i/GLP-1. The dropped clause is visible at a
+glance because the sentence sits next to the encoding; in the terminal it was a
+`UNUSED_BOUND_CONCEPT` line that scrolled past.
+
+## R37 · A wrong docstring propagated into every artifact derived from it
+
+The header of `gate.py` carried a table mapping evidence to refusal codes. It
+was drawn from an early design and never revised, and it was wrong in two ways
+that read as guarantees the pipeline does not make:
+
+| Claimed | Actual |
+|---|---|
+| `not_patient_level` ← "obligation names no action" *(deterministic)* | ← `is_patient_level`, the SEGMENTER'S CLASSIFIER, which is an LLM call on a live run. `NO_ACTION_ATOM` is a validator error that causes rejection and never sets this code. |
+| `unsupported_temporal` ← "multi-visit predicate" *(deterministic)* | **No code path assigns it.** It exists only in the refusal schema enum, so the model is the only thing that can emit it -- which it did, twice across the real bundles. |
+| `defeasible` *(model)* | Deterministic when `MODAL_PREDICATE` is among the blocking codes; the model may also name it. |
+| `beyond_dsl` *(deterministic)* | Mixed: `VACUOUS_RULE` deterministically, otherwise the model's own code or the fallback. |
+
+Also corrected: "most of the decision is already made by machinery stages 1-2
+produce". Of the six codes, **one** is deterministic evidence from stages 1-2
+(`unbound_concept`) and one more from this stage's validator (`defeasible`).
+The deterministic machinery is a gate ON the model's answer, not a replacement
+for it.
+
+**Why this is worth a section.** The error was found by checking an
+architecture diagram against the code -- the diagram was faithful to the
+docstring, so it inherited every mistake. Prose in a codebase is an artifact
+other artifacts are derived from, and nothing tests it. `test_gate.py`
+now pins which codes are reachable with `formalize=None`, including an
+assertion that fails if a deterministic `unsupported_temporal` path is ever
+added without the table being updated.
+
+This is R33g's shape once more, in a different medium: something was wrong and
+returned a usable-looking value -- a table that reads as authoritative.

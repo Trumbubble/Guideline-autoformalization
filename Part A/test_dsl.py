@@ -889,7 +889,8 @@ def _insulin_registry():
                 binding="http://www.whocc.no/atc|D049528|2026", role="action"),
          VarDef("on_basal_insulin_dose", "real", None, "Insulin, Long-Acting dose",
                 binding="http://www.whocc.no/atc|D049528|2026", role="action")],
-        [EventDef("on_basal_insulin", "basal insulin")])
+        [EventDef("on_basal_insulin", "basal insulin"),
+         EventDef("start_lrd", "at start LRD", None, unbound=True)])
 
 def _wide_insulin_registry():
     """...as the gate widens it for the partial attempt: bound vocabulary plus
@@ -903,7 +904,7 @@ def _wide_insulin_registry():
 def _insulin_rule():
     return Rule(rule_id="r", when=And([Cmp("on_basal_insulin", "==", True),
                                        Cmp("has_start_lrd", "==", True)]),
-                then=dsl.Delta("on_basal_insulin_dose", "on_basal_insulin",
+                then=dsl.Delta("on_basal_insulin_dose", "start_lrd",
                                "reduce", 0.5),
                 action="recommend", target="dose reduction", source_span="x")
 
@@ -933,7 +934,7 @@ def test_a_hole_is_never_merged_into_a_numeric_variable():
 def test_the_bundle_registry_declares_a_delta_baseline_event():
     """The event walker handled `Since` only, so the first `Delta` we produced
     shipped with `events: []` and Track B rejected it as UNKNOWN_EVENT."""
-    assert dsl.events_in(_insulin_rule()) == ("on_basal_insulin",)
+    assert dsl.events_in(_insulin_rule()) == ("start_lrd",)
     since = Rule(rule_id="r", when=Since("on_basal_insulin", 30),
                  then=Cmp("on_basal_insulin", "==", True), action="recommend",
                  target="t", source_span="x")
@@ -945,7 +946,7 @@ def test_a_delta_baseline_is_the_lowerings_to_declare_not_the_registrys():
     (the library would not translate) and a number-vs-boolean comparison."""
     reg, rule = _wide_insulin_registry(), _insulin_rule()
     holes = dsl.open_holes(rule, reg)
-    assert "on_basal_insulin_dose_at_on_basal_insulin" in holes, "still reported"
+    assert "on_basal_insulin_dose_at_start_lrd" in holes, "still reported"
     names = [v.name for v in dsl.hole_defs(reg, holes, rule)]
     assert names == [], "the derived baseline is skipped, the rest already declared"
     # and a hole the registry does NOT yet declare is still stubbed
@@ -966,3 +967,64 @@ def test_the_titration_rule_survives_validation_and_lowering():
     assert not [i for i in cql.check_cql(lib.text) if i.severity == "error"]
     defs = re.findall(r'^define "([^"]+)"', lib.text, re.M)
     assert len(defs) == len(set(defs)), f"duplicate define: {defs}"
+
+
+def test_a_circular_baseline_is_rejected_not_merely_flagged():
+    """"Reduce the basal insulin dose to 50% of the dose at the time the
+    patient was on basal insulin" names no point in time, so any dose at all
+    satisfies it. It typechecks, is non-vacuous, compiles, and verifies. It was
+    produced twelve times across a single real document, because the only
+    events on offer were the drug bindings themselves. A warning is not enough
+    for a rule that is wrong."""
+    reg = _wide_insulin_registry()
+    circular = Rule(rule_id="r", when=Cmp("has_start_lrd", "==", True),
+                    then=dsl.Delta("on_basal_insulin_dose", "on_basal_insulin",
+                                   "reduce", 0.5),
+                    action="recommend", target="t", source_span="x")
+    errs = [i for i in validate_rule(circular, reg) if i.severity == "error"]
+    assert [i.code for i in errs] == ["CIRCULAR_BASELINE"]
+
+def test_a_delta_may_anchor_to_an_unbound_event_but_a_window_may_not():
+    """A Delta baseline lowers to a named null, so an anchor with no code is
+    honest there. `Since` lowers to a FHIR retrieve, which against an uncoded
+    event matches nothing and reads as "never happened"."""
+    reg = _wide_insulin_registry()
+    assert reg.event("start_lrd").unbound
+    delta = dsl.Delta("on_basal_insulin_dose", "start_lrd", "reduce", 0.5)
+    assert not [i for i in validate(delta, reg, "then") if i.severity == "error"]
+    window = Since("start_lrd", 14)
+    assert "UNBOUND_EVENT" in [i.code for i in validate(window, reg, "when")]
+
+def test_an_unbound_event_survives_the_bundle():
+    """The flag has to reach Track B, or the loader re-reads the anchor as a
+    coded event and the distinction is lost at the interface."""
+    reg = _wide_insulin_registry()
+    back = dsl.registry_from_dict(dsl.registry_to_dict(reg))
+    assert back.event("start_lrd").unbound is True
+    assert back.event("on_basal_insulin").unbound is False
+
+def test_a_weak_recommendation_is_not_rendered_as_must():
+    """"a weak recommendation against finerenone" read as `THEN must: NOT
+    finerenone`. Overstating a guideline to a governance committee is the
+    specific harm this project exists to avoid, and the strength was sitting in
+    the rule unused."""
+    base = dict(when=Cmp("has_diabetes", "==", True),
+                then=Cmp("on_ace_inhibitor", "==", True),
+                action="recommend", target="ACE inhibitor", source_span="x")
+    weak = Rule(rule_id="r", strength="weak recommendation against", **base)
+    strong = Rule(rule_id="r", strength="strong recommendation in favour", **base)
+    plain = Rule(rule_id="r", **base)
+    permissive = Rule(rule_id="r", deontic="permission",
+                      strength="conditional (permissive wording)", **base)
+    assert dsl.deontic_force(weak) == "should (weak recommendation)"
+    assert dsl.deontic_force(strong) == "must (strong recommendation)"
+    assert dsl.deontic_force(plain) == "must"
+    assert dsl.deontic_force(permissive) == "may", "permission outranks strength"
+
+def test_english_reads_a_boolean_as_a_presence_claim():
+    """"on_warfarin equals true" is not English and nobody adjudicates it."""
+    reg = Registry([VarDef("on_warfarin", "bool", None, "Warfarin", role="action"),
+                    VarDef("egfr", "real", "mL/min", "eGFR")], [])
+    assert dsl.to_english(Cmp("on_warfarin", "==", True), reg) == "Warfarin"
+    assert dsl.to_english(Cmp("on_warfarin", "==", False), reg) == "NOT Warfarin"
+    assert dsl.to_english(Cmp("egfr", "<", 30), reg) == "eGFR is below 30 mL/min"
