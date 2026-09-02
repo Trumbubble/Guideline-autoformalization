@@ -86,36 +86,34 @@ $2$ are permissive --- which is the reason for the first set.
 
 \begin{table}[t]
   \centering
-  \caption{Designed sweep: $144$ rules $\times$ $50$ records $=$ $4{,}569$
-  pairs. Percentages are of pairs, over a sample enriched for disagreement.}
+  \caption{Designed sweep: $144$ rules, up to $50$ records each (mean $31.7$; a rule with few variables admits fewer distinct partial records), $4{,}569$ rule--record pairs in total. \emph{Applies to} counts the pairs the guard can act on at all --- a substitution needs a boolean undefined predicate, the deontic row needs a permission, the occurrence row needs a time window --- and the rate is over those.}
   \label{tab:generated}
-  \begin{tabular}{lrr}
+  \begin{tabular}{lrrr}
     \toprule
-    Guard removed & $\rightarrow$ \textsc{certified} & $\rightarrow$ \textsc{must-violate} \\
+    Guard removed & applies to & moved & rate \\
     \midrule
-    Undefined predicate $\rightarrow$ \textsf{false}   & 3.0\% & 1.5\% \\
-    Undefined predicate $\rightarrow$ \textsf{true}    & 0.0\% & 8.1\% \\
-    Deontic operator (all rules obligations)           & 0.0\% & 40.2\% \\
-    Occurrence flag on a time window                   & 0.6\% & 0.0\% \\
-    Three-valued verdict $\rightarrow$ single query    & 0.0\% & 32.1\% \\
+    Undefined predicate $\rightarrow$ \textsf{false} & 3277 & 206 & 6.3\% \\
+    Undefined predicate $\rightarrow$ \textsf{true} & 3277 & 368 & 11.2\% \\
+    Deontic operator (all rules obligations) & 2282 & 1837 & 80.5\% \\
+    Occurrence flag on a time window & 1800 & 26 & 1.4\% \\
+    Three-valued verdict $\rightarrow$ single query & 4569 & 1468 & 32.1\% \\
     \bottomrule
   \end{tabular}
 \end{table}
 
 \begin{table}[t]
   \centering
-  \caption{Extracted rules: $19$ rules $\times$ $50$ records $=$ $382$ pairs.
-  Same procedure, same seed.}
+  \caption{Extracted rules: $19$ rules, up to $50$ records each (mean $20.1$), $382$ pairs. Same procedure and seed.}
   \label{tab:real}
-  \begin{tabular}{lrr}
+  \begin{tabular}{lrrr}
     \toprule
-    Guard removed & $\rightarrow$ \textsc{certified} & $\rightarrow$ \textsc{must-violate} \\
+    Guard removed & applies to & moved & rate \\
     \midrule
-    Undefined predicate $\rightarrow$ \textsf{false}   & 33.0\% & 0.0\% \\
-    Undefined predicate $\rightarrow$ \textsf{true}    & 0.0\%  & 11.0\% \\
-    Deontic operator (all rules obligations)           & 0.0\%  & 2.6\% \\
-    Occurrence flag on a time window                   & 3.1\%  & 0.0\% \\
-    Three-valued verdict $\rightarrow$ single query    & 0.0\%  & 65.2\% \\
+    Undefined predicate $\rightarrow$ \textsf{false} & 225 & 126 & 56.0\% \\
+    Undefined predicate $\rightarrow$ \textsf{true} & 225 & 42 & 18.7\% \\
+    Deontic operator (all rules obligations) & 16 & 10 & 62.5\% \\
+    Occurrence flag on a time window & 24 & 12 & 50.0\% \\
+    Three-valued verdict $\rightarrow$ single query & 382 & 249 & 65.2\% \\
     \bottomrule
   \end{tabular}
 \end{table}
@@ -136,7 +134,7 @@ effect --- and why a system evaluated on those rules alone would not discover
 the second.
 
 \paragraph{Deontic force.}
-The gap between $40.2\%$ and $2.6\%$ is not a disagreement. Half the designed
+The rate is $80.5\%$ in the sweep and $62.5\%$ on extracted rules, but the denominators differ by two orders of magnitude ($2{,}282$ pairs against $16$). Half the designed
 sweep is permissive by construction; $2$ of $19$ extracted rules are. The
 designed figure is the effect when the guard applies; the extracted figure is
 how often it applies to this corpus. Both are needed, and quoting either alone
@@ -194,6 +192,13 @@ it reports both as violations. Roughly two thirds of pairs are affected.
         the two samples differ.
   \item \textbf{Records are enriched for disagreement.} Rates are conditional
         on that sampling and are not incidence in a patient population.
+  \item \textbf{Rules are weighted unequally.} The unit is the rule--record
+        pair, and a rule with more variables admits more distinct partial
+        records (from $3$ to $50$, mean $31.7$), so it contributes more pairs.
+        A rate is therefore not the fraction of \emph{rules} affected.
+  \item \textbf{The deontic row on extracted rules rests on $16$ pairs} from
+        $2$ permissive rules. We report the rate because the denominator is
+        printed beside it; it should not be read as an estimate.
   \item \textbf{Two guards are not measured here.} Merging duplicate concepts
         before the vacuity sweep changes which rules exist rather than what
         verdict they yield; it currently catches nothing in this corpus, the
