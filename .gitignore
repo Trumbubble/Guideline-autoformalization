@@ -249,3 +249,5 @@ Formatting_Instructions_For_NeurIPS_2026/
 Part B/tests/ablation.csv
 Part B/tests/generated_ablation.csv
 Part B/tests/explanation_*.csv
+# summaries ARE tracked: small, and they are what the paper quotes
+!Part B/tests/*.summary.txt

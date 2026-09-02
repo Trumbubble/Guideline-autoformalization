@@ -39,6 +39,8 @@
 \usepackage{booktabs}
 \usepackage{amsfonts}
 \usepackage{amsmath}
+\usepackage{amssymb}   % logic.tex
+\usepackage{amsthm}    % logic.tex
 \usepackage{nicefrac}
 \usepackage{microtype}
 \usepackage{graphicx}
@@ -133,6 +135,10 @@
 
 \lstset{basicstyle=\ttfamily\scriptsize, frame=single, framesep=4pt,
         columns=fullflexible, breaklines=true, xleftmargin=0pt}
+
+% Required by logic.tex, which states the guards as propositions.
+\newtheorem{proposition}{Proposition}
+\newtheorem{corollary}[proposition]{Corollary}
 
 %==============================================================================
 \title{Coverage Is Not a Safety Metric: Guideline Formalisation\\
@@ -782,6 +788,73 @@ pipeline does call one, and a recorded run is replayed offline by
 hashes with their responses, so the pipeline can be re-executed without an API
 key and without redistributing source documents. A tape that no longer matches
 the code \emph{skips} rather than passes.
+
+\section{Explanation size}
+\label{app:explanation}
+
+When a verdict is \textsc{may-violate}, the checker owes the reader a reason.
+The unhelpful reason is the witness itself: a value for every unstated variable,
+most of them incidental. \texttt{api.minimal\_counterexample\_core} instead
+returns the smallest set of those values that on its own forces the violation,
+by deletion-based extraction --- drop one assignment, keep the drop if the
+remainder still cannot be made compliant. That yields a \emph{minimal} core, not
+a \emph{minimum} one, so the sizes below are an upper bound on the smallest
+possible explanation.
+
+Measured over the generated rules, $144$ rules and $4{,}570$ records, of which
+$1{,}472$ returned \textsc{may-violate}:
+
+\begin{center}
+\begin{tabular}{lrr}
+  \toprule
+   & generated & the system's own rules \\
+  \midrule
+  rules                          & 144   & 19 \\
+  records                        & 4570  & 382 \\
+  \textsc{may-violate} verdicts  & 1472  & 246 \\
+  \addlinespace
+  unstated variables, mean       & 2.53  & 2.64 \\
+  core size, mean                & 1.34  & 1.91 \\
+  core size, median              & 1     & 2 \\
+  reduction                      & 1.89$\times$ & 1.38$\times$ \\
+  explanations of one fact       & 68.9\% & 39.4\% \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+\paragraph{The core cannot collapse to one.}
+For the assumptions to make $\mathcal{D} \wedge P \wedge \Phi_R$ unsatisfiable
+they must force $\Phi_R$ false, which requires the antecedent true \emph{and}
+the consequent false. A single value suffices only when the record already pins
+the other side. Measured: over records that pinned nothing, a core of size one
+occurs $0$ times in $72$; over records that pinned four variables it occurs
+$95$ times in $95$. Nor can a core be empty --- \textsc{may-violate} means some
+completion complies, so at least one assignment is needed to exclude compliance,
+and the observed minimum over $1{,}718$ verdicts is $1$.
+
+\paragraph{Core size grows more slowly than the record thins.}
+\begin{center}
+\begin{tabular}{rrrrr}
+  \toprule
+  unstated variables & pairs & mean core & reduction & one-fact \\
+  \midrule
+  1 & 277 & 1.00 & 1.00$\times$ & 100.0\% \\
+  2 & 497 & 1.21 & 1.65$\times$ & 78.7\% \\
+  3 & 420 & 1.44 & 2.08$\times$ & 58.8\% \\
+  4 & 202 & 1.70 & 2.35$\times$ & 38.6\% \\
+  5 &  68 & 1.82 & 2.74$\times$ & 30.9\% \\
+  6 &   8 & 2.50 & 2.40$\times$ &   0.0\% \\
+  \bottomrule
+\end{tabular}
+\end{center}
+The core is bounded below by the rule's structure --- the number of atoms that
+must be forced --- and not by the size of the record, so as a record thins the
+numerator grows while the denominator approaches that structural floor. Over the
+range measured the core grows at roughly a third the rate of the unstated count.
+This is the property that matters in deployment, where a real record leaves far
+more than three things unstated; it is also a short extrapolation, from a
+maximum of six unstated variables with only eight records at that end, and we do
+not fit a curve to it.
 
 \section{Engineering log}
 \note{One paragraph pointing at \texttt{Part A/RESULTS.md} in the anonymised
