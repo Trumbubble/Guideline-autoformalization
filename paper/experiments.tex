@@ -69,7 +69,7 @@ system cannot avoid needing.
 
 Reported over two rule sets, because each answers a question the other cannot.
 
-The \textbf{designed sweep} enumerates the expressible space: undefined
+The \textbf{generated set} enumerates the expressible space: undefined
 predicate in the antecedent, in the consequent, or absent; obligation or
 permission; numeric threshold, boolean, time window, or relative change; one
 atom, two under conjunction, or two under disjunction. Two instances per cell
@@ -78,15 +78,20 @@ validator and non-degeneracy check the pipeline applies --- no candidate was
 rejected. This set says what a guard is worth \emph{when it applies}, with
 enough rules per row to be quotable.
 
-The \textbf{extracted rules} are the $19$ the system actually has: $10$
-hand-authored against the DSL and $9$ produced by the pipeline from
-open-access guidelines. This set says how often each guard applies to real
-material. Its rows are narrow --- $6$ rules carry an undefined predicate and
-$2$ are permissive --- which is the reason for the first set.
+The \textbf{existing rules} are the $19$ the system already had, and they are
+two different things: $10$ hand-authored directly against the DSL as checker
+fixtures, and $9$ produced by the pipeline from open-access guidelines. The
+distinction is not cosmetic, because the two halves populate disjoint rows.
+No hand-authored fixture carries an undefined predicate or is permissive, so
+the substitution rows and the deontic row draw entirely from the $6$ and $2$
+guideline-derived rules respectively; conversely both time-window rules are
+hand-authored, so the occurrence row draws entirely from the fixtures. Each row
+of Table~\ref{tab:real} therefore rests on a handful of rules, named in the
+table, which is the reason for the generated set rather than an aside about it.
 
 \begin{table}[t]
   \centering
-  \caption{Designed sweep: $144$ rules, up to $50$ records each (mean $31.7$; a rule with few variables admits fewer distinct partial records), $4{,}569$ rule--record pairs in total. \emph{Applies to} counts the pairs the guard can act on at all --- a substitution needs a boolean undefined predicate, the deontic row needs a permission, the occurrence row needs a time window --- and the rate is over those.}
+  \caption{Generated set: $144$ rules, up to $50$ records each (mean $31.7$; a rule with few variables admits fewer distinct partial records), $4{,}569$ rule--record pairs in total. \emph{Applies to} counts the pairs the guard can act on at all --- a substitution needs a boolean undefined predicate, the deontic row needs a permission, the occurrence row needs a time window --- and the rate is over those.}
   \label{tab:generated}
   \begin{tabular}{lrrr}
     \toprule
@@ -103,17 +108,20 @@ $2$ are permissive --- which is the reason for the first set.
 
 \begin{table}[t]
   \centering
-  \caption{Extracted rules: $19$ rules, up to $50$ records each (mean $20.1$), $382$ pairs. Same procedure and seed.}
+  \caption{Existing rules: $19$ rules ($10$ hand-authored
+  fixtures, $9$ pipeline-derived), up to $50$ records each (mean $20.1$), $382$
+  pairs. \emph{From} names which rules supply the applicable pairs --- the two
+  halves populate disjoint rows.}
   \label{tab:real}
-  \begin{tabular}{lrrr}
+  \begin{tabular}{llrrr}
     \toprule
-    Guard removed & applies to & moved & rate \\
+    Guard removed & from & applies to & moved & rate \\
     \midrule
-    Undefined predicate $\rightarrow$ \textsf{false} & 225 & 126 & 56.0\% \\
-    Undefined predicate $\rightarrow$ \textsf{true} & 225 & 42 & 18.7\% \\
-    Deontic operator (all rules obligations) & 16 & 10 & 62.5\% \\
-    Occurrence flag on a time window & 24 & 12 & 50.0\% \\
-    Three-valued verdict $\rightarrow$ single query & 382 & 249 & 65.2\% \\
+    Undefined predicate $\rightarrow$ \textsf{false} & 6 pipeline & 225 & 126 & 56.0\% \\
+    Undefined predicate $\rightarrow$ \textsf{true} & 6 pipeline & 225 & 42 & 18.7\% \\
+    Deontic operator (all rules obligations) & 2 pipeline & 16 & 10 & 62.5\% \\
+    Occurrence flag on a time window & 2 fixtures & 24 & 12 & 50.0\% \\
+    Three-valued verdict $\rightarrow$ single query & all 19 & 382 & 249 & 65.2\% \\
     \bottomrule
   \end{tabular}
 \end{table}
@@ -123,20 +131,19 @@ $2$ are permissive --- which is the reason for the first set.
 \paragraph{Substituting a value for an undefined predicate.}
 Every guideline in the corpus states predicates it never defines. Both
 substitutions are unsafe and they are unsafe in opposite directions, which is
-the argument for neither. Position matters and is visible only in the designed
-sweep, where the predicate is placed deliberately
+the argument for neither. Position matters and is visible only in the generated
+set, where the predicate is placed deliberately
 (Table~\ref{tab:holepos}): substituting \textsf{false} for a predicate in the
 \emph{antecedent} narrows applicability and clears patients, while the same
 substitution in the \emph{consequent} makes the obligation unsatisfiable and
-manufactures alerts. Every extracted rule carrying an undefined predicate has
+manufactures alerts. Every existing rule carrying an undefined predicate has
 it in the antecedent, which is why Table~\ref{tab:real} shows only the first
 effect --- and why a system evaluated on those rules alone would not discover
 the second.
 
 \paragraph{Deontic force.}
-The rate is $80.5\%$ in the sweep and $62.5\%$ on extracted rules, but the denominators differ by two orders of magnitude ($2{,}282$ pairs against $16$). Half the designed
-sweep is permissive by construction; $2$ of $19$ extracted rules are. The
-designed figure is the effect when the guard applies; the extracted figure is
+The rate is $80.5\%$ in the sweep and $62.5\%$ on existing rules, but the denominators differ by two orders of magnitude ($2{,}282$ pairs against $16$). Half the generated set is permissive by construction; $2$ of $19$ existing rules are. The
+generated figure is the effect when the guard applies; the existing-rule figure is
 how often it applies to this corpus. Both are needed, and quoting either alone
 misleads. Every one of these is an alert on a patient who declined an option
 the source offered.
@@ -145,7 +152,7 @@ the source offered.
 A time window lowers to \emph{the event occurred} $\wedge$ \emph{it was within
 $n$ days}. Dropping the first conjunct lets a patient who was never tested
 satisfy the window, because the solver selects a small day count. All $26$
-divergences in the designed sweep fall on time-window rules, and all move to
+divergences in the generated set fall on time-window rules, and all move to
 compliant. The absolute rate is low because only a quarter of the sweep
 contains a window at all; conditioned on those rules it is the difference
 between detecting and not detecting the commonest failure of a monitoring
@@ -159,7 +166,7 @@ it reports both as violations. Roughly two thirds of pairs are affected.
 
 \begin{table}[t]
   \centering
-  \caption{Designed sweep, split by where the undefined predicate sits. Rules
+  \caption{Generated set, split by where the undefined predicate sits. Rules
   with no undefined predicate are the control: nothing is substituted and
   nothing moves.}
   \label{tab:holepos}
@@ -182,11 +189,11 @@ it reports both as violations. Roughly two thirds of pairs are affected.
 
 \begin{itemize}\itemsep2pt
   \item \textbf{The samples disagree in magnitude.} Substituting \textsf{false}
-        moves $33.0\%$ of extracted pairs and $8.2\%$ of comparable designed
-        pairs. The directions agree; the magnitudes do not, and we do not claim
+        moves $56.0\%$ of applicable existing-rule pairs and $6.3\%$ of applicable
+        generated pairs. The directions agree; the magnitudes do not, and we do not claim
         one predicts the other.
-  \item \textbf{The designed vocabulary carries plausible ranges; the pipeline
-        supplies none.} Extracted rules are therefore checked against a weaker
+  \item \textbf{The generated vocabulary carries plausible ranges; the pipeline
+        supplies none.} Existing rules are therefore checked against a weaker
         domain theory, admitting completions no clinician would accept. This is
         a defect in the pipeline, not in the measurement, and it is one reason
         the two samples differ.
@@ -196,7 +203,7 @@ it reports both as violations. Roughly two thirds of pairs are affected.
         pair, and a rule with more variables admits more distinct partial
         records (from $3$ to $50$, mean $31.7$), so it contributes more pairs.
         A rate is therefore not the fraction of \emph{rules} affected.
-  \item \textbf{The deontic row on extracted rules rests on $16$ pairs} from
+  \item \textbf{The deontic row on existing rules rests on $16$ pairs} from
         $2$ permissive rules. We report the rate because the denominator is
         printed beside it; it should not be read as an estimate.
   \item \textbf{Two guards are not measured here.} Merging duplicate concepts
@@ -206,7 +213,7 @@ it reports both as violations. Roughly two thirds of pairs are affected.
         partial encoding path after a binding failure changes what the
         formalizer emits, and measuring it requires re-running generation with
         the guard disabled.
-  \item \textbf{The designed sweep is synthetic.} It establishes what the
+  \item \textbf{The generated set is synthetic.} It establishes what the
         guards are worth across the expressible space; it says nothing about
         which regions of that space real guidelines occupy.
 \end{itemize}
