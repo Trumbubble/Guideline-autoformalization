@@ -170,8 +170,11 @@ def _build_one(hole_pos, deontic, kind, shape, i):
 
 
 def build(verbose: bool = False):
-    """Sweep the grid.  Returns (rules, stats)."""
-    out, rejected, cells = [], [], {}
+    """Sweep the grid.  Returns (rules, stats).
+
+    `stats["source"]` maps rule_id -> (dsl.Rule, dsl.Registry) so the sweep can
+    be listed and audited: a generator nobody can read is not evidence."""
+    out, rejected, cells, source = [], [], {}, {}
     for hole_pos, deontic, kind, shape in product(HOLE_POS, DEONTIC, KIND, SHAPE):
         if kind == "boolean" and shape != "single":
             pass                      # still valid; boolean atom + second fact
@@ -209,9 +212,10 @@ def build(verbose: bool = False):
                 strength=rule.strength,
                 variables=tuple(names)))
             cells[key] += 1
+            source[rule.rule_id] = (rule, reg)
 
     stats = {"built": len(out), "rejected": len(rejected),
-             "cells": cells, "rejections": rejected}
+             "cells": cells, "rejections": rejected, "source": source}
     if verbose:
         print(f"generated {stats['built']} rules, "
               f"{stats['rejected']} candidates rejected by the real validator")
@@ -220,7 +224,30 @@ def build(verbose: bool = False):
     return out, stats
 
 
+def listing() -> str:
+    """Every generated rule, as a formula, grouped by grid cell."""
+    _rules, stats = build()
+    lines, last = [], None
+    for rid, (rule, reg) in stats["source"].items():
+        cell = rid.rsplit("-", 1)[0]
+        if cell != last:
+            last = cell
+            hole, deo, kind, shape = cell.split("-")[1:]
+            lines.append("")
+            lines.append(f"# hole:{hole}  {deo}  {kind}  {shape}")
+        lines.append(f"  {rid}")
+        lines.append(f"      {dsl.rule_to_logic(rule)}")
+        lines.append(f"      deontic={rule.deontic}  "
+                     f"holes={dsl.open_holes(rule, reg) or '()'}  "
+                     f"fragment={dsl.fragment_of(rule.when, rule.then)}")
+    return "\n".join(lines)
+
+
 if __name__ == "__main__":
+    import sys as _sys
+    if "--list" in _sys.argv:
+        print(listing())
+        raise SystemExit(0)
     rules, stats = build(verbose=True)
     print()
     print("cell,count")

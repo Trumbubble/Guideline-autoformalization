@@ -92,11 +92,20 @@ def verdict_full(rule, domain) -> str:
 
 def verdict_ablated(rule, domain, mode: str) -> str:
     if mode == "naive_single_call":
-        # The single-call check: sat(D and P and not phi).  It cannot tell a
-        # certainty from a possibility, so anything satisfiable reads as a
-        # violation.
+        # The single-call check: is a violation satisfiable at all?  It cannot
+        # tell "every completion violates" from "some completion violates", so
+        # anything satisfiable reads as a violation.
+        #
+        # It uses the rule's OWN violation condition, which keeps the deontic
+        # operator intact.  Using not-phi instead would make this row also drop
+        # that operator -- every permission would read as violable -- and the
+        # two rows would stop being independent.  Same confound as the stub
+        # rows had; each ablation must change exactly one thing.
+        viol = getattr(rule, "violation", None)
+        if viol is None:
+            viol = z3.Not(rule.predicate)          # fixtures carry no operator
         s = z3.Solver()
-        s.add(*domain, z3.Not(rule.predicate))
+        s.add(*domain, viol)
         return "MUST-violate" if s.check() == z3.sat else "CERTIFIED-compliant"
 
     if mode == "no_deontic":

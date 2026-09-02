@@ -30,13 +30,27 @@ permission's antecedent true and its consequent false. Rates below are
 therefore over a sample enriched for disagreement, not over a patient
 population.} Runs are deterministic given a seed.
 
-\paragraph{Two directions, unequally bad.}
-\emph{Moves to compliant} means the ablated checker reports
-\textsc{certified-compliant} where the full system does not: a patient is
-cleared where the source was silent, and nothing downstream can observe that it
-happened. \emph{Moves to violation} means it reports a violation where the full
-system does not: a false alert, which returns to the first case as soon as a
-clinician disables the rule.
+\paragraph{The two directions, stated exactly.}
+Verdicts are \textsc{must-violate}, \textsc{certified-compliant} and
+\textsc{may-violate} for an obligation, and \textsc{option-taken},
+\textsc{option-not-taken}, \textsc{option-available} and
+\textsc{option-not-applicable} for a permission. A move is counted when:
+\begin{itemize}\itemsep1pt
+  \item the ablated verdict is \textsc{certified-compliant} and the full
+        verdict is not --- a patient cleared where the source was silent, and
+        nothing downstream can observe that it happened; or
+  \item the ablated verdict is \textsc{must-violate} and the full verdict is
+        not --- a false alert, which returns to the first case as soon as a
+        clinician disables the rule.
+\end{itemize}
+For a rule whose full verdict is any \textsc{option-} state, \emph{any}
+violation verdict counts as the second case, \textsc{may-violate} included: the
+permission lattice has no accusing state, so reporting that a patient may have
+deviated is already the harm. Transitions within a lattice
+(\textsc{option-available} to \textsc{option-not-taken}) and losses of
+certainty in the safe direction (\textsc{must-violate} to
+\textsc{may-violate}) are recorded but not counted in either column; the full
+transition matrix is in the appendix.
 
 \paragraph{On ground truth.}
 The comparison is differential --- the same rules and records under two
@@ -77,13 +91,13 @@ $2$ are permissive --- which is the reason for the first set.
   \label{tab:generated}
   \begin{tabular}{lrr}
     \toprule
-    Guard removed & moves to compliant & moves to violation \\
+    Guard removed & $\rightarrow$ \textsc{certified} & $\rightarrow$ \textsc{must-violate} \\
     \midrule
-    Undefined predicate $\rightarrow$ \textsf{false}   & 2.9\% & 1.3\% \\
-    Undefined predicate $\rightarrow$ \textsf{true}    & 0.0\% & 8.0\% \\
-    Deontic operator (all rules obligations)           & 0.0\% & 40.1\% \\
+    Undefined predicate $\rightarrow$ \textsf{false}   & 3.0\% & 1.5\% \\
+    Undefined predicate $\rightarrow$ \textsf{true}    & 0.0\% & 8.1\% \\
+    Deontic operator (all rules obligations)           & 0.0\% & 40.2\% \\
     Occurrence flag on a time window                   & 0.6\% & 0.0\% \\
-    Three-valued verdict $\rightarrow$ single query    & 0.0\% & 72.1\% \\
+    Three-valued verdict $\rightarrow$ single query    & 0.0\% & 32.1\% \\
     \bottomrule
   \end{tabular}
 \end{table}
@@ -95,13 +109,13 @@ $2$ are permissive --- which is the reason for the first set.
   \label{tab:real}
   \begin{tabular}{lrr}
     \toprule
-    Guard removed & moves to compliant & moves to violation \\
+    Guard removed & $\rightarrow$ \textsc{certified} & $\rightarrow$ \textsc{must-violate} \\
     \midrule
     Undefined predicate $\rightarrow$ \textsf{false}   & 33.0\% & 0.0\% \\
-    Undefined predicate $\rightarrow$ \textsf{true}    & 0.0\%  & 11.8\% \\
+    Undefined predicate $\rightarrow$ \textsf{true}    & 0.0\%  & 11.0\% \\
     Deontic operator (all rules obligations)           & 0.0\%  & 2.6\% \\
-    Occurrence flag on a time window                   & 2.9\%  & 0.0\% \\
-    Three-valued verdict $\rightarrow$ single query    & 0.0\%  & 67.0\% \\
+    Occurrence flag on a time window                   & 3.1\%  & 0.0\% \\
+    Three-valued verdict $\rightarrow$ single query    & 0.0\%  & 65.2\% \\
     \bottomrule
   \end{tabular}
 \end{table}
