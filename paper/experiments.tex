@@ -1,0 +1,200 @@
+%==============================================================================
+%  \input{experiments} from main.tex, in place of the placeholder Section 5.
+%
+%  This is the ELABORATE version -- more than 5 pages can hold.  Cut in this
+%  order: (1) Table~\ref{tab:holepos} to the appendix, (2) the per-row prose
+%  down to one sentence each, (3) merge the two result tables into one with a
+%  "generated / real" column pair.
+%==============================================================================
+
+\section{What each design decision is worth}
+\label{sec:necessity}
+
+Every guard in the checker, if removed, produces the same observable: the
+system returns a different verdict about a patient. Only the direction differs.
+We therefore measure all of them with one procedure and one metric.
+
+\paragraph{Procedure.}
+For a rule $R$ and a partial patient record $P$ we compute the verdict of the
+full system and of the system with exactly one guard disabled, and record
+whether the verdict moved and in which direction. Records are drawn from the
+solver, so every value satisfies the domain theory; each record pins a random
+subset of the rule's variables and leaves the rest free, since a fully
+determined record admits no \textsc{may-violate} and would make the comparison
+vacuous. Half of each rule's records are drawn from $\mathcal{D} \wedge \neg
+\Phi_R$ --- completions in which the rule really is broken --- because
+uniformly sampled records almost never reach the region where two encodings
+disagree.\footnote{Under uniform sampling the deontic row measured $0.0\%$, not
+because the operator is inert but because no sampled record pinned a
+permission's antecedent true and its consequent false. Rates below are
+therefore over a sample enriched for disagreement, not over a patient
+population.} Runs are deterministic given a seed.
+
+\paragraph{Two directions, unequally bad.}
+\emph{Moves to compliant} means the ablated checker reports
+\textsc{certified-compliant} where the full system does not: a patient is
+cleared where the source was silent, and nothing downstream can observe that it
+happened. \emph{Moves to violation} means it reports a violation where the full
+system does not: a false alert, which returns to the first case as soon as a
+clinician disables the rule.
+
+\paragraph{On ground truth.}
+The comparison is differential --- the same rules and records under two
+configurations --- so no annotation is required to observe that the
+configurations disagree. Whether the full system is the correct one is a
+separate claim, and its warrant differs by row. For the three-valued verdict it
+is a theorem: the three cases are mutually exclusive and exhaustive
+(Proposition~1), and a single satisfiability call cannot separate two of them.
+For the undefined-predicate rows it is an argument, not a proof: substituting a
+value asserts something the source does not state, whereas leaving the symbol
+free asserts nothing. For the deontic row it rests on a human judgement --- that
+the sentence expresses a permission --- which is exactly the labelling this
+system cannot avoid needing.
+
+\subsection{Two samples}
+
+Reported over two rule sets, because each answers a question the other cannot.
+
+The \textbf{designed sweep} enumerates the expressible space: undefined
+predicate in the antecedent, in the consequent, or absent; obligation or
+permission; numeric threshold, boolean, time window, or relative change; one
+atom, two under conjunction, or two under disjunction. Two instances per cell
+over $72$ cells gives $144$ rules, every one of which is admitted by the same
+validator and non-degeneracy check the pipeline applies --- no candidate was
+rejected. This set says what a guard is worth \emph{when it applies}, with
+enough rules per row to be quotable.
+
+The \textbf{extracted rules} are the $19$ the system actually has: $10$
+hand-authored against the DSL and $9$ produced by the pipeline from
+open-access guidelines. This set says how often each guard applies to real
+material. Its rows are narrow --- $6$ rules carry an undefined predicate and
+$2$ are permissive --- which is the reason for the first set.
+
+\begin{table}[t]
+  \centering
+  \caption{Designed sweep: $144$ rules $\times$ $50$ records $=$ $4{,}567$
+  pairs. Percentages are of pairs, over a sample enriched for disagreement.}
+  \label{tab:generated}
+  \begin{tabular}{lrr}
+    \toprule
+    Guard removed & moves to compliant & moves to violation \\
+    \midrule
+    Undefined predicate $\rightarrow$ \textsf{false}   & 2.9\% & 1.3\% \\
+    Undefined predicate $\rightarrow$ \textsf{true}    & 0.0\% & 8.0\% \\
+    Deontic operator (all rules obligations)           & 0.0\% & 40.1\% \\
+    Occurrence flag on a time window                   & 0.6\% & 0.0\% \\
+    Three-valued verdict $\rightarrow$ single query    & 0.0\% & 72.1\% \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\begin{table}[t]
+  \centering
+  \caption{Extracted rules: $19$ rules $\times$ $50$ records $=$ $382$ pairs.
+  Same procedure, same seed.}
+  \label{tab:real}
+  \begin{tabular}{lrr}
+    \toprule
+    Guard removed & moves to compliant & moves to violation \\
+    \midrule
+    Undefined predicate $\rightarrow$ \textsf{false}   & 33.0\% & 0.0\% \\
+    Undefined predicate $\rightarrow$ \textsf{true}    & 0.0\%  & 11.8\% \\
+    Deontic operator (all rules obligations)           & 0.0\%  & 2.6\% \\
+    Occurrence flag on a time window                   & 2.9\%  & 0.0\% \\
+    Three-valued verdict $\rightarrow$ single query    & 0.0\%  & 67.0\% \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\subsection{Reading the rows}
+
+\paragraph{Substituting a value for an undefined predicate.}
+Every guideline in the corpus states predicates it never defines. Both
+substitutions are unsafe and they are unsafe in opposite directions, which is
+the argument for neither. Position matters and is visible only in the designed
+sweep, where the predicate is placed deliberately
+(Table~\ref{tab:holepos}): substituting \textsf{false} for a predicate in the
+\emph{antecedent} narrows applicability and clears patients, while the same
+substitution in the \emph{consequent} makes the obligation unsatisfiable and
+manufactures alerts. Every extracted rule carrying an undefined predicate has
+it in the antecedent, which is why Table~\ref{tab:real} shows only the first
+effect --- and why a system evaluated on those rules alone would not discover
+the second.
+
+\paragraph{Deontic force.}
+The gap between $40.1\%$ and $2.6\%$ is not a disagreement. Half the designed
+sweep is permissive by construction; $2$ of $19$ extracted rules are. The
+designed figure is the effect when the guard applies; the extracted figure is
+how often it applies to this corpus. Both are needed, and quoting either alone
+misleads. Every one of these is an alert on a patient who declined an option
+the source offered.
+
+\paragraph{The occurrence flag.}
+A time window lowers to \emph{the event occurred} $\wedge$ \emph{it was within
+$n$ days}. Dropping the first conjunct lets a patient who was never tested
+satisfy the window, because the solver selects a small day count. All $26$
+divergences in the designed sweep fall on time-window rules, and all move to
+compliant. The absolute rate is low because only a quarter of the sweep
+contains a window at all; conditioned on those rules it is the difference
+between detecting and not detecting the commonest failure of a monitoring
+recommendation.
+
+\paragraph{The three-valued verdict.}
+The largest effect in both samples, and the only one whose correctness is a
+theorem rather than an argument. A single satisfiability call returns the same
+answer for ``every completion violates'' and ``some completion violates'', so
+it reports both as violations. Roughly two thirds of pairs are affected.
+
+\begin{table}[t]
+  \centering
+  \caption{Designed sweep, split by where the undefined predicate sits. Rules
+  with no undefined predicate are the control: nothing is substituted and
+  nothing moves.}
+  \label{tab:holepos}
+  \begin{tabular}{llrrr}
+    \toprule
+    Substitution & Predicate sits in & pairs & to compliant & to violation \\
+    \midrule
+    \textsf{false} & the antecedent & 1642 & 8.2\% & 0.0\% \\
+    \textsf{false} & the consequent & 1634 & 0.0\% & 3.7\% \\
+    \textsf{false} & --- (control)  & 1291 & 0.0\% & 0.0\% \\
+    \addlinespace
+    \textsf{true}  & the antecedent & 1642 & 0.0\% & 22.3\% \\
+    \textsf{true}  & the consequent & 1634 & 0.0\% & 0.0\% \\
+    \textsf{true}  & --- (control)  & 1291 & 0.0\% & 0.0\% \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\subsection{Threats to this measurement}
+
+\begin{itemize}\itemsep2pt
+  \item \textbf{The samples disagree in magnitude.} Substituting \textsf{false}
+        moves $33.0\%$ of extracted pairs and $8.2\%$ of comparable designed
+        pairs. The directions agree; the magnitudes do not, and we do not claim
+        one predicts the other.
+  \item \textbf{The designed vocabulary carries plausible ranges; the pipeline
+        supplies none.} Extracted rules are therefore checked against a weaker
+        domain theory, admitting completions no clinician would accept. This is
+        a defect in the pipeline, not in the measurement, and it is one reason
+        the two samples differ.
+  \item \textbf{Records are enriched for disagreement.} Rates are conditional
+        on that sampling and are not incidence in a patient population.
+  \item \textbf{Two guards are not measured here.} Merging duplicate concepts
+        before the vacuity sweep changes which rules exist rather than what
+        verdict they yield; it currently catches nothing in this corpus, the
+        collision that motivated it having been fixed upstream. Forcing the
+        partial encoding path after a binding failure changes what the
+        formalizer emits, and measuring it requires re-running generation with
+        the guard disabled.
+  \item \textbf{The designed sweep is synthetic.} It establishes what the
+        guards are worth across the expressible space; it says nothing about
+        which regions of that space real guidelines occupy.
+\end{itemize}
+
+\paragraph{Reproduction.}
+Both tables are produced without any model call, from a fixed seed:
+\begin{center}
+\texttt{python3 tests/ablation.py -{}-generated -{}-plans 50 -{}-seed 0}\\
+\texttt{python3 tests/ablation.py -{}-plans 50 -{}-seed 0}
+\end{center}

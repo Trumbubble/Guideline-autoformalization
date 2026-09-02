@@ -49,7 +49,8 @@ import api                                                         # noqa: E402
 from from_dsl import load_bundle                                   # noqa: E402
 
 # Ablations that can be measured per (rule, plan) with no model call.
-ABLATIONS = ("stub_false", "stub_true", "no_deontic", "naive_single_call")
+ABLATIONS = ("stub_false", "stub_true", "no_deontic",
+             "no_occurrence_flag", "naive_single_call")
 
 # The fifth guard -- canonicalise-before-the-vacuity-sweep -- is not a
 # per-plan ablation: it changes which rules EXIST, not what verdict they give.
@@ -103,15 +104,48 @@ def verdict_ablated(rule, domain, mode: str) -> str:
         # lowers to CQL and reads `Violated` does.
         return api.classify(domain, rule.predicate)
 
+    if mode == "no_occurrence_flag":
+        # A time window lowers to "the event happened AND it was within n
+        # days".  Drop the first conjunct -- i.e. assume it always happened --
+        # and a patient who was NEVER TESTED satisfies the window, because the
+        # solver simply picks a small number of days. "The test was never done"
+        # is the commonest real failure of a monitoring recommendation, so this
+        # is the guard that makes that case reachable at all.
+        occ = [v for n, v in rule.var_refs.items() if n.endswith("_occurred")]
+        if not occ:
+            return verdict_full(rule, domain)      # no time window in this rule
+        return _sub_verdict(rule, domain,
+                            [(o, z3.BoolVal(True)) for o in occ])
+
     if mode in ("stub_false", "stub_true"):
-        refs = [rule.var_refs[h] for h in holes_of(rule) if h in rule.var_refs]
+        # BOOLEAN holes only.  An unbound EVENT also leaves free symbols
+        # behind -- the days-since counter and any baseline value -- but those
+        # are Int and Real, and "assume the undefined predicate is false" has
+        # no meaning for a quantity.  Substituting a boolean into them is a
+        # sort error, and pretending otherwise would silently measure
+        # something other than the guard under test.
+        refs = [rule.var_refs[h] for h in holes_of(rule)
+                if h in rule.var_refs and z3.is_bool(rule.var_refs[h])]
         if not refs:
             return verdict_full(rule, domain)      # no hole: nothing to stub
         val = z3.BoolVal(mode == "stub_true")
-        pred = z3.substitute(rule.predicate, *[(r, val) for r in refs])
-        return api.classify(domain, pred)
+        return _sub_verdict(rule, domain, [(r, val) for r in refs])
 
     raise ValueError(f"unknown ablation {mode!r}")
+
+
+def _sub_verdict(rule, domain, pairs) -> str:
+    """Verdict after substituting into the rule, KEEPING its deontic operator.
+
+    Getting this wrong contaminated two rows at once: calling the obligation
+    verdict on a permission meant `stub_false` was also silently dropping the
+    deontic operator, so its numbers included that effect and the two rows were
+    no longer independent. Each ablation must change exactly one thing."""
+    if deontic_of(rule) == "permission":
+        return api.classify_option(domain,
+                                   z3.substitute(rule.applies, *pairs),
+                                   z3.substitute(rule.taken, *pairs))
+    return api.classify(domain, z3.substitute(rule.predicate, *pairs))
 
 
 def direction(full: str, ablated: str) -> str | None:
@@ -274,11 +308,20 @@ def main(argv=None) -> int:
     ap.add_argument("--out", default="ablation.csv", help="per-pair CSV")
     ap.add_argument("--no-fixtures", action="store_true",
                     help="Track A bundles only")
+    ap.add_argument("--generated", action="store_true",
+                    help="run over the designed sweep instead of the real rules")
     a = ap.parse_args(argv)
 
     rng = random.Random(a.seed)
     here = Path(__file__).resolve().parent
-    rules, sources, bundles = collect_rules(here.parent, not a.no_fixtures)
+    if a.generated:
+        from generated_rules import build as build_generated
+        rules, gen_stats = build_generated()
+        sources = ["generated"] * len(rules)
+        bundles = []
+    else:
+        gen_stats = None
+        rules, sources, bundles = collect_rules(here.parent, not a.no_fixtures)
 
     tally = {m: defaultdict(int) for m in ABLATIONS}
     rows, pairs, n_holes, n_perms = [], 0, 0, 0
@@ -324,6 +367,11 @@ def main(argv=None) -> int:
     print(f"plans_per_rule,{a.plans}")
     print(f"rule_plan_pairs,{pairs}")
     print(f"seed,{a.seed}")
+    if gen_stats is not None:
+        print(f"generated_rules_rejected_by_the_validator,{gen_stats['rejected']}")
+        print(f"grid_cells,{len(gen_stats['cells'])}")
+        print(f"rules_with_a_time_window,"
+              f"{sum(1 for r in rules if any(n.endswith('_occurred') for n in r.var_refs))}")
     print()
     print("ablation,pairs,wrongly_certified,wrongly_accused,pct_certified,pct_accused")
     for mode in ABLATIONS:
