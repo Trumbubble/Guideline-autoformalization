@@ -241,3 +241,4 @@ Part A/terms.db
 # terms.db. Derived data, never source.
 Part A/semantic/
 *.npy
+paper.zip

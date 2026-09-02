@@ -4,4 +4,12 @@
 corpus/
 # Segmenter output: generated, large, and full of verbatim source text.
 *.jsonl
+# EXCEPT the replay cassettes. These are the reproducibility artefact --
+# test_replay.py runs the full pipeline against a real recorded run with no API
+# key -- and they do NOT carry the redistribution risk the rule above is about:
+# the prompt is stored as a SHA-256 hash rather than as text, so the source
+# document cannot be reconstructed from a tape. What remains is a section
+# breadcrumb and the model's response, i.e. individual quoted recommendation
+# sentences from open-access articles. ~84 KB for both.
+!cassettes/*.jsonl
 __pycache__/

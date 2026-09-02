@@ -41,30 +41,55 @@
 \usepackage{xcolor}
 \usepackage{listings}
 
-% Overleaf has Inkscape, so \includesvg works there and keeps the figures vector.
-% If your build complains, either (a) enable shell-escape in Overleaf's menu, or
-% (b) convert the SVGs to PDF once and swap in \includegraphics.
-\usepackage{svg}
-\svgpath{{figures/}}
+% Figures.  Overleaf runs Inkscape, so \includesvg keeps them vector -- but it
+% needs shell-escape (Menu -> Compiler -> allow).  If that is unavailable, set
+% \usesvgfalse and the document still compiles with placeholder boxes; convert
+% the SVGs to PDF once and switch \figsvg to \includegraphics when you have them.
+\newif\ifusesvg
+\usesvgtrue
+\ifusesvg
+  \usepackage{svg}
+  \svgpath{{figures/}}
+  \newcommand{\figsvg}[2][\linewidth]{\includesvg[width=#1]{#2}}
+\else
+  \newcommand{\figsvg}[2][\linewidth]{%
+    \fbox{\parbox[c][0.25\textheight][c]{#1}{\centering
+      \ttfamily figures/#2.svg\\[6pt]
+      \normalfont\small(placeholder --- set \texttt{\textbackslash usesvgtrue})}}}
+\fi
 
 %------------------------------------------------------------------------------
 % Drafting aids.  Set \draftmodetrue while writing; flip to false to see the
 % real page count.  DO NOT SUBMIT WITH NOTES VISIBLE.
+%
+% \note MUST be \long (its argument spans paragraphs and itemize blocks) and
+% MUST use \color inside a group rather than \textcolor{}{} -- \textcolor takes
+% a SHORT argument, so a blank line inside one gives:
+%     "Paragraph ended before \@textcolor was complete."
+% Also: never put verbatim/lstlisting inside \note{...}.  A verbatim environment
+% cannot appear in a macro argument at all.  Code blocks go OUTSIDE the note,
+% wrapped in \ifdraftmode ... \fi.
 %------------------------------------------------------------------------------
 \newif\ifdraftmode
 \draftmodetrue          % <-- set to \draftmodefalse before submitting
 
 \ifdraftmode
-  \newcommand{\note}[1]{\par\noindent\small\textcolor{blue!70!black}{\textsf{[#1]}}\par\normalsize}
-  \newcommand{\todo}[1]{\textcolor{red!80!black}{\textbf{[TODO: #1]}}}
-  \newcommand{\budget}[1]{\marginpar{\scriptsize\textcolor{gray}{#1}}}
-  \newcommand{\num}[1]{\textcolor{orange!80!black}{#1}}  % un-verified number
+  \long\def\note#1{\par\begingroup\small\sffamily\color{blue!65!black}%
+                   \leftskip=1em [#1]\par\endgroup\normalsize\normalcolor}
+  \newcommand{\todo}[1]{{\color{red!80!black}\bfseries [TODO: #1]}}
+  \newcommand{\budget}[1]{\marginpar{\scriptsize\color{gray}#1}}
+  \newcommand{\num}[1]{{\color{orange!85!black}#1}}   % un-verified number
 \else
-  \newcommand{\note}[1]{}
+  \long\def\note#1{}
   \newcommand{\todo}[1]{}
   \newcommand{\budget}[1]{}
   \newcommand{\num}[1]{#1}
 \fi
+
+% Code blocks: use \begin{cmds}...\end{cmds}, never inside a \note.
+\lstnewenvironment{cmds}{\lstset{basicstyle=\ttfamily\scriptsize,frame=single,
+  framesep=4pt,columns=fullflexible,breaklines=true,xleftmargin=0pt,
+  aboveskip=6pt,belowskip=6pt}}{}
 
 \lstset{basicstyle=\ttfamily\scriptsize, frame=single, framesep=4pt,
         columns=fullflexible, breaklines=true, xleftmargin=0pt}
@@ -204,7 +229,7 @@ the three-valued verdict, one on refusal.}
 
 \begin{figure}[t]
   \centering
-  \includesvg[width=\linewidth]{architecture}
+  \figsvg{architecture}
   \caption{The pipeline. Four stages, each terminating in an output the next is
   confined to. Shaded components are the four model calls; every other component
   is deterministic. The channel along the bottom is the declared residue.}
@@ -232,31 +257,41 @@ appendix. My ranking if you can afford exactly one extra:
 \note{THIS IS THE SECTION THE TRACK ACTUALLY ASKS FOR. Three scenes, each with a
 screenshot. Write it as ``what a viewer sees'', not as a feature list.
 
-SCENE 1 --- upload. A real PMC guideline goes in; the dashboard shows rules,
-refusals grouped by reason, and the awaiting-formalisation count side by side.
-The point to make: a checker that shows only what compiled tells a governance
-reader the tool covered everything.
-  RUN:  cd "Part B" \&\& python3 api.py   then open http://localhost:8000/
-  SHOT: the dashboard grid, then the upload modal.
+\textbf{Scene 1 --- upload.} A real PMC guideline goes in; the dashboard shows
+rules, refusals grouped by reason, and the awaiting-formalisation count side by
+side. The point to make: a checker that shows only what compiled tells a
+governance reader the tool covered everything. Shot: the dashboard grid, then
+the upload modal.
 
-SCENE 2 --- one statement, adjudicable. The HTML report puts the source sentence
-beside the rule it became, with the guideline's own wording of its strength.
-Use the PMC12355350:0048 case: the sentence ends ``...and a weak recommendation
-against finerenone in adults with CKD'' and the rule beside it is only about
-SGLT-2i/GLP-1. The dropped clause is visible at a glance.
-  RUN:  python3 report.py <bundle.json> -o report.html   (check the exact flags)
-  SHOT: one statement card, cropped.
+\textbf{Scene 2 --- one statement, adjudicable.} The HTML report puts the source
+sentence beside the rule it became, with the guideline's own wording of its
+strength. Use the PMC12355350:0048 case: the sentence ends ``\ldots and a weak
+recommendation against finerenone in adults with CKD'' and the rule beside it is
+only about SGLT-2i/GLP-1, so the dropped clause is visible at a glance. Shot:
+one statement card, cropped.
 
-SCENE 3 --- a patient, and a verdict that is not yes/no. POST a patient+plan and
-get MAY-violate with a minimised counterexample rendered in prose
-(``it becomes a certain violation if potassium check occurred = false'').
-  RUN:  curl -s -X POST localhost:8000/guidelines/fixtures/check \\
-          -H 'Content-Type: application/json' \\
-          -d '{"patient":{"potassium":5.4},"plan":{"ace_inhibitor_on":true}}'
-  SHOT: the ui.html verdict badge + the prose counterexample.
+\textbf{Scene 3 --- a patient, and a verdict that is not yes/no.} Post a patient
+and plan, and get MAY-violate with a minimised counterexample rendered in prose
+(``it becomes a certain violation if potassium check occurred = false''). Shot:
+the verdict badge and the prose counterexample.
 
-ALSO: record a 2--3 minute screen capture of these three scenes and link it. The
+Then record a 2--3 minute screen capture of these three scenes and link it. The
 CFP names video explicitly and it is the cheapest evidence you can produce.}
+
+\ifdraftmode
+\begin{cmds}
+# scene 1 + 3 -- the app
+cd "Part B" && python3 api.py          # then open http://localhost:8000/
+
+# scene 2 -- the human-readable report
+python3 "Part A/report.py" bundle.PMC12355350.json -o report.html
+
+# scene 3 -- a verdict with a minimised counterexample
+curl -s -X POST localhost:8000/guidelines/fixtures/check \
+  -H 'Content-Type: application/json' \
+  -d '{"patient":{"potassium":5.4},"plan":{"ace_inhibitor_on":true}}'
+\end{cmds}
+\fi
 
 \todo{Take the three screenshots, put them in figures/, and lay them out as a
 2- or 3-panel figure. Crop tightly --- a full browser window wastes the page.}
@@ -349,13 +384,17 @@ rather than 5 per document. Same corpus, no new labels, more rules.}
         clauses. This row is free --- run it and copy the number.
 \end{itemize}}
 
-\note{RUN, once the harness exists:
-\begin{verbatim}
+\note{RUN, once the harness exists. Row 6 is free --- \texttt{benchmark.py}
+already computes it.}
+
+\ifdraftmode
+\begin{cmds}
 cd "Part B/tests"
-python3 synthesize_boundary_tests.py      # writes the boundary bundles
-python3 benchmark.py                      # naive_false_violation_rate (row 6)
-python3 ablation.py --out ablation.csv    # <-- the script to write
-\end{verbatim}}
+python3 synthesize_boundary_tests.py   # solves the boundary bundles
+python3 benchmark.py                   # naive_false_violation_rate  -> row 6
+python3 ablation.py --out ablation.csv # <-- the script still to write
+\end{cmds}
+\fi
 
 % ---- OPTIONAL FIGURE: the single most persuasive thing in the paper ---------
 \note{\textbf{FIGURE \ref{fig:stub} DOES NOT EXIST YET AND YOU SHOULD BUILD IT.}
@@ -454,15 +493,20 @@ boast that four were free was not, and it was wrong.}
         sentence, and it pre-empts ``why didn't you evaluate against X''.
 \end{itemize}}
 
-\note{END ON THE REPRODUCIBILITY LINE --- it is a genuine asset and almost
-nobody offers it: \texttt{cassette.py} + \texttt{test\_replay.py} record one real
+\note{END ON THE REPRODUCIBILITY LINE --- it is a genuine asset and almost nobody
+offers it. \texttt{cassette.py} and \texttt{test\_replay.py} record one real
 run's model responses and replay the full pipeline offline, so a reviewer can
-reproduce the pipeline WITH NO API KEY. A stale tape skips rather than passes.
-\begin{verbatim}
-python3 test_dsl.py && python3 test_bind.py && python3 test_segment.py \
-  && python3 test_gate.py && python3 test_cql.py    # offline, no key
-python3 test_replay.py                              # replays a real run
-\end{verbatim}}
+reproduce it \emph{with no API key}. A stale tape skips rather than passes.
+Current state: 291 tests pass offline.}
+
+\ifdraftmode
+\begin{cmds}
+cd "Part A"
+python3 -m pytest test_dsl.py test_bind.py test_segment.py \
+                  test_gate.py test_cql.py -q      # offline, no key
+python3 -m pytest test_replay.py -q                # replays a real run
+\end{cmds}
+\fi
 
 %==============================================================================
 \bibliographystyle{plain}
@@ -485,7 +529,7 @@ document statement counts, and the DSL grammar.}
 
 \begin{figure}[h]
   \centering
-  \includesvg[width=\linewidth]{language}
+  \figsvg{language}
   \caption{The rule language, with one worked example at every layer. Leaves are
   tagged with the logical fragment each requires; the rule's fragment is the
   maximum over the tree, computed from the tree rather than annotated by hand.}
@@ -494,7 +538,7 @@ document statement counts, and the DSL grammar.}
 
 \begin{figure}[h]
   \centering
-  \includesvg[width=\linewidth]{deontic}
+  \figsvg{deontic}
   \caption{Obligation and permission differ in exactly one place. The violation
   condition of a permission is the constant \textsc{false}, so no patient and no
   completion of the unknowns can yield a violation --- a structural guarantee
@@ -504,7 +548,7 @@ document statement counts, and the DSL grammar.}
 
 \begin{figure}[h]
   \centering
-  \includesvg[width=\linewidth]{lowering}
+  \figsvg{lowering}
   \caption{One node, two lowerings. A solver has no patient timeline, so recency
   flattens to an occurrence flag and a day count; a CQL engine evaluates over the
   record, where a retrieve plus a temporal \texttt{where} already is the bounded
