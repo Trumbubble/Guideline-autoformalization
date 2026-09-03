@@ -3,18 +3,18 @@ rules,144
 rules_with_a_hole,108
 rules_permissive,72
 plans_per_rule,50
-rule_plan_pairs,4569
+rule_plan_pairs,5760
 seed,0
 generated_rules_rejected_by_the_validator,0
 grid_cells,72
 rules_with_a_time_window,36
 
 ablation,pairs,applies_to,to_certified,to_must_violate,rate_pct
-stub_false,4569,3277,137,69,6.3
-stub_true,4569,3277,0,368,11.2
-no_deontic,4569,2282,0,1837,80.5
-no_occurrence_flag,4569,1800,26,0,1.4
-naive_single_call,4569,4569,0,1468,32.1
+stub_false,5760,4304,207,170,8.8
+stub_true,5760,4304,115,219,7.8
+no_deontic,5760,2876,0,2300,80.0
+no_occurrence_flag,5760,1713,120,0,7.0
+naive_single_call,5760,5760,0,1776,30.8
 
 # canonicalise-before-the-vacuity-sweep is a rule-level guard, not a
 # per-plan one: without it these rules load clean and then certify

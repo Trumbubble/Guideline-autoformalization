@@ -442,12 +442,12 @@ it does.
 
 \begin{table}[t]
   \centering
-  \caption{$144$ rules, up to $50$ records each (mean $31.7$; a rule
-  with few variables admits fewer distinct partial records), $4{,}569$
+  \caption{$144$ rules, up to $50$ records each, $5{,}760$
   rule--record pairs. \emph{Applies to} counts the pairs the guard can act on at
   all --- a substitution needs a boolean undefined predicate, the deontic row a
   permission, the occurrence row a time window --- and both percentages are over
-  those. A dash is an exact zero: the guard never moves a verdict that way.}
+  those. A zero is an observed count, not a proof of impossibility; the two
+  structural zeros are noted in the text.}
   \label{tab:generated}
   \begin{tabular}{lrrr}
     \toprule
@@ -455,11 +455,11 @@ it does.
     \cmidrule(l){3-4}
     Guard removed & applies to & \textsc{certified-compliant} & \textsc{must-violate} \\
     \midrule
-    Undefined predicate $\rightarrow$ \textsf{false} & 3277 & 137 (4.2\%) & 69 (2.1\%) \\
-    Undefined predicate $\rightarrow$ \textsf{true} & 3277 & --- & 368 (11.2\%) \\
-    Deontic operator (all rules obligations) & 2282 & --- & 1837 (80.5\%) \\
-    Occurrence flag on a time window & 1800 & 26 (1.4\%) & --- \\
-    Three-valued verdict $\rightarrow$ single query & 4569 & --- & 1468 (32.1\%) \\
+    Undefined predicate $\rightarrow$ \textsf{false} & 4304 & 207 (4.8\%) & 170 (4.0\%) \\
+    Undefined predicate $\rightarrow$ \textsf{true} & 4304 & 115 (2.7\%) & 219 (5.1\%) \\
+    Deontic operator (all rules obligations) & 2876 & 0 & 2300 (80.0\%) \\
+    Occurrence flag on a time window & 1713 & 120 (7.0\%) & 0 \\
+    Three-valued verdict $\rightarrow$ single query & 5760 & 0 & 1776 (30.8\%) \\
     \bottomrule
   \end{tabular}
 \end{table}
@@ -473,50 +473,59 @@ the argument for neither. Position determines which: substituting
 \textsf{false} for a predicate in the \emph{antecedent} narrows applicability
 and clears patients, while the same substitution in the \emph{consequent} makes
 the obligation unsatisfiable and manufactures alerts
-(Table~\ref{tab:holepos}). Both columns understate the effect, because half the
+(Table~\ref{tab:holepos}), and the two substitutions are mirror images. Both
+columns of Table~\ref{tab:generated} understate the effect, because half the
 generated rules are permissive and a permission cannot move to
 \textsc{certified-compliant} at all. Restricted to obligations, substituting
-\textsf{false} clears $8.4\%$ of pairs and accuses $4.2\%$, and substituting
-\textsf{true} accuses $22.5\%$.
+\textsf{false} clears $9.6\%$ of pairs and accuses $7.9\%$; substituting
+\textsf{true} clears $5.3\%$ and accuses $10.2\%$.
+
+\paragraph{The two zeros.}
+Neither is an empty cell of the sample. A permission's full verdict is an
+\textsc{option-} state, and the counting rule treats only a violation verdict
+against that baseline as a move, so a permission can never be recorded as
+moving to \textsc{certified-compliant}; and the single-query check returns only
+\textsc{must-violate} or \textsc{certified-compliant}, and it returns the
+latter exactly when the full system does. Both zeros follow from the
+definitions rather than from what was sampled.
 
 \paragraph{Deontic force.}
 The largest effect measured: once a rule is permissive, dropping the operator
-changes the verdict for four pairs in five. Every one is an alert on a patient
+changes the verdict for four pairs in five ($80.0\%$). Every one is an alert on a patient
 who declined an option the source offered.
 
 \paragraph{The occurrence flag.}
 A time window lowers to \emph{the event occurred} $\wedge$ \emph{it was within
 $n$ days}. Dropping the first conjunct lets a patient who was never tested
-satisfy the window, because the solver selects a small day count. All $26$
-divergences move to compliant, and all fall on time-window rules. The rate is
-low because the flag is decisive only when the rest of the record leaves the
-window in question; it is nonetheless the difference between detecting and not
-detecting the commonest failure of a monitoring recommendation.
+satisfy the window, because the solver selects a small day count. All $120$
+divergences move to compliant, and all fall on time-window rules. The flag is
+decisive only when the rest of the record leaves the window in question, so the
+rate is a floor rather than a frequency; every instance is a patient who was
+never tested being reported as compliant.
 
 \paragraph{The three-valued verdict.}
 The only row whose correctness is a theorem rather than an argument. A single
 satisfiability call returns the same answer for ``every completion violates''
 and ``some completion violates'', so it reports both as violations. This row
 uses the rule's own violation condition, so it does not also drop the deontic
-operator; measured against $\neg\Phi_R$ instead it reads $72.1\%$, and that
-figure double-counts the row above it.
+operator; measured against $\neg\Phi_R$ instead it double-counts the deontic row above
+it, because every permission then reads as violable.
 
 \begin{table}[t]
   \centering
-  \caption{Split by where the undefined predicate sits. Rules with none are the
-  control: nothing is substituted and nothing moves.}
+  \caption{Split by where the undefined predicate sits, over the
+  pairs a substitution can act on. Each combination moves the verdict exactly
+  one way, and the two substitutions are mirror images of each other.}
   \label{tab:holepos}
   \begin{tabular}{llrrr}
     \toprule
     Substitution & Predicate sits in & pairs & $\rightarrow$ \textsc{certified} & $\rightarrow$ \textsc{must-violate} \\
     \midrule
-    \textsf{false} & the antecedent & 1642 & 8.3\% & 0.0\% \\
-    \textsf{false} & the consequent & 1635 & 0.0\% & 4.2\% \\
-    \textsf{false} & --- (control) & 1292 & 0.0\% & 0.0\% \\
+    \textsf{false} & the antecedent & 2152 & 9.6\% & 0.0\% \\
+    \textsf{false} & the consequent & 2152 & 0.0\% & 7.9\% \\
     \addlinespace
-    \textsf{true} & the antecedent & 1642 & 0.0\% & 22.4\% \\
-    \textsf{true} & the consequent & 1635 & 0.0\% & 0.0\% \\
-    \textsf{true} & --- (control) & 1292 & 0.0\% & 0.0\% \\
+    \textsf{true} & the antecedent & 2152 & 0.0\% & 10.2\% \\
+    \textsf{true} & the consequent & 2152 & 5.3\% & 0.0\% \\
     \bottomrule
   \end{tabular}
 \end{table}
@@ -535,8 +544,8 @@ completions, so the core's values force a violation \emph{whatever the
 unmeasured variables turn out to be}. The result is minimal, not minimum: an
 irreducible set, not provably the smallest, so sizes are an upper bound.
 
-Of $4{,}570$ records, $1{,}472$ returned \textsc{may-violate}. The core is
-smaller than the set of unstated variables ($1.34$ against $2.53$ on average),
+Of $5{,}764$ records, $1{,}783$ returned \textsc{may-violate}. The core is
+smaller than the set of unstated variables ($1.39$ against $2.42$ on average),
 and the reduction grows as the record thins, because the core is bounded by the
 rule's structure --- the number of atoms that must be forced --- and not by how
 much the record omits.
@@ -546,23 +555,24 @@ much the record omits.
   \toprule
   unstated variables & verdicts & mean core & reduction & single-variable core \\
   \midrule
-  1 & 277 & 1.00 & 1.00$\times$ & 100.0\% \\
-  2 & 497 & 1.21 & 1.65$\times$ & 78.7\% \\
-  3 & 420 & 1.44 & 2.08$\times$ & 58.8\% \\
-  4 & 202 & 1.70 & 2.35$\times$ & 38.6\% \\
-  5 &  68 & 1.82 & 2.74$\times$ & 30.9\% \\
+  1 & 396 & 1.00 & 1.00$\times$ & 100.0\% \\
+  2 & 619 & 1.29 & 1.56$\times$ & 71.4\% \\
+  3 & 479 & 1.58 & 1.90$\times$ & 50.1\% \\
+  4 & 205 & 1.78 & 2.25$\times$ & 34.6\% \\
+  5 &  76 & 1.97 & 2.53$\times$ & 21.1\% \\
   6 &   8 & 2.50 & 2.40$\times$ & 0.0\% \\
   \bottomrule
 \end{tabular}
 \end{center}
 
 \paragraph{Not every explanation names something that can be measured.}
-$1{,}014$ of the $1{,}472$ undetermined verdicts ($68.9\%$) rest on a single
-variable, but $97$ of those name an \emph{undefined predicate} --- a phrase a
+$1{,}165$ of the $1{,}783$ undetermined verdicts ($65.3\%$) rest on a single
+variable, but $161$ of those name an \emph{undefined predicate} --- a phrase a
 source states and never defines --- which no measurement resolves, because
-there is nothing to measure. Splitting them: $917$ ($62.3\%$) turn on a single
-bound concept, $97$ ($6.6\%$) on a single undefined predicate, and across all
-core sizes $176$ ($12.0\%$) involve an undefined predicate somewhere. A system
+there is nothing to measure. Splitting them: $1{,}004$ ($56.3\%$) turn on a
+single bound concept, $161$ ($9.0\%$) on a single undefined predicate, and
+across all core sizes $353$ ($19.8\%$) involve an undefined predicate
+somewhere. A system
 that substituted a value for those predicates would return a definite verdict
 in every one of those cases, and would be asserting something the source does
 not say each time.
@@ -576,7 +586,7 @@ a measurement and which are waiting on a definition the source never gave.
 
 \paragraph{Supplying the core resolves the verdict.}
 Pinning the values the core named and re-reading the verdict gives
-\textsc{must-violate} in $1{,}470$ of $1{,}470$ cases. This is true by
+\textsc{must-violate} in $1{,}801$ of $1{,}801$ cases. This is true by
 construction --- the core is extracted precisely as a set whose values make
 compliance unsatisfiable --- so it is reported as a check on the implementation
 rather than as a result. It rules out a minimiser that returns cores which do
@@ -601,11 +611,11 @@ variables, share $X$ between them, and ask whether both can hold at once:
 Satisfiable means some value of $X$ still leaves the verdict open; unsatisfiable
 means measuring $X$ resolves the case whatever comes back.
 
-Of the $1{,}011$ single-variable cores, measuring the named variable determines
-the verdict in $708$ ($70.0\%$), which is $48.2\%$ of all undetermined verdicts.
-In the other $303$ ($30.0\%$) some value of it leaves the case open. The naive
+Of the $1{,}183$ single-variable cores, measuring the named variable determines
+the verdict in $840$ ($71.0\%$), which is $46.6\%$ of all undetermined verdicts.
+In the other $343$ ($29.0\%$) some value of it leaves the case open. The naive
 reading --- counting single-variable cores as resolvable measurements --- would
-have claimed $68.8\%$ and overstated by nearly a third.
+have claimed $65.7\%$ and overstated by nearly a third.
 
 Which of the two holds is a property of the record, not of the rule. For
 $(\textsf{potassium} < 5.0 \vee \textsf{has\_ckd}) \rightarrow \textsf{on\_acei}$
@@ -629,9 +639,9 @@ disjoint set that forces a violation by a different route.
 The generated vocabulary assigns every numeric variable a plausible
 physiological range; the pipeline currently supplies none, so a rule it
 produces is checked against a weaker domain theory. Re-running the sweep with
-the ranges stripped moves the rates by at most a few points (substituting
-\textsf{false}: $6.3\%$ to $8.7\%$; single query: $32.1\%$ to $36.2\%$), so the
-result does not rest on that difference.
+the ranges stripped moves every rate by less than half a point (substituting
+\textsf{false}: $8.8\%$ to $8.7\%$; deontic: $80.0\%$ to $79.4\%$; single query:
+$30.8\%$ to $30.6\%$), so the result does not rest on that difference.
 
 \begin{itemize}\itemsep2pt
   \item \textbf{The rules are synthetic.} This establishes what each guard is
@@ -642,6 +652,19 @@ result does not rest on that difference.
         magnitudes differ substantially, and we were not able to isolate which
         property of the rules accounts for that; we therefore report the
         generated set alone rather than a comparison we cannot explain.
+  \item \textbf{The sampler needed correcting, and the correction moved every
+        row.} Z3 is deterministic about unconstrained symbols --- an
+        unconstrained boolean returns false in $40$ of $40$ fresh solvers
+        whatever the seed --- so drawing records straight from a model never
+        pinned a boolean true unless the formula forced it. That is a
+        systematic bias, and it removed entire verdict transitions from the
+        measurement: substituting \textsf{true} for an undefined predicate in a
+        \emph{consequent} should sometimes clear a patient, and it was recorded
+        as never doing so, because the records that show it pin an action
+        variable true and the sampler could not produce one. Records are now
+        pushed away from Z3's defaults with probability one half, each push
+        kept only while the constraints stay satisfiable. Every rate in this
+        section changed: the occurrence row moved from $1.4\%$ to $7.0\%$.
   \item \textbf{Records are enriched for disagreement.} Rates are conditional
         on that sampling and are not incidence in a patient population.
   \item \textbf{Rules are weighted unequally.} The unit is the rule--record
