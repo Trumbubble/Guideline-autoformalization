@@ -10,8 +10,29 @@
 % that these are the properties the system's guards exist to preserve, not that
 % any one of them is difficult.
 
-\section{What the guards mean}
+\section{Formalisation \& logic}
 \label{sec:logic}
+
+The rule language is quantifier-free first-order logic over linear arithmetic:
+propositional connectives whose atoms are arithmetic comparisons on the reals
+and integers, rather than bare propositions. It is the SMT fragment
+$\mathrm{QF\_LIRA}$, and is decidable. Two constructs are added --- a bounded
+past-time temporal operator, flattened to derived state, and a relative-change
+operator over a value at an earlier event --- and two things are deliberately
+absent: quantifiers, and arithmetic relating two variables.
+
+No rule contains a quantifier; every variable is free, which is what allows a
+satisfying assignment to \emph{be} a patient. The quantification sits one level
+up, in the verdict: a patient record is a \emph{partial} interpretation, and the
+two definite verdicts are universal statements over the interpretations
+extending it --- every completion violates, or none does --- each discharged as a
+single unsatisfiability check. That is the whole reason a third verdict is
+needed (Propositions~\ref{prop:determinacy} and~\ref{prop:onequery}).
+
+Deontic force is a dyadic annotation selecting a rule's violation condition, not
+a modal operator over formulas; it is never nested, which keeps the standard
+deontic paradoxes out of scope. Each proposition below was machine-checked
+before being stated.
 
 \paragraph{Setup.}
 A rule $R$ denotes the material implication
@@ -22,8 +43,8 @@ over a signature of typed variables.
 \paragraph{Derived symbols.}
 Two constructs are interpreted over symbols the
 signature induces rather than ones a rule names directly. For each declared
-clinical event $e$: $\mathsf{occ}_e$, a boolean recording that $e$ occurred, and
-$\mathsf{dse}_e$, an integer counting days since it did. For each event $e$ and
+clinical event $e$: $\mathsf{occ}_e$, a boolean recording that $e$ \textbf{occ}urred, and
+$\mathsf{dse}_e$, an integer counting days since it did (\textbf{d}ays \textbf{s}ince \textbf{e}vent). For each event $e$ and
 numeric variable $v$: $v@e$, the value $v$ held at the time of $e$. A recency
 window ``$e$ within the last $n$ days'' lowers to
 $\mathsf{occ}_e \wedge \mathsf{dse}_e \le n$, and a relative change ``reduce $v$
@@ -31,7 +52,7 @@ by $p$'' to $v \le (1-p)\cdot v@e$. These symbols are produced by the lowering
 and never written by the generator, so each has exactly one definition.
 
 \paragraph{The domain theory.}
-$\mathcal{D}$ collects plausible physiological ranges for bound
+The domain, $\mathcal{D}$, collects plausible physiological ranges for bound
 numeric variables, code membership for coded ones, $0 \le \mathsf{dse}_e \le H$
 for a fixed horizon $H$ (ten years in the implementation), and $v@e > 0$ for
 each induced baseline. Unbound symbols are deliberately unconstrained --- an
@@ -43,8 +64,8 @@ A \emph{completion} of the record is a model of $\mathcal{D} \wedge P$ --- one
 consistent way of filling in everything the record left open. A record therefore
 does not describe one patient but the set of patients compatible with it, and
 the three verdicts below are statements about that whole set: every completion
-violates, none does, or the record does not settle the question. Write
-$\mathrm{Vars}(\Phi)$ for the symbols occurring in $\Phi$.
+violates, none does, or the record does not settle the question.
+$\mathrm{Vars}(\Phi)$ denotes the symbols occurring in $\Phi$.
 
 \[
 \mathrm{verdict}(R,P) =
@@ -57,7 +78,7 @@ $\mathrm{Vars}(\Phi)$ for the symbols occurring in $\Phi$.
 
 \begin{proposition}[Well-posedness]
 \label{prop:exhaustive}
-If $\mathcal{D} \wedge P$ is satisfiable, the three cases are mutually exclusive
+If $\mathcal{D} \wedge P$ is satisfiable, the three above cases are mutually exclusive
 and exhaustive.
 \end{proposition}
 \begin{proof}
@@ -74,18 +95,17 @@ is satisfiable, then $\mathrm{verdict}(R,P) \neq \textsc{may-violate}$.
 Equivalently: \textsc{may-violate} implies some symbol of $\Phi_R$ is unpinned.
 \end{proposition}
 \begin{proof}
-$P$ fixes a truth value for $\Phi_R$, since no symbol it fails to pin occurs in
-$\Phi_R$. If that value is true then $\mathcal{D}\wedge P\wedge\neg\Phi_R$ is
-unsat; if false then $\mathcal{D}\wedge P\wedge\Phi_R$ is unsat.
+$P$ fixes a truth value for $\Phi_R$, since every symbol in $\Phi_R$ is pinned. If that value is true then $\mathcal{D}\wedge P\wedge\neg\Phi_R$ is
+unsat; if false then $\mathcal{D}\wedge P\wedge\Phi_R$ is unsat. By satisfiability, one of these has to be true, so \textsc{may-violate} never occurs.
 \end{proof}
 
 The converse fails, and the failure is worth stating because it is the reason
 ``count the free variables'' is not a usable proxy for uncertainty. With
-$\Phi = (k > 5 \wedge h) \rightarrow \neg\,\mathit{acei}$ and $h$ unpinned,
+$\Phi = (k > 5 \wedge h) \rightarrow \neg\,\mathit{acei}$ (ACE inhibitor) and $h$ unpinned,
 $k = 4$ yields \textsc{certified-compliant}: the antecedent is already false, so
 $h$ is free but irrelevant. The exact criterion is not freeness but
-\emph{decidedness} --- $\mathrm{verdict} = \textsc{may-violate}$ precisely when
-$\mathcal{D} \wedge P$ entails neither $\Phi_R$ nor $\neg\Phi_R$ --- which is the
+\emph{decidedness} -- $\mathrm{verdict} = \textsc{may-violate}$ precisely when
+$\mathcal{D} \wedge P$ entails neither $\Phi_R$ nor $\neg\Phi_R$ -- which is the
 definition unfolded, and is what the two solver calls compute.
 
 The bridge to the system is that an \emph{undefined predicate} is a symbol no
@@ -168,11 +188,7 @@ missing datum, the second is a deviation.
 \subsection{Why deontic force is an operator and not a label}
 
 Each rule carries a \emph{deontic force} $\delta \in \{\mathsf{Obl},
-\mathsf{Per}\}$: an obligation requires the action of a patient the rule applies
-to, whereas a permission offers it, so a patient who declines has deviated from
-nothing. The force is a conditional operator, not an annotation, and it enters
-the logic at exactly one point --- the condition under which the rule counts as
-broken:
+\mathsf{Per}\}$: an obligation ($\mathsf{Obl}$) requires the action of a patient the rule applies to, whereas a permission ($\mathsf{Per}$) offers it, so a patient who declines has deviated from nothing. The force is a conditional operator, not an annotation, and it enters the logic at exactly one point --- the condition under which the rule counts as broken:
 \[
   \mathrm{viol}(R) =
   \begin{cases}
@@ -185,7 +201,7 @@ broken:
 \begin{proposition}[Permissions accuse no one]
 \label{prop:permission}
 If $\delta = \mathsf{Per}$ then $\mathcal{D}\wedge P\wedge\mathrm{viol}(R)$ is
-unsatisfiable for every $\mathcal{D}$ and every $P$.
+unsatisfiable.
 \end{proposition}
 \begin{proof}
 Immediate: the conjunction contains $\bot$.
@@ -211,7 +227,7 @@ Extend the interpretation with $\mathsf{dse}_e = 0$.
 
 That is, a window lowered without the flag is satisfied by a patient for whom
 the event never occurred --- and ``the test was never done'' is the commonest
-real violation of a monitoring recommendation.
+real violation of a monitoring recommendation.\\
 
 \begin{proposition}[A free baseline cannot certify]
 \label{prop:baseline}
