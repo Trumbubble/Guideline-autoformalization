@@ -244,10 +244,40 @@ def sample_plans(rule, domain, n: int, rng: random.Random) -> list[dict]:
         return []
 
     def model_of(*extra):
+        """A model of the constraints, DIVERSIFIED away from Z3's defaults.
+
+        Z3 is deterministic about unconstrained symbols: an unconstrained
+        boolean comes back False in 40 of 40 fresh solvers whatever the
+        random_seed, and an unconstrained numeric sits at the bottom of its
+        range. Sampling straight from `check()` therefore never pins a boolean
+        true unless the formula forces it, which is a systematic bias, not
+        noise -- it silently removed whole verdict transitions from the
+        measurement. (Substituting true for an undefined predicate in a
+        CONSEQUENT should sometimes clear a patient; it never did, because the
+        records that would show it pin an action variable true and the sampler
+        could not produce one.)
+
+        So: take the default model, then try to push each variable AWAY from
+        its default value with probability one half, keeping each push only
+        while the constraints stay satisfiable."""
         s_ = z3.Solver()
         s_.set("random_seed", rng.randrange(1 << 30))
         s_.add(*domain, *extra)
-        return s_.model() if s_.check() == z3.sat else None
+        if s_.check() != z3.sat:
+            return None
+        base = s_.model()
+        kept = []
+        for name in sorted(rule.var_refs):
+            ref = rule.var_refs[name]
+            if rng.random() < 0.5:
+                continue
+            here = base.eval(ref, model_completion=True)
+            push = z3.Not(ref) if z3.is_bool(ref) and z3.is_true(here) else (
+                   ref if z3.is_bool(ref) else ref != here)
+            if s_.check(*kept, push) == z3.sat:
+                kept.append(push)
+        s_.check(*kept)
+        return s_.model()
 
     plans, seen = [], set()
     for i in range(n * 6):                      # oversample; dedupe below
