@@ -2,7 +2,7 @@
 
 Track A turns a clinical guideline document into formally checkable rules —
 refusing rather than guessing wherever it can't. This is the brief entry
-point; each linked file in §9 has the full detail this page compresses.
+point; each linked file in §8 has the full detail this page compresses.
 
 ---
 
@@ -67,11 +67,11 @@ patients — one solver query is one patient. `Since(event, days)` flattens a
 temporal predicate to `<event>_occurred AND days_since_<event> <= days` for
 Z3 (a solver has no patient timeline), while CQL keeps it as a genuine
 bounded existential over the record (§2.5). Multi-visit predicates ("on two
-occasions ≥90 days apart") are still out of the fragment — see §6.
+occasions ≥90 days apart") are still out of the fragment — see §5.
 
 `Rule.deontic` is an operator, not a label: an obligation's violation
 condition is `when AND NOT then`; a permission's is the constant `false`,
-so no patient can ever violate one by construction (§6).
+so no patient can ever violate one by construction (§5).
 
 ### 2.4 Gate
 Most of the refusal decision is *not* "ask a model if this is vague"
@@ -81,7 +81,7 @@ produced, and only then asks a model to try. Only **two** of the six
 refusal reasons are actually deterministic (`unbound_concept`,
 `defeasible`); one (`beyond_dsl`) is mixed; the other three trace to a
 model decision somewhere upstream or in the formalizer itself — see the
-corrected table in [GATE.md](GATE.md) and §6.
+corrected table in [GATE.md](GATE.md) and §5.
 
 Decisions: `encode` (every clause bound, validates, non-degenerate),
 `partial` (some clauses bound, the rest declared as free-variable holes),
@@ -202,36 +202,15 @@ needed, since prompts and responses are stored as SHA-256 hashes.
 - Three-valued logic — CQL's native `true` / `false` / `null`, used so an
   unbound predicate propagates honest uncertainty instead of being stubbed.
 
-**Gold-standard labels**
+**Gold-standard labels** (from [GOLD.md](GOLD.md))
 - ENCODE / PARTIAL / REFUSE / NOT_A_RECOMMENDATION — the four labels a
-  human annotator assigns, blind to the tool's own output.
+  human annotator assigns, blind to the tool's own output, following a
+  decision order (patient-level? → nameable? → expressible? → overridable?
+  → threshold defined?) down to whichever applies first.
 - Deontic label — obligation / permission, labelled independently of the
   four above.
 
-## 5. Evaluation Methodology
-
-From [GOLD.md](GOLD.md): criteria written *before* any tool output is
-consulted — a statement labelled after seeing the tool's answer is marked
-`PEEKED` and dropped from the evaluation set. Each statement is labelled
-against the DSL it must fit: **ENCODE** (fully faithful), **PARTIAL**
-(encodable except a hole nameable verbatim from the statement), **REFUSE**
-(one of the six reason codes — §4), **NOT_A_RECOMMENDATION** (the segmenter
-was wrong — still labelled, not discarded, since it's the segmenter's own
-error rate and belongs in the denominator separately). Deontic is labelled
-independently of all four.
-
-Decision order (stop at the first that applies): about a patient at all? →
-is the action nameable as a variable? → does it need structure the
-fragment can't express? → is it explicitly overridable by judgement? → is a
-threshold used but undefined (quotable hole vs. genuinely vague)? →
-otherwise ENCODE.
-
-Procedure: two annotators label independently without discussing, raw
-agreement and Cohen's κ are reported on both the four labels and deontic
-separately, disagreements are adjudicated in a recorded third pass, and
-only then is the tool run and compared.
-
-## 6. Design Decisions Worth Keeping
+## 5. Design Decisions Worth Keeping
 
 - **Null, not false, for an unbound predicate.** CQL is natively
   three-valued; stubbing an uncomputable node to `false` (as PathWISE does)
@@ -267,7 +246,7 @@ only then is the tool run and compared.
   This corrects an earlier claim that four were free — see
   [GATE.md](GATE.md) and RESULTS.md R37.
 
-## 7. Known Limitations
+## 6. Known Limitations
 
 **Segmenter**
 - The PDF/Docling path has never executed; the PyMuPDF path is tested only
@@ -299,7 +278,7 @@ only then is the tool run and compared.
 
 **DSL**
 - Snapshot model only: one value per variable, no patient timeline.
-  Multi-visit predicates route to `unsupported_temporal` (§6).
+  Multi-visit predicates route to `unsupported_temporal` (§5).
 
 **CQL**
 - `check_cql` is structural only — brackets balance and names resolve;
@@ -320,7 +299,7 @@ only then is the tool run and compared.
 - Single-run numbers on a small n are not yet shown to be stable
   (RESULTS.md R17c).
 
-## 8. Status
+## 7. Status
 
 Live runs have happened, repeatedly, against a 9-document PMC corpus with
 real model calls at every wired hook (segmenter classifier, binder
@@ -332,7 +311,7 @@ limitation, not yet a representative one. Offline, the full test suite
 passes with no API key, and one real run is replayable byte-for-byte from a
 recorded cassette, also with no key needed.
 
-## 9. Source Map
+## 8. Source Map
 
 | Topic | Canonical source |
 |---|---|
