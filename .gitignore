@@ -219,37 +219,37 @@ __marimo__/
 
 # LOINC is licensed -- load it locally, never redistribute it.
 Loinc_*/
-Part A/loinc.db
-Part A/demo.db
-Part B/engine/node_modules/
-Part B/engine/*.jar
-Part B/engine/cs
-Part B/engine/classes/
-Part B/engine/cp.txt
-Part B/engine/*.json
-!Part B/engine/package.json
+CQL_converter/loinc.db
+CQL_converter/demo.db
+patient_checker/engine/node_modules/
+patient_checker/engine/*.jar
+patient_checker/engine/cs
+patient_checker/engine/classes/
+patient_checker/engine/cp.txt
+patient_checker/engine/*.json
+!patient_checker/engine/package.json
 
 # Uploaded guidelines are runtime data, not source.
-Part B/guidelines/
+patient_checker/guidelines/
 
 # Licensed terminology releases -- load locally, never redistribute.
 SnomedCT_*/
 RxNorm_*/
-Part A/terms.db
+CQL_converter/terms.db
 
 # Semantic index: ~1 GB of float32 vectors, rebuildable in minutes from
 # terms.db. Derived data, never source.
-Part A/semantic/
+CQL_converter/semantic/
 *.npy
 paper.zip
 .DS_Store
 Formatting_Instructions_For_NeurIPS_2026/
 
 # ablation output
-Part B/tests/ablation.csv
+patient_checker/tests/ablation.csv
 # real-rule results are not reported; the --existing flag still produces them
-Part B/tests/generated_ablation.csv
-Part B/tests/explanation_*.csv
+patient_checker/tests/generated_ablation.csv
+patient_checker/tests/explanation_*.csv
 # summaries ARE tracked: small, and they are what the paper quotes
-!Part B/tests/*.summary.txt
-Part B/tests/may_actionability.csv
+!patient_checker/tests/*.summary.txt
+patient_checker/tests/may_actionability.csv

@@ -9,13 +9,13 @@
 %
 % amssymb is needed for \nsim and \mathbb{B}; amsthm for the proof environment.
 %
-% CORRESPONDENCE TO THE IMPLEMENTATION (Part A/dsl.py):
+% CORRESPONDENCE TO THE IMPLEMENTATION (CQL_converter/dsl.py):
 %   Signature            -> Registry, VarDef, EventDef
 %   Syntax               -> Cmp, Between, Since, Delta, Not, And, Or
 %   Well-formedness      -> validate(), validate_rule()
 %   Semantics            -> to_z3(); derived symbols via make_env()
 %   Domain theory        -> domain_axioms()
-%   Verdicts             -> Part B/api.py classify(), classify_option()
+%   Verdicts             -> patient_checker/api.py classify(), classify_option()
 %   Non-degeneracy       -> check_nondegenerate()
 %   Fragments            -> fragment_of()
 % Each bracketed \textsc{code} in the well-formedness and non-degeneracy rules

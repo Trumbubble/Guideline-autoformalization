@@ -10,7 +10,7 @@ what's already fixed; this file is only what's still open.
 
 ### R1. `terms.db` had almost no real-world coverage, and zero conditions -- FIXED 2026-09-01
 
-`Part A/terms.db` (local, gitignored) had **59 rows total**: `drug` 23,
+`CQL_converter/terms.db` (local, gitignored) had **59 rows total**: `drug` 23,
 `drug_class` 11, `lab` 23, `procedure` 2, and **zero** `condition` rows --
 confirmed by direct query, not inference. Every `condition`-kind lookup
 failed unconditionally, and `procedure`/most `lab` lookups did too outside
@@ -47,7 +47,7 @@ PMC12948374:0000 ("ABPM") and :0016 ("urinary tract infections"):
 
 **Confirmed fixed as a data-coverage problem.** Don't re-diagnose
 `unbound_concept` refusals as this issue going forward -- check
-`Part A/terms.db`'s row count first (`SELECT COUNT(*) FROM concept`); if
+`CQL_converter/terms.db`'s row count first (`SELECT COUNT(*) FROM concept`); if
 it's back down near 59, the database was reset/rebuilt again.
 
 ### R2. `between` could be offered against a boolean-bound variable -- FIXED 2026-09-01
@@ -295,7 +295,7 @@ first and most important fix. 155/155 offline tests pass throughout.
 ### R8. `README.md` was gone from the repo root -- FIXED 2026-09-02
 
 Removed by a teammate's restructuring commit at some point before this
-session; run instructions lived only in `Part B/CHECKER.md`, findable only
+session; run instructions lived only in `patient_checker/CHECKER.md`, findable only
 if you already knew to look there. Added a short root `README.md`:
 project description, setup (`venv` + `.env`), the run command, and pointers
 to `CHECKER.md`/`DSL.md`/`BACKLOG.md` rather than duplicating them.

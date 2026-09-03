@@ -2,7 +2,7 @@
 
 SKIPPED, LOUDLY, when the toolchain is not built -- these shell out to a JVM
 and Node, so they cannot be part of the offline suite. Build with
-`bash "Part B/engine/setup.sh"`.
+`bash "patient_checker/engine/setup.sh"`.
 """
 import json
 import os

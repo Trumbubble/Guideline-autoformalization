@@ -55,7 +55,7 @@ def _walkers():
     in the codebase that dispatches on the expression union."""
     root = os.path.dirname(os.path.abspath(__file__))
     files = (glob.glob(os.path.join(root, "*.py"))
-             + glob.glob(os.path.join(root, "..", "Part B", "*.py")))
+             + glob.glob(os.path.join(root, "..", "patient_checker", "*.py")))
     found = {}
     for path in sorted(files):
         base = os.path.basename(path)

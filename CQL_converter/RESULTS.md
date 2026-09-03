@@ -2213,8 +2213,8 @@ were deliberate. Three were live bugs that had not yet fired:
 | Site | Silent on | Consequence |
 |---|---|---|
 | `dsl.rule_quantities` | `Delta` | a titration's percentage invisible to the dropped-quantity check |
-| `Part B/real_rules._vars_and_events` | `Delta` | a delta rule's variable and baseline event invisible to Track B at load |
-| `Part B/guidelines._events_in` | `Delta` | a **third copy** of the same walker, with the same `Since`-only bug |
+| `patient_checker/real_rules._vars_and_events` | `Delta` | a delta rule's variable and baseline event invisible to Track B at load |
+| `patient_checker/guidelines._events_in` | `Delta` | a **third copy** of the same walker, with the same `Since`-only bug |
 
 ### R34b · The measurement bug this exposed
 
@@ -2289,7 +2289,7 @@ terminal scrollback. Neither can be handed to a clinician.
 
 | Gap | Fix |
 |---|---|
-| **The CQL was never saved** -- generated, printed as a one-line status, discarded | written to `Part B/cql/<bundle>/<statement_id>.cql` |
+| **The CQL was never saved** -- generated, printed as a one-line status, discarded | written to `patient_checker/cql/<bundle>/<statement_id>.cql` |
 | Cautions never reached the bundle: only *refusals* carried evidence, so an encoded rule with a `CIRCULAR_BASELINE` looked clean in the artifact | optional `findings` key -- decision, holes and evidence per statement; additive, so an older consumer ignores it |
 | No human-readable output at all | `report.py`: a self-contained HTML page, source sentence beside the rule it became |
 | A rule was rendered as JSON or CQL, which nobody adjudicates | `dsl.to_english` / `rule_to_english` |

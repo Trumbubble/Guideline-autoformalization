@@ -1225,7 +1225,7 @@ def find_callout_rects(page) -> list[tuple[float, float, float, float]]:
     semantic label: a stroked or filled rectangle with text inside it. Layout
     models trained on DocLayNet cannot report this -- there is no 'callout'
     class -- so recover it geometrically, where the answer is exact."""
-    page_area = abs(page.rect.get_area()) or 1.0
+    page_area = abs(page.rect.width * page.rect.height) or 1.0
     rects = []
     for d in page.get_drawings():
         if not (d.get("fill") or d.get("color")):

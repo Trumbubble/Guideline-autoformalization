@@ -75,7 +75,7 @@ screenshots (§Demonstration). Both are screenshots of the real UI.
 ## Three days: suggested order
 - **Day 1** — write §1, §2, §5 (they need no new results). Take the three demo
   screenshots and record the video.
-- **Day 2** — write `Part B/tests/ablation.py`, fill Table 1. Build the stub
+- **Day 2** — write `patient_checker/tests/ablation.py`, fill Table 1. Build the stub
   comparison figure.
 - **Day 3** — §3, §4, abstract. Verify every orange `\num{}` against current
   code. Anonymisation pass. Page-count pass with notes off.

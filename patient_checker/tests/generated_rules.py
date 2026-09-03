@@ -39,7 +39,7 @@ from itertools import product
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent / "Part A"))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent / "CQL_converter"))
 
 import dsl                                                        # noqa: E402
 from from_dsl import LoadedRule, _mentioned                       # noqa: E402

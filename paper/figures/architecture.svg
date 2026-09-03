@@ -98,7 +98,7 @@
       <rect style="fill:#F2F4F1; stroke:#C2CAC5; stroke-width:1" x="1264" y="64" width="362" height="337" rx="6"/>
       <text style="font-family:JetBrains Mono, DejaVu Sans Mono, monospace; font-weight:700; font-size:13px; fill:#0B5F55" x="1280" y="89">04</text>
       <text style="font-family:Archivo, Helvetica, Arial, sans-serif; font-weight:700; font-size:15px; fill:#111614" x="1306" y="89">Check</text>
-      <text style="font-family:JetBrains Mono, DejaVu Sans Mono, monospace; font-size:9.5px; fill:#7C8783" x="1280" y="104">cql.py · Part B — rule → verdict</text>
+      <text style="font-family:JetBrains Mono, DejaVu Sans Mono, monospace; font-size:9.5px; fill:#7C8783" x="1280" y="104">cql.py · patient_checker — rule → verdict</text>
       <path style="stroke:#C2CAC5; stroke-width:1" d="M1276 112 H1614"/>
       <rect style="fill:#FFFFFF; stroke:#6E7975; stroke-width:1" x="1275" y="120" width="340" height="91" rx="4"/>
       <text style="font-family:Archivo, Helvetica, Arial, sans-serif; font-weight:600; font-size:12px; fill:#111614" x="1287" y="140">Three-valued verdict</text>
