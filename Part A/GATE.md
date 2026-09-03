@@ -52,16 +52,24 @@ same object the residue report and the DSL already understand.
 
 | code | means | example | caught by |
 |---|---|---|---|
-| `unbound_concept` | a clinical concept resolves to no code | *"frailty"*, *"high-risk patients"* | **binder** — deterministic |
-| `not_patient_level` | about a service, commissioner or research agenda, not a patient | *"Commissioners should ensure rapid-access clinics are available"* | **segmenter** (`is_patient_level`) |
-| `unsupported_temporal` | needs more than one timepoint | *"eGFR < 60 on two occasions ≥ 90 days apart"* — the definition of CKD | **deterministic** — no `Since` lowering exists |
-| `beyond_dsl` | needs structure the DSL lacks | arithmetic, counting, nesting past the decoder's depth | **validator / decoder** |
+| `unbound_concept` | a clinical concept resolves to no code | *"frailty"*, *"high-risk patients"* | **deterministic** — the binder: selector returns -1, no candidate survives, or a value set expands to no codes |
+| `defeasible` | exceptions or discretion the logic cannot carry | *"unless clinically indicated"*, *"at the discretion of the MDT"* | **deterministic** — `MODAL_PREDICATE` among the blocking codes; the model may also name it |
+| `beyond_dsl` | needs structure the DSL lacks | arithmetic, counting, nesting past the decoder's depth | **mixed** — `VACUOUS_RULE` deterministically, otherwise the model's own code or the fallback |
+| `not_patient_level` | about a service, commissioner or research agenda, not a patient | *"Commissioners should ensure rapid-access clinics are available"* | **model** — the segmenter's classifier (`is_patient_level`), an LLM call on a live run; never derived inside the gate itself |
 | `vague_predicate` | a word standing in for a number the guideline never gives | *"an adequate trial"*, *"significant impairment"* | **model** |
-| `defeasible` | exceptions or discretion the logic cannot carry | *"unless clinically indicated"*, *"at the discretion of the MDT"* | **model** |
+| `unsupported_temporal` | needs more than one timepoint | *"eGFR < 60 on two occasions ≥ 90 days apart"* — the definition of CKD | **model** — no deterministic check exists; the formalizer just declines. Seen twice across the real bundles, both model-authored |
 
-**Four of the six are free** — they fall out of stages 1–2. Only
-`vague_predicate` and `defeasible` need judgement. That is the whole reason the
-gate is an aggregator rather than a classifier.
+**Only two of the six are deterministic** — `unbound_concept` (the binder) and
+`defeasible` (the validator's `MODAL_PREDICATE` check); `beyond_dsl` is mixed.
+The other three need the model, either to decline directly or — for
+`not_patient_level` — to have classified the statement upstream. The
+deterministic machinery is a gate *on* the model's answer, not a replacement
+for it.
+
+*(This corrects an earlier version of this table and its "four of the six are
+free" claim, which was wrong the same way a stale docstring in `gate.py`
+itself was wrong — see RESULTS.md R37. `test_gate.py` now pins which codes are
+reachable with `formalize=None`, so the claim cannot drift again silently.)*
 
 One deliberate non-inference: an empty binding is **never** labelled
 `not_patient_level`. *"Consider referral after an adequate trial"* binds
@@ -180,8 +188,12 @@ asking *"why was this refused"* gets those, not a score. Same discipline as
 - **Nothing is calibrated.** `risk_coverage` is implemented and untested against
   real labels; E3 needs two clinicians on a held-out guideline. Until then the
   confidence score is a number, not a calibrated probability.
-- **The gate has not run end-to-end on a real guideline** — only on hand-written
-  statements and small live batches.
+- **It has now run end-to-end on real guidelines, repeatedly** — R12 was the
+  first full run (14 statements, one document); by R20 the corpus is 9
+  open-access PMC guidelines, 45 gold-labelled statements. What is *not* yet
+  true: no clinician has adjudicated any output — the gold labels are the
+  project's own — and single-run numbers on a small n are not yet shown to be
+  stable (RESULTS.md R17c).
 - **`partial` doubles the model calls** on statements that need it (a strict
   attempt, then a second with holes declared). Measured: $0.47 for 3 statements
   at k=8.

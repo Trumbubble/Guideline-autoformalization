@@ -152,10 +152,14 @@ registry and passed to `registry_from_bindings`.
 
 ## Limits
 
-- **No LLM has ever run here.** The three hooks (`propose_mentions`, `select`,
-  and the segmenter's classifier) have only executed as offline heuristics and
-  mock callables. Live refusal rates are therefore an **upper bound**, not the
-  real residue.
+- **The three hooks now do run live.** `demo.py` wires `llm.propose_mentions`
+  and `llm.select_candidate` into every `bind.bind_statement` call, and the
+  segmenter's classifier is live too (see SEGMENT.md). R12 onward measures
+  against a 9-document PMC corpus with real API calls, not offline heuristics
+  and mock callables — so refusal rates reported there are the measured
+  residue, not an upper bound on it. What's still true: no clinician has
+  adjudicated any of it, and coverage numbers predate whichever fixes in
+  BACKLOG.md landed most recently, so re-check before citing one.
 - **`propose_mentions` is a stub**: 15 hardcoded regexes. On a real ASH/ISTH
   sentence it finds **zero** concepts. It makes the pipeline runnable; it is not
   a design.

@@ -284,5 +284,11 @@ Five 2025-26 open-access guidelines (see [`NOTES.md`](NOTES.md) for the full log
   but nobody has read one and marked every recommendation by hand. Until that
   gold set exists, "9/9 on the fixture" is a regression guarantee, not
   evidence.
-- **No LLM has been wired in.** Every real run so far used the offline
-  heuristic, so `prefilter_disagreements` has not been measured for real.
+- **The model classifier is wired in now** (`demo.py`, `goldset.py` both pass
+  `llm=llm.classify_block`) — but it wasn't for a while without anyone
+  noticing, because the offline heuristic is a silently working fallback, not
+  an error. See RESULTS.md R21: measured on the 45-statement gold set, the
+  model classifier lifted coverage over what reaches the pipeline from 27% to
+  40%, entirely by rejecting non-recommendations the heuristic was letting
+  through — no encodable statement was lost. `prefilter_disagreements` is
+  measured for real as of that run.
