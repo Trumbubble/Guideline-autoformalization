@@ -41,7 +41,7 @@ import sys
 from collections import defaultdict
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))   # Part B
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))   # patient_checker
 
 import z3                                                          # noqa: E402
 import real_rules                                                  # noqa: E402

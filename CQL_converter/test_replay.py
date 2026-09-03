@@ -31,7 +31,7 @@ import gate
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 TAPES = os.path.join(HERE, "cassettes")
-sys.path.insert(0, os.path.join(os.path.dirname(HERE), "Part B"))
+sys.path.insert(0, os.path.join(os.path.dirname(HERE), "patient_checker"))
 
 def _tapes():
     return sorted(p for p in glob.glob(os.path.join(TAPES, "*.jsonl"))

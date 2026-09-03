@@ -1,6 +1,6 @@
 # The Track B Checker
 
-Track A ([`../Part A/DSL.md`](../Part%20A/DSL.md)) turns a guideline document
+Track A ([`../CQL_converter/DSL.md`](../CQL_converter/DSL.md)) turns a guideline document
 into `dsl.Rule` objects: closed-vocabulary formulas, `phi = when -> then`,
 validated and provenance-tagged. Track B is everything downstream of that --
 given a rule, a patient, and a partial care plan, decide whether the plan
@@ -10,7 +10,7 @@ of a vague "maybe." This directory is Track B.
 [`real_rules.py`](real_rules.py) hand-authors ten real guideline rules
 through the same DSL, so the rest of this directory always has real
 material to run against. [`guidelines.py`](guidelines.py) is the actual
-Track A connection: it runs Part A's real pipeline (segment → gate.triage →
+Track A connection: it runs CQL_converter's real pipeline (segment → gate.triage →
 bind → dsl.write_bundle) over an uploaded document and stores the result as
 another guideline the checker can run against, alongside the fixtures. See
 [Guidelines and uploads](#guidelines-and-uploads) below.
@@ -191,7 +191,7 @@ process. Leave it blank to fall back to the server's own `.env`.
 [`guidelines.py`](guidelines.py) is the library of guidelines the checker
 can run against: the always-available `fixtures` entry (`real_rules.py`),
 plus anything uploaded and stored under `guidelines/` (gitignored --
-uploads are runtime data, not source). Each upload goes through Part A's
+uploads are runtime data, not source). Each upload goes through CQL_converter's
 real pipeline exactly as `demo.py` does, just over an arbitrary document
 instead of a fixed statement list:
 

@@ -5,12 +5,12 @@ care plan against them and gives a real answer: definitely violates,
 definitely compliant, or genuinely undetermined (with the exact missing
 fact named) -- never a silent guess.
 
-- **Part A** -- formalizes a guideline document into typed rules.
-- **Part B** -- the checker: runs a patient/plan against those rules
+- **CQL_converter** -- formalizes a guideline document into typed rules.
+- **patient_checker** -- the checker: runs a patient/plan against those rules
   (or a set of ten hand-authored example rules, no upload needed).
 
-This README covers running Part B, the part with a UI. See
-[`Part B/CHECKER.md`](Part%20B/CHECKER.md) for how it works in detail.
+This README covers running patient_checker, the part with a UI. See
+[`patient_checker/CHECKER.md`](patient_checker/CHECKER.md) for how it works in detail.
 
 ## Setup
 
@@ -26,7 +26,7 @@ cp .env.example .env
 ## Run it
 
 ```sh
-cd "Part B"
+cd "patient_checker"
 ../.venv/bin/python3 api.py
 # open http://localhost:8000/
 ```
@@ -37,8 +37,8 @@ or use "+ Upload guideline" to formalize your own document. New here? Open
 
 ## More detail
 
-- [`Part B/CHECKER.md`](Part%20B/CHECKER.md) -- how the checker and its
+- [`patient_checker/CHECKER.md`](patient_checker/CHECKER.md) -- how the checker and its
   pages work, the three-valued verdict, uploading guidelines.
-- [`Part A/DSL.md`](Part%20A/DSL.md) -- the rule language guideline text
+- [`CQL_converter/DSL.md`](CQL_converter/DSL.md) -- the rule language guideline text
   gets formalized into.
-- [`Part A/BACKLOG.md`](Part%20A/BACKLOG.md) -- known open issues.
+- [`CQL_converter/BACKLOG.md`](CQL_converter/BACKLOG.md) -- known open issues.

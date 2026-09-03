@@ -148,7 +148,7 @@
       <rect class="stage" x="1264" y="64" width="362" height="714" rx="6"/>
       <text class="t-stage-n" x="1280" y="89">04</text>
       <text class="t-stage" x="1306" y="89">Check</text>
-      <text class="t-mod" x="1280" y="104">cql.py · Part B — rule → verdict</text>
+      <text class="t-mod" x="1280" y="104">cql.py · patient_checker — rule → verdict</text>
       <path class="div" d="M1276 112 H1498"/>
       <rect class="box" x="1275" y="120" width="340" height="118" rx="4"/>
       <text class="t-cap" x="1287" y="140">Z3 lowering</text>

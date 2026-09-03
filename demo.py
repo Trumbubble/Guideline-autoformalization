@@ -29,8 +29,8 @@ import re
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, os.path.join(HERE, "Part A"))
-sys.path.insert(0, os.path.join(HERE, "Part B"))
+sys.path.insert(0, os.path.join(HERE, "CQL_converter"))
+sys.path.insert(0, os.path.join(HERE, "patient_checker"))
 
 import z3  # noqa: E402
 
@@ -65,7 +65,7 @@ def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[1])
     ap.add_argument("--live", action="store_true",
                     help="use the real model, compiler and execution engine")
-    ap.add_argument("--out", default=os.path.join(HERE, "Part B", "bundle.json"))
+    ap.add_argument("--out", default=os.path.join(HERE, "patient_checker", "bundle.json"))
     ap.add_argument("--doc", metavar="PATH_OR_PMCID",
                     help="your own guideline: a .pdf / .xml / .html file, or a "
                          "PubMed Central id like PMC13276589")
@@ -80,9 +80,9 @@ def main(argv=None):
     # the only thing that exercises the live path -- which made the user the
     # integration test. A tape turns one paid run into a fixture the whole
     # suite replays offline afterwards, so the next such defect is found at
-    # commit time instead of on the next run. See Part A/cassette.py.
+    # commit time instead of on the next run. See CQL_converter/cassette.py.
     if a.live and not a.no_record and not os.environ.get(cassette.ENV_PATH):
-        tapes = os.path.join(HERE, "Part A", "cassettes")
+        tapes = os.path.join(HERE, "CQL_converter", "cassettes")
         os.makedirs(tapes, exist_ok=True)
         stem = re.sub(r"[^A-Za-z0-9_.-]", "_", os.path.basename(a.doc or "builtin"))
         os.environ[cassette.ENV_PATH] = os.path.join(tapes, f"{stem}.jsonl")
@@ -245,7 +245,7 @@ def main(argv=None):
                 a.out, title=(a.doc or "demo"),
                 guideline_id=_slugfile(a.doc or "demo"))
             print(f"    library: http://localhost:8000/guidelines/"
-                  f"{_entry['id']}/report  (run `python3 api.py` in Part B)")
+                  f"{_entry['id']}/report  (run `python3 api.py` in patient_checker)")
         except Exception as exc:
             print(f"    (not added to the web library: {type(exc).__name__}: {exc})")
         if cql_files:
@@ -393,7 +393,7 @@ def _statements_from(doc, limit, classify=None):
     says which judge ran."""
     import segment as sg
     if doc.upper().startswith("PMC") and not os.path.exists(doc):
-        path = sg.fetch_pmc(doc, cache_dir=os.path.join(HERE, "Part A", "corpus"))
+        path = sg.fetch_pmc(doc, cache_dir=os.path.join(HERE, "CQL_converter", "corpus"))
     else:
         path = doc
         if not os.path.exists(path):
@@ -453,7 +453,7 @@ def _build_index(live):
     real UCUM units, so the right code is selected structurally."""
     if not live:
         return bind.fixture_index()
-    local = bind.SqliteIndex(os.path.join(HERE, "Part A", "terms.db"))
+    local = bind.SqliteIndex(os.path.join(HERE, "CQL_converter", "terms.db"))
     # Load whichever licensed releases are present. Each is optional; the
     # binder degrades to the free endpoints for anything missing, and says so.
     for name, system, loader in [("LOINC", bind.LOINC, bind.load_loinc),

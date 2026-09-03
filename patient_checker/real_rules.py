@@ -6,7 +6,7 @@ import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "Part A"))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "CQL_converter"))
 
 import sys as _sys
 

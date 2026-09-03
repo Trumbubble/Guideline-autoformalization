@@ -24,7 +24,7 @@ import sys
 import tempfile
 
 ENGINE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-                      "Part B", "engine")
+                      "patient_checker", "engine")
 TIMEOUT = 120
 
 class ToolchainMissing(RuntimeError):

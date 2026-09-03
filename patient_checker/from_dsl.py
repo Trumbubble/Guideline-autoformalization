@@ -22,7 +22,7 @@ import sys
 from dataclasses import dataclass, field
 
 _PART_A = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-                       "Part A")
+                       "CQL_converter")
 if _PART_A not in sys.path:
     sys.path.insert(0, _PART_A)
 

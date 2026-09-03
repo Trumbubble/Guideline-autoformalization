@@ -759,7 +759,7 @@ def test_no_non_builtin_open_carries_an_encoding_argument():
     import re
     here = os.path.dirname(os.path.abspath(__file__))
     roots = [os.path.join(here, "*.py"),
-             os.path.join(os.path.dirname(here), "Part B", "*.py"),
+             os.path.join(os.path.dirname(here), "patient_checker", "*.py"),
              os.path.join(os.path.dirname(here), "demo.py")]
     bad = []
     pat = re.compile(r"\b(?:urlopen|webbrowser\.open|os\.open)\([^()]*encoding=")

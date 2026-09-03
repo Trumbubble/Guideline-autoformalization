@@ -1,7 +1,7 @@
 """The guideline library: the fixture set plus any uploaded, processed
-guidelines, each its own dsl bundle. Uses Part A's segment/gate/bind/dsl
+guidelines, each its own dsl bundle. Uses CQL_converter's segment/gate/bind/dsl
 modules to turn an uploaded document into a bundle -- nothing here
-duplicates that logic, and nothing is written into Part A. See CHECKER.md."""
+duplicates that logic, and nothing is written into CQL_converter. See CHECKER.md."""
 
 from __future__ import annotations
 
@@ -16,7 +16,7 @@ import time
 import uuid
 from pathlib import Path
 
-_PART_A = str(Path(__file__).resolve().parent.parent / "Part A")
+_PART_A = str(Path(__file__).resolve().parent.parent / "CQL_converter")
 if _PART_A not in sys.path:
     sys.path.insert(0, _PART_A)
 
@@ -58,7 +58,7 @@ def _slug(title: str) -> str:
 def _blocks_from_text(text: str, doc_id: str) -> list:
     """Plain pasted text -> one Block per paragraph.
 
-    Not a Part A loader: load_pdf/load_html/load_jats all recover real
+    Not a CQL_converter loader: load_pdf/load_html/load_jats all recover real
     document layout, and pasted text has none to recover. This is the
     minimal honest stand-in, one step below what segment.py does for a
     structured document.
@@ -175,7 +175,7 @@ def _merged_registry(triages, index, mention_llm, select_llm) -> "dsl.Registry":
     """One registry a bundle can carry: every triage's own bound vocabulary,
     every open hole, and every event a surviving rule refers to. Same
     construction as demo.py's `_merge_registries` -- duplicated rather than
-    imported, since demo.py is a script, not a library, and Part A is not to
+    imported, since demo.py is a script, not a library, and CQL_converter is not to
     be modified for this."""
     seen, events = {}, {}
     for t in triages:
@@ -196,7 +196,7 @@ def ingest(title: str, *, file_bytes=None, filename=None, text=None,
            live: bool = False, api_key: str | None = None) -> dict:
     """Turn an uploaded document (or pasted text) into a stored bundle.
 
-    Runs Part A's real pipeline -- segment -> gate.triage (bind + formalize)
+    Runs CQL_converter's real pipeline -- segment -> gate.triage (bind + formalize)
     per statement -> dsl.write_bundle -- exactly as demo.py does, just over
     an arbitrary uploaded document instead of a fixed statement list.
 
