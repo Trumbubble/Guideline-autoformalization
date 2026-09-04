@@ -638,6 +638,36 @@ def register_bundle(bundle_path, title: str | None = None,
     return entry
 
 
+# demo.html links to these two ids by fixed name -- not the `title-hex` ids
+# ingest() generates -- so it can point at a fixed URL. Each is backed by
+# Track A's own committed bundle (checked into git, unlike guidelines/
+# itself, which is gitignored runtime data).
+_DEMO_SEEDS = [("pmc12355350", "PMC12355350"), ("pmc13270348", "PMC13270348")]
+
+
+def seed_demo_guidelines() -> None:
+    """Register demo.html's two fixed-id guidelines from their committed
+    bundles, if this machine's local store doesn't have them yet.
+
+    Without this, "no setup" (CHECKER.md's own description of the demo
+    page) was only true on whichever machine happened to have someone run
+    register_bundle() by hand at some point -- a fresh clone 404s on
+    GET /guidelines/pmc12355350 instead. Skips (rather than re-registering)
+    an id that is already present, so this costs nothing on every normal
+    startup after the first."""
+    existing = {e.get("id") for e in _load_index()}
+    for guideline_id, doc_id in _DEMO_SEEDS:
+        if guideline_id in existing:
+            continue
+        bundle_path = Path(__file__).parent / f"bundle.{doc_id}.json"
+        if not bundle_path.exists():
+            continue
+        try:
+            register_bundle(str(bundle_path), title=doc_id, guideline_id=guideline_id)
+        except Exception as exc:  # a broken seed must not block the server starting
+            print(f"[warn] could not seed demo guideline {guideline_id!r}: {exc}")
+
+
 def delete_guideline(guideline_id: str) -> dict:
     """Remove an uploaded guideline: its index entry, its bundle, and the raw
     upload kept for reprocessing. The fixture set is built in, not stored, so
