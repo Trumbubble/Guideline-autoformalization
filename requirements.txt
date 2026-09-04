@@ -3,4 +3,9 @@ flask
 lxml
 pymupdf
 anthropic
+numpy  # loads/searches the precomputed semantic embedding indices
 # docling  -- optional, PDF layout-model path only; pulls torch. Lazy-imported.
+# torch + transformers + sentence-transformers -- optional, only needed to
+# EMBED a live query against the biomedical model; search over the precomputed
+# indices needs only numpy above. Absence degrades to lexical-only retrieval
+# via SemanticUnavailable (bind.py), not a crash. Lazy-imported.

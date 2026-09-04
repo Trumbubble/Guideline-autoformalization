@@ -410,35 +410,46 @@ have claimed $68.8\%$ and overstated by nearly a third.
 \label{sec:limits}
 \budget{0.25 pp --- flat, no hedging}
 
-\note{SHORT AND BLUNT. Reviewers reward this and it costs almost nothing.
-\begin{itemize}
-  \item \texttt{cql-to-elm} has never run, so ``compiles'' means brackets balance
-        and names resolve. Nothing has executed against a FHIR bundle.
-  \item No clinician has adjudicated anything. The gold labels are ours.
-  \item Corpus is 9 open-access guidelines; PMC OA over-represents journals that
-        publish structured recommendation abstracts. NICE, KDIGO and ACC/AHA are
-        not open access. State the sampling frame.
-  \item Physiological ranges are the caller's to supply and the live pipeline
-        supplies none, so on a Track A rule the unit-slip warning cannot fire and
-        the solver may return a counterexample at eGFR = 2.0. (Small fix: a
-        lookup table keyed by binding code, threaded into one call.)
-  \item There is no reference corpus with ground truth for this task. AHRQ CDS
-        Connect is not a rules artefact and eCQMs are cohort definitions rather
-        than recommendations. \textbf{This is a finding, not an apology} --- one
-        sentence, and it pre-empts ``why didn't you evaluate against X''.
-\end{itemize}}
+The real HL7 \texttt{cql-to-elm} translator and the Node \texttt{cql-execution}
+engine compile and execute for real: \texttt{test\_toolchain.py} runs a
+prose-derived rule through the whole chain, CQL to ELM to a verdict, against a
+shipped FHIR bundle, using the actual compiler rather than a syntax check. What
+this does not cover is narrower: the live upload path writes a bundle's CQL
+directly and never invokes that compiler --- \texttt{dsl.write\_bundle} takes
+already-formed rules and has no \texttt{compiler=} argument, unlike
+\texttt{cql.synthesize}'s repair loop, which does and is only exercised in
+tests. A rule generated from an uploaded guideline is therefore never itself
+compiled or executed; only the toolchain's own fixtures have been.
 
-\note{END ON THE REPRODUCIBILITY LINE --- it is a genuine asset and almost nobody
-offers it. \texttt{cassette.py} and \texttt{test\_replay.py} record one real
-run's model responses and replay the full pipeline offline, so a reviewer can
-reproduce it \emph{with no API key}. A stale tape skips rather than passes.
-Current state: 291 tests pass offline.}
+No clinician has reviewed any rule this system has produced, or the criteria
+by which one might be judged faithful. The corpus is nine open-access
+guidelines; PMC Open Access over-represents journals that publish structured,
+GRADE-style recommendation abstracts \citep{grade}, and guidelines that are
+not open access (NICE, KDIGO, ACC/AHA) are absent by construction, not by
+sampling. Physiological ranges are the caller's to supply, and the live
+pipeline currently supplies none, so a live-encoded rule is checked against a
+weaker domain theory than the generated rules of Section~\ref{sec:necessity}
+--- a unit slip cannot be caught, and the solver may return a counterexample
+at a value no clinician would consider physiologically possible. There is no
+reference corpus with ground truth for this task: AHRQ's CDS Connect
+\citep{cdsconnect} publishes decision-support artefacts, not a labelled set of
+guideline sentences and the rules they should become, and an electronic
+Clinical Quality Measure \citep{cql} is a cohort definition against a
+population, not a per-patient recommendation with a source sentence to be
+faithful to. This is a property of the field's existing artefacts, not a gap
+we declined to fill.
+
+\texttt{cassette.py} and \texttt{test\_replay.py} record one real run's model
+responses and replay the full pipeline offline, so a reviewer can reproduce it
+with no API key; a tape that no longer matches the code skips rather than
+passes. Current state: 325 tests pass offline, 2 skipped.
 
 \ifdraftmode
 \begin{cmds}
 cd "CQL_converter"
 python3 -m pytest test_dsl.py test_bind.py test_segment.py \
                   test_gate.py test_cql.py -q      # offline, no key
+python3 -m pytest test_toolchain.py -q             # real cql-to-elm + engine
 python3 -m pytest test_replay.py -q                # replays a real run
 \end{cmds}
 \fi
