@@ -199,6 +199,14 @@
   .status.error { color: var(--must); }
   .status.ok { color: var(--certified); }
   .loading { color: var(--muted); font-size: 0.9rem; }
+
+  .progress-wrap { display: none; margin-top: 0.8rem; }
+  .progress-wrap.active { display: block; }
+  .progress-wrap progress {
+    width: 100%; height: 8px; border-radius: 999px; overflow: hidden;
+    accent-color: var(--accent); border: none; background: var(--border);
+  }
+  .progress-label { font-size: 0.78rem; color: var(--muted); margin-top: 0.35rem; }
 </style>
 </head>
 <body>
@@ -257,6 +265,10 @@
     </div>
 
     <div id="upload-status" class="status"></div>
+    <div id="progress-wrap" class="progress-wrap">
+      <progress id="progress-bar" max="1" value="0"></progress>
+      <div id="progress-label" class="progress-label"></div>
+    </div>
 
     <div class="modal-actions">
       <button type="button" class="secondary" id="cancel-btn">Cancel</button>
@@ -274,6 +286,9 @@ const liveCheckbox = document.getElementById("live");
 const keyPanel = document.getElementById("key-panel");
 const keyInput = document.getElementById("api-key");
 const keyHint = document.getElementById("key-hint");
+const progressWrap = document.getElementById("progress-wrap");
+const progressBar = document.getElementById("progress-bar");
+const progressLabel = document.getElementById("progress-label");
 
 const API_KEY_STORAGE = "gf_anthropic_api_key";
 
@@ -391,6 +406,55 @@ function closeModal() {
   backdrop.classList.remove("open");
 }
 
+function showProgress(done, total) {
+  progressWrap.classList.add("active");
+  progressBar.max = total || 1;
+  progressBar.value = done;
+  const pct = total ? Math.round((100 * done) / total) : 0;
+  progressLabel.textContent =
+    `${done} / ${total} statement${total === 1 ? "" : "s"} formalized (${pct}%)`;
+}
+
+function hideProgress() {
+  progressWrap.classList.remove("active");
+}
+
+// A live run is one statement at a time, each a real model round trip -- a
+// full document can be a few hundred of those, easily minutes with nothing
+// to show for it. Polls /guidelines/<id>/progress until the background
+// thread guidelines.py started reports done or error, updating the bar as
+// it goes. Resolves with the finished entry (same shape a synchronous
+// upload always returned); throws on failure or on losing track of it.
+async function pollProgress(guidelineId) {
+  while (true) {
+    const response = await fetch(`/guidelines/${encodeURIComponent(guidelineId)}/progress`);
+    if (!response.ok) {
+      hideProgress();
+      throw new Error("lost track of this upload's progress -- check the guideline list");
+    }
+    const data = await response.json();
+    if (data.status === "finalizing") {
+      // Every statement has been formalized; the bundle's shared vocabulary
+      // is being rebuilt from them, which is more real model calls but not
+      // ones this loop counts individually -- so the bar holds at 100%
+      // rather than pretending nothing is happening.
+      progressBar.value = progressBar.max;
+      progressLabel.textContent = "Finalizing the registry and writing the bundle…";
+    } else {
+      showProgress(data.done ?? 0, data.total ?? 0);
+    }
+    if (data.status === "done") {
+      hideProgress();
+      return data.result;
+    }
+    if (data.status === "error") {
+      hideProgress();
+      throw new Error(data.error || "processing failed");
+    }
+    await new Promise((resolve) => setTimeout(resolve, 900));
+  }
+}
+
 document.querySelectorAll(".tab-btn").forEach((btn) => {
   btn.addEventListener("click", () => {
     document.querySelectorAll(".tab-btn").forEach((b) => b.classList.remove("active"));
@@ -453,8 +517,14 @@ async function submitUpload() {
 
   try {
     const response = await fetch("/guidelines", { method: "POST", body: form });
-    const data = await response.json();
+    let data = await response.json();
     if (!response.ok) throw new Error(data.error || "upload failed");
+
+    if (data.status === "processing") {
+      statusEl.textContent = "Formalizing live -- this is one model call chain per statement, so a real document can take a while.";
+      showProgress(0, data.total);
+      data = await pollProgress(data.id);
+    }
 
     statusEl.className = "status ok";
     const bits = [`${data.statements ?? "?"} statement(s) found`, `${data.rule_count} rule(s) encoded`];
@@ -465,6 +535,7 @@ async function submitUpload() {
     await loadGuidelines();
     setTimeout(closeModal, 1400);
   } catch (err) {
+    hideProgress();
     statusEl.className = "status error";
     statusEl.textContent = err.message;
   } finally {
@@ -487,8 +558,14 @@ async function submitProcess() {
       `/guidelines/${encodeURIComponent(processTarget.id)}/process`,
       { method: "POST", body: form }
     );
-    const data = await response.json();
+    let data = await response.json();
     if (!response.ok) throw new Error(data.error || "processing failed");
+
+    if (data.status === "processing") {
+      statusEl.textContent = "Formalizing live -- this is one model call chain per statement, so a real document can take a while.";
+      showProgress(0, data.total);
+      data = await pollProgress(data.id);
+    }
 
     statusEl.className = "status ok";
     const bits = [`${data.rule_count} rule(s) encoded`];
@@ -499,6 +576,7 @@ async function submitProcess() {
     await loadGuidelines();
     setTimeout(closeModal, 1400);
   } catch (err) {
+    hideProgress();
     statusEl.className = "status error";
     statusEl.textContent = err.message;
   } finally {

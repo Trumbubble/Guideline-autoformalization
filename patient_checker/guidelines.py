@@ -12,6 +12,7 @@ import re
 import shutil
 import sys
 import tempfile
+import threading
 import time
 import uuid
 from pathlib import Path
@@ -35,6 +36,38 @@ FIXTURES_ID = "fixtures"
 class IngestError(RuntimeError):
     """Raised rather than returning an empty bundle -- a failed upload must
     not look like a guideline with zero rules."""
+
+
+# ------------------------------------------------------------ live progress
+#
+# A live ingest can run to hundreds of sequential model calls (one
+# statement's worth of the pipeline is a REST round trip, not a function
+# call), so it runs in a background thread and reports progress here rather
+# than blocking the request for as long as it takes. Keyed by guideline_id;
+# an entry is consumed (and removed) the first time a client reads a
+# terminal status, so this never accumulates finished runs forever.
+_PROGRESS_LOCK = threading.Lock()
+_PROGRESS: dict[str, dict] = {}
+
+
+def _progress_set(guideline_id: str, **fields) -> None:
+    with _PROGRESS_LOCK:
+        _PROGRESS.setdefault(guideline_id, {}).update(fields)
+
+
+def get_progress(guideline_id: str) -> dict | None:
+    """A snapshot of a tracked live ingest, or None -- either this id was
+    never run through the tracked (live) path, or a caller already consumed
+    its terminal status. Not the source of truth for a finished guideline;
+    that's always the stored bundle, read through get_guideline()."""
+    with _PROGRESS_LOCK:
+        state = _PROGRESS.get(guideline_id)
+        if state is None:
+            return None
+        snapshot = dict(state)
+        if snapshot.get("status") in ("done", "error"):
+            del _PROGRESS[guideline_id]
+        return snapshot
 
 
 def _load_index() -> list:
@@ -242,6 +275,12 @@ def ingest(title: str, *, file_bytes=None, filename=None, text=None,
     ANTHROPIC_API_KEY, either already in the server's environment or passed
     per-call as `api_key` (e.g. typed into the browser), which is used only
     for this call and never persisted -- see `_temporary_api_key`.
+
+    live=False returns the finished entry, same as always. live=True instead
+    returns {"id", "status": "processing", "total"} immediately and runs the
+    actual per-statement work in a background thread -- a real document can
+    be a few hundred sequential model calls, which is not a request any
+    caller should sit blocked on. Poll get_progress(guideline_id) for status.
     """
     if not (file_bytes or text):
         raise IngestError("no document provided")
@@ -258,7 +297,9 @@ def reprocess(guideline_id: str, *, api_key: str | None = None) -> dict:
     had no way to go back and process it with the model" (the raw content
     ingest() saves via `_raw_source_path` is what makes this possible; a
     guideline registered from a Track A bundle via `register_bundle` has no
-    raw upload behind it and can't be reprocessed this way)."""
+    raw upload behind it and can't be reprocessed this way). Always live, so
+    always backgrounded -- see ingest()'s docstring for the returned shape
+    and get_progress()."""
     meta = next((e for e in _load_index() if e["id"] == guideline_id), None)
     if meta is None:
         raise IngestError(f"unknown guideline {guideline_id!r}")
@@ -282,6 +323,10 @@ def reprocess(guideline_id: str, *, api_key: str | None = None) -> dict:
 def _ingest_into(guideline_id: str, title: str, *, file_bytes=None,
                  filename=None, text=None, live: bool = False,
                  api_key: str | None = None) -> dict:
+    """Fast part only: extract text, segment it, and either run the rest
+    inline (live=False -- no model calls, so there's nothing worth tracking)
+    or hand it to a background thread and return a 'processing' marker the
+    caller can poll get_progress() against (live=True -- see _run_ingest)."""
     blocks = _blocks_for_upload(
         guideline_id, file_bytes=file_bytes, filename=filename, text=text
     )
@@ -297,6 +342,27 @@ def _ingest_into(guideline_id: str, title: str, *, file_bytes=None,
 
     stmts, manifest = segment.segment(blocks, guideline_id)
 
+    if not live:
+        return _run_ingest(guideline_id, title, filename, live, api_key,
+                           stmts, manifest)
+
+    total = len(stmts)
+    _progress_set(guideline_id, done=0, total=total, status="processing")
+    threading.Thread(
+        target=_run_ingest_tracked,
+        args=(guideline_id, title, filename, live, api_key, stmts, manifest),
+        daemon=True,
+    ).start()
+    return {"id": guideline_id, "status": "processing", "total": total}
+
+
+def _run_ingest(guideline_id, title, filename, live, api_key, stmts,
+                manifest, *, track: bool = False) -> dict:
+    """The actual pipeline run: gate.triage per statement, then the bundle
+    write. Identical to what this function used to do inline; the only
+    change is the `track` flag, which reports each statement's completion
+    to _PROGRESS so a poller can watch it happen instead of getting one
+    result at the end."""
     mention_llm = select_llm = formalize = None
     if live:
         import llm
@@ -305,15 +371,18 @@ def _ingest_into(guideline_id: str, title: str, *, file_bytes=None,
         formalize = lambda t, r: llm.formalize(t, r, effort="medium")
 
     index = _build_index(live)
+    total = len(stmts)
     with _temporary_api_key(api_key if live else None):
-        triages = [
-            gate.triage(
+        triages = []
+        for i, s in enumerate(stmts):
+            triages.append(gate.triage(
                 s.text, index, statement_id=s.statement_id,
                 mention_llm=mention_llm, select_llm=select_llm, formalize=formalize,
                 source_page=s.prov.page, source_span=s.text,
-            )
-            for s in stmts
-        ]
+            ))
+            if track:
+                _progress_set(guideline_id, done=i + 1, total=total,
+                              status="processing")
 
         rules, refusals = [], []
         needs_model = 0
@@ -327,6 +396,14 @@ def _ingest_into(guideline_id: str, title: str, *, file_bytes=None,
             elif t.decision == "encode":
                 needs_model += 1  # binder evidence alone can't say encode or refuse
 
+        # _merged_registry re-binds every encodable statement to build the
+        # bundle's vocabulary (see its own docstring) -- real model calls,
+        # same as the loop above, just not one-per-statement-visible the
+        # same way. Without this, progress looks stalled at 100% for
+        # however long this takes, which is exactly the "is it stuck?"
+        # question tracking exists to answer.
+        if track:
+            _progress_set(guideline_id, status="finalizing")
         reg = _merged_registry(triages, index, mention_llm, select_llm)
 
     if live and not rules and _looks_like_auth_failure(refusals):
@@ -368,6 +445,18 @@ def _ingest_into(guideline_id: str, title: str, *, file_bytes=None,
     entries.append(entry)
     _save_index(entries)
     return entry
+
+
+def _run_ingest_tracked(guideline_id, title, filename, live, api_key,
+                        stmts, manifest) -> None:
+    """Thread target: _run_ingest with tracking on, reporting its outcome
+    to _PROGRESS instead of returning/raising to a caller that isn't there."""
+    try:
+        entry = _run_ingest(guideline_id, title, filename, live, api_key,
+                            stmts, manifest, track=True)
+        _progress_set(guideline_id, status="done", result=entry)
+    except Exception as exc:  # a background thread has no caller to raise to
+        _progress_set(guideline_id, status="error", error=str(exc))
 
 
 def register_bundle(bundle_path, title: str | None = None,

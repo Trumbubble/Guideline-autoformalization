@@ -248,14 +248,18 @@ def upload_guideline():
     except Exception as error:  # a bad upload must not take the app down
         return jsonify({"error": f"ingestion failed: {error}"}), 502
 
-    return jsonify(entry), 201
+    # live=True: guidelines.ingest() has handed off to a background thread
+    # and entry is {"id", "status": "processing", "total"} -- 202 says so.
+    # live=False: entry is the finished record, same as before -- 201.
+    return jsonify(entry), (202 if entry.get("status") == "processing" else 201)
 
 
 @app.post("/guidelines/<guideline_id>/process")
 def process_guideline(guideline_id):
     """Reprocess an existing guideline live, against its original upload --
     the other half of upload_guideline() for a guideline that was first
-    uploaded without 'process live' checked and came back with zero rules."""
+    uploaded without 'process live' checked and came back with zero rules.
+    Always live, so always backgrounded -- see upload_guideline()."""
     is_json = request.is_json
     json_body = (request.get_json(silent=True) if is_json else None) or {}
     api_key = (request.form.get("api_key") or json_body.get("api_key") or "").strip() or None
@@ -267,7 +271,20 @@ def process_guideline(guideline_id):
     except Exception as error:  # a bad reprocess must not take the app down
         return jsonify({"error": f"reprocessing failed: {error}"}), 502
 
-    return jsonify(entry), 200
+    return jsonify(entry), 202
+
+
+@app.get("/guidelines/<guideline_id>/progress")
+def guideline_progress(guideline_id):
+    """Poll target for a backgrounded live ingest/reprocess: {done, total,
+    status}, plus 'result' (the finished entry) once status is 'done', or
+    'error' once it's 'error'. 404 once that terminal status has been read
+    once -- see guidelines.get_progress -- or if this id was never run
+    through the tracked (live) path at all."""
+    progress = guidelines.get_progress(guideline_id)
+    if progress is None:
+        return jsonify({"error": f"no live progress tracked for {guideline_id!r}"}), 404
+    return jsonify(progress)
 
 
 @app.get("/guidelines/<guideline_id>")
@@ -475,4 +492,7 @@ def health():
 
 
 if __name__ == "__main__":
-    app.run(port=8000, debug=False)
+    # threaded=True: a live upload's background thread runs for as long as
+    # the document takes, and the polling GETs against /progress need to be
+    # served concurrently with it rather than queued behind it.
+    app.run(port=8000, debug=False, threaded=True)

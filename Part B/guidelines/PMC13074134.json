@@ -1,0 +1,255 @@
+{
+ "bundle_version": "1",
+ "registry": {
+  "variables": [
+   {
+    "name": "carbohydrate_intake",
+    "type": "bool",
+    "unit": null,
+    "description": "Carbohydrate intake",
+    "binding": "http://snomed.info/sct|788472008|20260801",
+    "role": "action",
+    "plausible": null,
+    "codes": [
+     "1003628003",
+     "1003629006",
+     "1003630001",
+     "1003631002",
+     "1144650008",
+     "1144651007",
+     "1144652000",
+     "1144653005",
+     "1144654004",
+     "1144656002",
+     "1144657006",
+     "1144658001",
+     "1144666005",
+     "1148639001",
+     "1179046006",
+     "1179047002",
+     "226340000",
+     "226341001",
+     "226342008",
+     "226343003",
+     "226344009",
+     "226345005",
+     "226346006",
+     "286586005",
+     "286635008",
+     "787764007",
+     "787765008",
+     "787766009",
+     "788472008",
+     "788654007",
+     "789305003",
+     "789306002",
+     "789308001",
+     "865943008",
+     "866010004",
+     "868237000",
+     "894129001",
+     "894131005",
+     "894139007",
+     "894140009",
+     "926353005",
+     "926354004"
+    ],
+    "unbound": false
+   },
+   {
+    "name": "has_depending_carbohydrate_intake",
+    "type": "bool",
+    "unit": null,
+    "description": "Depending on the carbohydrate intake",
+    "binding": null,
+    "role": "observation",
+    "plausible": null,
+    "codes": [],
+    "unbound": true
+   },
+   {
+    "name": "has_start_lrd",
+    "type": "bool",
+    "unit": null,
+    "description": "at start LRD",
+    "binding": null,
+    "role": "observation",
+    "plausible": null,
+    "codes": [],
+    "unbound": true
+   },
+   {
+    "name": "on_basal_insulin",
+    "type": "bool",
+    "unit": null,
+    "description": "Insulin, Long-Acting",
+    "binding": "http://www.whocc.no/atc|D049528",
+    "role": "action",
+    "plausible": null,
+    "codes": [],
+    "unbound": false
+   },
+   {
+    "name": "on_basal_insulin_dose",
+    "type": "real",
+    "unit": null,
+    "description": "Insulin, Long-Acting dose",
+    "binding": "http://www.whocc.no/atc|D049528",
+    "role": "action",
+    "plausible": null,
+    "codes": [],
+    "unbound": false
+   }
+  ],
+  "events": [
+   {
+    "name": "on_basal_insulin",
+    "description": "",
+    "binding": null
+   }
+  ]
+ },
+ "rules": [
+  {
+   "rule_id": "PMC13074134:0010",
+   "when": {
+    "kind": "and",
+    "operands": [
+     {
+      "kind": "cmp",
+      "var": "has_start_lrd",
+      "op": "==",
+      "value": true
+     },
+     {
+      "kind": "cmp",
+      "var": "on_basal_insulin",
+      "op": "==",
+      "value": true
+     }
+    ]
+   },
+   "then": {
+    "kind": "delta",
+    "var": "on_basal_insulin_dose",
+    "baseline": "on_basal_insulin",
+    "direction": "reduce",
+    "lo_pct": 0.5,
+    "hi_pct": null
+   },
+   "action": "recommend",
+   "target": "basal insulin dose",
+   "strength": null,
+   "deontic": "obligation",
+   "source_page": null,
+   "source_span": "Action: Reduce basal insulin by 50% at start LRD. May need optimisation Depending on the carbohydrate intake, consider holding fast\u2010acting mealtime insulin or reduce dose by 50% Consideration should be given to the overall glycaemic control and insulin requirements which govern dose adjustment to optimise glycaemic control"
+  }
+ ],
+ "refusals": [
+  {
+   "rule_id": "PMC13074134:0018",
+   "reason_code": "unbound_concept",
+   "reason_text": "no terminology binding for 'Basal insulin regimen' (drug_class): The phrase denotes long-acting/basal insulin products specifically; no candidate captures that. 'Insulin' (SNOMED 67866001) and 'Human insulin' are too broad/incorrect (the list includes analogues such as glargine and degludec), and the regimen value sets are unrelated (gender-affirming, transplant prep, myeloma).; no terminology binding for 'liver reduction diet (LRD)' (procedure): A liver reduction diet is a specific pre-bariatric-surgery low-calorie/low-carbohydrate diet intended to shrink hepatic volume; none of the candidates denote it. 'Weight reduction diet' and 'Dietary advice for weight reduction' are related but not the same concept (LRD's purpose is hepatic size reduction before surgery, and advice differs from the diet itself), and 'Dietary advice for liver disease' concerns hepatic disease management. Under-determined, so abstaining.; no terminology binding for 'glycaemic control' (lab): 'Glycaemic control' here is a general clinical concept (overall glucose control status), not a specific laboratory measurement; candidates are either a finding of poor control or specific glucose test methods, none of which the sentence settles on.; the change in 'on_abasaglar_dose' is measured from 'on_abasaglar', which is the same concept; the change in 'on_humulin_i_dose' is measured from 'on_humulin_i', which is the same concept; the change in 'on_insulatard_dose' is measured from 'on_insulatard', which is the same concept; the change in 'on_lantus_dose' is measured from 'on_lantus', which is the same concept; the change in 'on_levemir_dose' is measured from 'on_levemir', which is the same concept; the change in 'on_semglee_dose' is measured from 'on_semglee', which is the same concept; the change in 'on_toujeo_dose' is measured from 'on_toujeo', which is the same concept; the change in 'on_tresiba_dose' is measured from 'on_tresiba', which is the same concept; 'on_abasaglar_dose_at_on_abasaglar' is an unbound predicate the guideline states but does not define; 'on_humulin_i_dose_at_on_humulin_i' is an unbound predicate the guideline states but does not define; 'on_insulatard_dose_at_on_insulatard' is an unbound predicate the guideline states but does not define; 'on_lantus_dose_at_on_lantus' is an unbound predicate the guideline states but does not define; 'on_levemir_dose_at_on_levemir' is an unbound predicate the guideline states but does not define; 'on_semglee_dose_at_on_semglee' is an unbound predicate the guideline states but does not define; 'on_toujeo_dose_at_on_toujeo' is an unbound predicate the guideline states but does not define; 'on_tresiba_dose_at_on_tresiba' is an unbound predicate the guideline states but does not define; 3 concept(s) did not bind, so a strict encoding may have silently omitted them; retrying with them declared as holes; bound but not used in the rule: has_type_2_diabetes -- an outcome may legitimately be unused, a dropped population restriction may not; decoder could emit [and, between, cmp, delta, not, or, since] over vars [has_type_2_diabetes, on_abasaglar, on_abasaglar_dose, on_humulin_i, on_humulin_i_dose, on_insulatard, on_insulatard_dose, on_lantus, on_lantus_dose, on_levemir, on_levemir_dose, on_semglee, on_semglee_dose, on_toujeo, on_toujeo_dose, on_tresiba, on_tresiba_dose] and events [on_abasaglar, on_humulin_i, on_insulatard, on_lantus, on_levemir, on_semglee, on_toujeo, on_tresiba]",
+   "source_page": null,
+   "source_span": "Class of medication: Basal insulin regimen; (not exhaustive list): Abasaglar\u00ae (once or twice daily), Humulin\u2010I\u00ae (once or twice daily), Insulatard\u00ae (once or twice daily), Lantus\u00ae (once or twice daily), Levemir\u00ae (once or twice daily), Semglee\u00ae (once or twice daily), Toujeo\u00ae (once daily), Tresiba\u00ae (once daily); Action: Reduce dose by 35\u201350% of pre\u2010liver reduction diet (LRD) dose. Consider further reduction or discontinuation in those with type 2 diabetes. Consideration should be given to the individual's glycaemic control and insulin requirements which govern dose adjustment to optimise glycaemic control",
+   "confidence": 0.0,
+   "undefined_predicates": [],
+   "evidence": [
+    "[binder/unbound_unselected] no terminology binding for 'Basal insulin regimen' (drug_class): The phrase denotes long-acting/basal insulin products specifically; no candidate captures that. 'Insulin' (SNOMED 67866001) and 'Human insulin' are too broad/incorrect (the list includes analogues such as glargine and degludec), and the regimen value sets are unrelated (gender-affirming, transplant prep, myeloma).",
+    "[binder/unbound_unselected] no terminology binding for 'liver reduction diet (LRD)' (procedure): A liver reduction diet is a specific pre-bariatric-surgery low-calorie/low-carbohydrate diet intended to shrink hepatic volume; none of the candidates denote it. 'Weight reduction diet' and 'Dietary advice for weight reduction' are related but not the same concept (LRD's purpose is hepatic size reduction before surgery, and advice differs from the diet itself), and 'Dietary advice for liver disease' concerns hepatic disease management. Under-determined, so abstaining.",
+    "[binder/unbound_unselected] no terminology binding for 'glycaemic control' (lab): 'Glycaemic control' here is a general clinical concept (overall glucose control status), not a specific laboratory measurement; candidates are either a finding of poor control or specific glucose test methods, none of which the sentence settles on.",
+    "[validator/CIRCULAR_BASELINE] the change in 'on_abasaglar_dose' is measured from 'on_abasaglar', which is the same concept",
+    "[validator/CIRCULAR_BASELINE] the change in 'on_humulin_i_dose' is measured from 'on_humulin_i', which is the same concept",
+    "[validator/CIRCULAR_BASELINE] the change in 'on_insulatard_dose' is measured from 'on_insulatard', which is the same concept",
+    "[validator/CIRCULAR_BASELINE] the change in 'on_lantus_dose' is measured from 'on_lantus', which is the same concept",
+    "[validator/CIRCULAR_BASELINE] the change in 'on_levemir_dose' is measured from 'on_levemir', which is the same concept",
+    "[validator/CIRCULAR_BASELINE] the change in 'on_semglee_dose' is measured from 'on_semglee', which is the same concept",
+    "[validator/CIRCULAR_BASELINE] the change in 'on_toujeo_dose' is measured from 'on_toujeo', which is the same concept",
+    "[validator/CIRCULAR_BASELINE] the change in 'on_tresiba_dose' is measured from 'on_tresiba', which is the same concept",
+    "[validator/OPEN_HOLE] 'on_abasaglar_dose_at_on_abasaglar' is an unbound predicate the guideline states but does not define",
+    "[validator/OPEN_HOLE] 'on_humulin_i_dose_at_on_humulin_i' is an unbound predicate the guideline states but does not define",
+    "[validator/OPEN_HOLE] 'on_insulatard_dose_at_on_insulatard' is an unbound predicate the guideline states but does not define",
+    "[validator/OPEN_HOLE] 'on_lantus_dose_at_on_lantus' is an unbound predicate the guideline states but does not define",
+    "[validator/OPEN_HOLE] 'on_levemir_dose_at_on_levemir' is an unbound predicate the guideline states but does not define",
+    "[validator/OPEN_HOLE] 'on_semglee_dose_at_on_semglee' is an unbound predicate the guideline states but does not define",
+    "[validator/OPEN_HOLE] 'on_toujeo_dose_at_on_toujeo' is an unbound predicate the guideline states but does not define",
+    "[validator/OPEN_HOLE] 'on_tresiba_dose_at_on_tresiba' is an unbound predicate the guideline states but does not define",
+    "[gate/DROPPED_CONCEPT_RISK] 3 concept(s) did not bind, so a strict encoding may have silently omitted them; retrying with them declared as holes",
+    "[gate/UNUSED_BOUND_CONCEPT] bound but not used in the rule: has_type_2_diabetes -- an outcome may legitimately be unused, a dropped population restriction may not",
+    "[gate/GRAMMAR_OFFERED] decoder could emit [and, between, cmp, delta, not, or, since] over vars [has_type_2_diabetes, on_abasaglar, on_abasaglar_dose, on_humulin_i, on_humulin_i_dose, on_insulatard, on_insulatard_dose, on_lantus, on_lantus_dose, on_levemir, on_levemir_dose, on_semglee, on_semglee_dose, on_toujeo, on_toujeo_dose, on_tresiba, on_tresiba_dose] and events [on_abasaglar, on_humulin_i, on_insulatard, on_lantus, on_levemir, on_semglee, on_toujeo, on_tresiba]"
+   ]
+  },
+  {
+   "rule_id": "PMC13074134:0019",
+   "reason_code": "unbound_concept",
+   "reason_text": "no terminology binding for 'Premixed insulin regimen' (drug_class): The phrase denotes premixed (biphasic) insulin products specifically; no candidate represents that class \"Insulin\" (SNOMED 67866001) is the generic substance, too broad, and the regimen value sets are unrelated (gender-affirming, myeloma, transplant prep). Abstaining.; the change in 'on_humalog_mix_25_dose' is measured from 'on_humalog_mix_25', which is the same concept; the change in 'on_humalog_mix_50_dose' is measured from 'on_humalog_mix_50', which is the same concept; the change in 'on_humulin_m3_dose' is measured from 'on_humulin_m3', which is the same concept; the change in 'on_novomix_30_dose' is measured from 'on_novomix_30', which is the same concept; 'on_humalog_mix_25_dose_at_on_humalog_mix_25' is an unbound predicate the guideline states but does not define; 'on_humalog_mix_50_dose_at_on_humalog_mix_50' is an unbound predicate the guideline states but does not define; 'on_humulin_m3_dose_at_on_humulin_m3' is an unbound predicate the guideline states but does not define; 'on_novomix_30_dose_at_on_novomix_30' is an unbound predicate the guideline states but does not define; 1 concept(s) did not bind, so a strict encoding may have silently omitted them; retrying with them declared as holes; bound but not used in the rule: has_hypoglycaemia, has_type_2_diabetes, on_basal_insulin, on_basal_insulin_dose -- an outcome may legitimately be unused, a dropped population restriction may not; decoder could emit [and, between, cmp, delta, not, or, since] over vars [has_hypoglycaemia, has_type_2_diabetes, on_basal_insulin, on_basal_insulin_dose, on_humalog_mix_25, on_humalog_mix_25_dose, on_humalog_mix_50, on_humalog_mix_50_dose, on_humulin_m3, on_humulin_m3_dose, on_novomix_30, on_novomix_30_dose] and events [on_basal_insulin, on_humalog_mix_25, on_humalog_mix_50, on_humulin_m3, on_novomix_30]",
+   "source_page": null,
+   "source_span": "Class of medication: Premixed insulin regimen; (not exhaustive list): Humalog Mix 25\u00ae, Humalog Mix 50\u00ae, Humulin M3\u00ae, Novomix 30\u00ae; Action: Reduce dose by 35%\u201350% of pre\u2010LRD dose. Consider further reduction or discontinuation in those with type 2 diabetes. Consideration should be given to the individual's glycaemic control and insulin requirements which govern dose adjustment to optimise glycaemic control Consider switching to a once\u2010a\u2010day basal insulin to avoid potential hypoglycaemia risk",
+   "confidence": 0.0,
+   "undefined_predicates": [],
+   "evidence": [
+    "[binder/unbound_unselected] no terminology binding for 'Premixed insulin regimen' (drug_class): The phrase denotes premixed (biphasic) insulin products specifically; no candidate represents that class \"Insulin\" (SNOMED 67866001) is the generic substance, too broad, and the regimen value sets are unrelated (gender-affirming, myeloma, transplant prep). Abstaining.",
+    "[validator/CIRCULAR_BASELINE] the change in 'on_humalog_mix_25_dose' is measured from 'on_humalog_mix_25', which is the same concept",
+    "[validator/CIRCULAR_BASELINE] the change in 'on_humalog_mix_50_dose' is measured from 'on_humalog_mix_50', which is the same concept",
+    "[validator/CIRCULAR_BASELINE] the change in 'on_humulin_m3_dose' is measured from 'on_humulin_m3', which is the same concept",
+    "[validator/CIRCULAR_BASELINE] the change in 'on_novomix_30_dose' is measured from 'on_novomix_30', which is the same concept",
+    "[validator/OPEN_HOLE] 'on_humalog_mix_25_dose_at_on_humalog_mix_25' is an unbound predicate the guideline states but does not define",
+    "[validator/OPEN_HOLE] 'on_humalog_mix_50_dose_at_on_humalog_mix_50' is an unbound predicate the guideline states but does not define",
+    "[validator/OPEN_HOLE] 'on_humulin_m3_dose_at_on_humulin_m3' is an unbound predicate the guideline states but does not define",
+    "[validator/OPEN_HOLE] 'on_novomix_30_dose_at_on_novomix_30' is an unbound predicate the guideline states but does not define",
+    "[gate/DROPPED_CONCEPT_RISK] 1 concept(s) did not bind, so a strict encoding may have silently omitted them; retrying with them declared as holes",
+    "[gate/UNUSED_BOUND_CONCEPT] bound but not used in the rule: has_hypoglycaemia, has_type_2_diabetes, on_basal_insulin, on_basal_insulin_dose -- an outcome may legitimately be unused, a dropped population restriction may not",
+    "[gate/GRAMMAR_OFFERED] decoder could emit [and, between, cmp, delta, not, or, since] over vars [has_hypoglycaemia, has_type_2_diabetes, on_basal_insulin, on_basal_insulin_dose, on_humalog_mix_25, on_humalog_mix_25_dose, on_humalog_mix_50, on_humalog_mix_50_dose, on_humulin_m3, on_humulin_m3_dose, on_novomix_30, on_novomix_30_dose] and events [on_basal_insulin, on_humalog_mix_25, on_humalog_mix_50, on_humulin_m3, on_novomix_30]"
+   ]
+  },
+  {
+   "rule_id": "lrd-basal-insulin-reduction",
+   "reason_code": "beyond_dsl",
+   "reason_text": "The core action is a relative dose change (reduce basal insulin by 35%-50% of the pre-LRD dose), which requires a delta construct and a basal_insulin_dose variable/LRD-start event; the available DSL exposes only comparisons on has_type_2_diabetes. The mealtime-insulin element is additionally permissive and governed by unstated individual glycaemic-control/insulin-requirement judgement.",
+   "source_page": null,
+   "source_span": "Reduce basal insulin dose by 35%\u201350% of pre\u2010LRD dose. Consider further reduction or discontinuation of fast\u2010acting mealtime insulin in those with type 2 diabetes.",
+   "confidence": 0.9,
+   "undefined_predicates": [
+    "Reduce basal insulin dose by 35%\u201350% of pre\u2010LRD dose",
+    "Consider further reduction or discontinuation of fast\u2010acting mealtime insulin",
+    "Consideration should be given to the individual's glycaemic control and insulin requirements"
+   ],
+   "evidence": [
+    "No dose variable or delta leaf kind exists in the schema",
+    "Discretionary individualisation cannot be expressed"
+   ]
+  },
+  {
+   "rule_id": "PMC13074134:0008",
+   "reason_code": "unbound_concept",
+   "reason_text": "no terminology binding for 'Basal insulin regimens' (drug_class): The phrase denotes the class of long-acting/intermediate-acting basal insulins (glargine, detemir, degludec, NPH). No candidate captures 'basal insulin' as a class: the transgender regimen value sets are irrelevant, insulin glargine and lispro are single specific agents (lispro is rapid-acting, the opposite of basal), and generic 'Insulin'/'Human insulin' are broader than basal regimens and would wrongly include prandial/mixed insulins. Abstaining rather than risking an over- or under-inclusive binding.; no terminology binding for 'LRD' (procedure): 'LRD' is an undefined local abbreviation; it could plausibly denote a low/reduced-carbohydrate diet (candidate 0) or a low-energy/calorie-restricted (total diet replacement) regimen (candidate 1), both of which warrant ~50% basal insulin reduction at initiation. The sentence gives no content to decide between carbohydrate restriction and energy restriction, so the concept is under-determined.; no terminology binding for 'glycaemic control' (lab): 'Glycaemic control' here is a general clinical concept (overall glucose management), not any specific glucose measurement test nor the finding 'poor glycaemic control'. The sentence does not specify which measurement (random, fasting, capillary, etc.), so no candidate is determined.; the change in 'on_abasaglar_dose' is measured from 'on_abasaglar', which is the same concept; the change in 'on_humulin_i_dose' is measured from 'on_humulin_i', which is the same concept; the change in 'on_insulatard_dose' is measured from 'on_insulatard', which is the same concept; the change in 'on_lantus_dose' is measured from 'on_lantus', which is the same concept; the change in 'on_levemir_dose' is measured from 'on_levemir', which is the same concept; the change in 'on_semglee_dose' is measured from 'on_semglee', which is the same concept; the change in 'on_toujeo_dose' is measured from 'on_toujeo', which is the same concept; the change in 'on_tresiba_dose' is measured from 'on_tresiba', which is the same concept; 'on_abasaglar_dose_at_on_abasaglar' is an unbound predicate the guideline states but does not define; 'on_humulin_i_dose_at_on_humulin_i' is an unbound predicate the guideline states but does not define; 'on_insulatard_dose_at_on_insulatard' is an unbound predicate the guideline states but does not define; 'on_lantus_dose_at_on_lantus' is an unbound predicate the guideline states but does not define; 'on_levemir_dose_at_on_levemir' is an unbound predicate the guideline states but does not define; 'on_semglee_dose_at_on_semglee' is an unbound predicate the guideline states but does not define; 'on_toujeo_dose_at_on_toujeo' is an unbound predicate the guideline states but does not define; 'on_tresiba_dose_at_on_tresiba' is an unbound predicate the guideline states but does not define; 3 concept(s) did not bind, so a strict encoding may have silently omitted them; retrying with them declared as holes; decoder could emit [and, between, cmp, delta, not, or, since] over vars [on_abasaglar, on_abasaglar_dose, on_humulin_i, on_humulin_i_dose, on_insulatard, on_insulatard_dose, on_lantus, on_lantus_dose, on_levemir, on_levemir_dose, on_semglee, on_semglee_dose, on_toujeo, on_toujeo_dose, on_tresiba, on_tresiba_dose] and events [on_abasaglar, on_humulin_i, on_insulatard, on_lantus, on_levemir, on_semglee, on_toujeo, on_tresiba]",
+   "source_page": null,
+   "source_span": "Class of medication: Basal insulin regimens; (not exhaustive list): Abasaglar\u00ae (once or twice daily), Humulin\u2010I\u00ae (once or twice daily), Insulatard\u00ae (once or twice daily), Lantus\u00ae (once or twice daily), Levemir\u00ae (once or twice daily), Semglee\u00ae (once or twice daily), Toujeo\u00ae (once daily), Tresiba\u00ae (once daily); Action: Reduce the total daily insulin dose by 50% at start LRD. May need optimisation Consideration should be given to the overall glycaemic control and insulin requirements which govern dose adjustment to optimise glycaemic control",
+   "confidence": 0.0,
+   "undefined_predicates": [],
+   "evidence": [
+    "[binder/unbound_unselected] no terminology binding for 'Basal insulin regimens' (drug_class): The phrase denotes the class of long-acting/intermediate-acting basal insulins (glargine, detemir, degludec, NPH). No candidate captures 'basal insulin' as a class: the transgender regimen value sets are irrelevant, insulin glargine and lispro are single specific agents (lispro is rapid-acting, the opposite of basal), and generic 'Insulin'/'Human insulin' are broader than basal regimens and would wrongly include prandial/mixed insulins. Abstaining rather than risking an over- or under-inclusive binding.",
+    "[binder/unbound_unselected] no terminology binding for 'LRD' (procedure): 'LRD' is an undefined local abbreviation; it could plausibly denote a low/reduced-carbohydrate diet (candidate 0) or a low-energy/calorie-restricted (total diet replacement) regimen (candidate 1), both of which warrant ~50% basal insulin reduction at initiation. The sentence gives no content to decide between carbohydrate restriction and energy restriction, so the concept is under-determined.",
+    "[binder/unbound_unselected] no terminology binding for 'glycaemic control' (lab): 'Glycaemic control' here is a general clinical concept (overall glucose management), not any specific glucose measurement test nor the finding 'poor glycaemic control'. The sentence does not specify which measurement (random, fasting, capillary, etc.), so no candidate is determined.",
+    "[validator/CIRCULAR_BASELINE] the change in 'on_abasaglar_dose' is measured from 'on_abasaglar', which is the same concept",
+    "[validator/CIRCULAR_BASELINE] the change in 'on_humulin_i_dose' is measured from 'on_humulin_i', which is the same concept",
+    "[validator/CIRCULAR_BASELINE] the change in 'on_insulatard_dose' is measured from 'on_insulatard', which is the same concept",
+    "[validator/CIRCULAR_BASELINE] the change in 'on_lantus_dose' is measured from 'on_lantus', which is the same concept",
+    "[validator/CIRCULAR_BASELINE] the change in 'on_levemir_dose' is measured from 'on_levemir', which is the same concept",
+    "[validator/CIRCULAR_BASELINE] the change in 'on_semglee_dose' is measured from 'on_semglee', which is the same concept",
+    "[validator/CIRCULAR_BASELINE] the change in 'on_toujeo_dose' is measured from 'on_toujeo', which is the same concept",
+    "[validator/CIRCULAR_BASELINE] the change in 'on_tresiba_dose' is measured from 'on_tresiba', which is the same concept",
+    "[validator/OPEN_HOLE] 'on_abasaglar_dose_at_on_abasaglar' is an unbound predicate the guideline states but does not define",
+    "[validator/OPEN_HOLE] 'on_humulin_i_dose_at_on_humulin_i' is an unbound predicate the guideline states but does not define",
+    "[validator/OPEN_HOLE] 'on_insulatard_dose_at_on_insulatard' is an unbound predicate the guideline states but does not define",
+    "[validator/OPEN_HOLE] 'on_lantus_dose_at_on_lantus' is an unbound predicate the guideline states but does not define",
+    "[validator/OPEN_HOLE] 'on_levemir_dose_at_on_levemir' is an unbound predicate the guideline states but does not define",
+    "[validator/OPEN_HOLE] 'on_semglee_dose_at_on_semglee' is an unbound predicate the guideline states but does not define",
+    "[validator/OPEN_HOLE] 'on_toujeo_dose_at_on_toujeo' is an unbound predicate the guideline states but does not define",
+    "[validator/OPEN_HOLE] 'on_tresiba_dose_at_on_tresiba' is an unbound predicate the guideline states but does not define",
+    "[gate/DROPPED_CONCEPT_RISK] 3 concept(s) did not bind, so a strict encoding may have silently omitted them; retrying with them declared as holes",
+    "[gate/GRAMMAR_OFFERED] decoder could emit [and, between, cmp, delta, not, or, since] over vars [on_abasaglar, on_abasaglar_dose, on_humulin_i, on_humulin_i_dose, on_insulatard, on_insulatard_dose, on_lantus, on_lantus_dose, on_levemir, on_levemir_dose, on_semglee, on_semglee_dose, on_toujeo, on_toujeo_dose, on_tresiba, on_tresiba_dose] and events [on_abasaglar, on_humulin_i, on_insulatard, on_lantus, on_levemir, on_semglee, on_toujeo, on_tresiba]"
+   ]
+  }
+ ]
+}

@@ -1,0 +1,62 @@
+[
+ {
+  "id": "PMC12355350",
+  "title": "PMC12355350",
+  "created_at": "2026-09-01T21:07:56Z",
+  "source_filename": "bundle.PMC12355350.json",
+  "live": true,
+  "statements": null,
+  "rule_count": 3,
+  "refusal_count": 2,
+  "needs_model_count": 0,
+  "rejected_count": 0
+ },
+ {
+  "id": "PMC13074134",
+  "title": "PMC13074134",
+  "created_at": "2026-09-01T21:07:56Z",
+  "source_filename": "bundle.PMC13074134.json",
+  "live": true,
+  "statements": null,
+  "rule_count": 0,
+  "refusal_count": 4,
+  "needs_model_count": 0,
+  "rejected_count": 1
+ },
+ {
+  "id": "PMC13131131",
+  "title": "PMC13131131",
+  "created_at": "2026-09-01T21:07:56Z",
+  "source_filename": "bundle.PMC13131131.json",
+  "live": true,
+  "statements": null,
+  "rule_count": 2,
+  "refusal_count": 3,
+  "needs_model_count": 0,
+  "rejected_count": 0
+ },
+ {
+  "id": "PMC13151662",
+  "title": "PMC13151662",
+  "created_at": "2026-09-01T21:07:56Z",
+  "source_filename": "bundle.PMC13151662.json",
+  "live": true,
+  "statements": null,
+  "rule_count": 2,
+  "refusal_count": 3,
+  "needs_model_count": 0,
+  "rejected_count": 0
+ },
+ {
+  "id": "PMC13270348",
+  "title": "PMC13270348",
+  "created_at": "2026-09-01T21:07:56Z",
+  "source_filename": "bundle.PMC13270348.json",
+  "live": true,
+  "statements": null,
+  "rule_count": 2,
+  "refusal_count": 3,
+  "needs_model_count": 0,
+  "rejected_count": 0
+ }
+]
