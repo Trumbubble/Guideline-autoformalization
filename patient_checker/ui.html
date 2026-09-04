@@ -3,6 +3,18 @@
 <head>
 <meta charset="utf-8">
 <title>Guideline checker</title>
+<script>
+// Set before the stylesheet paints, so a saved override never flashes the
+// wrong theme for a frame -- see the toggle logic at the bottom of the page.
+(function () {
+  try {
+    var saved = localStorage.getItem("gf_theme");
+    if (saved === "light" || saved === "dark") {
+      document.documentElement.setAttribute("data-theme", saved);
+    }
+  } catch (err) {}
+})();
+</script>
 <style>
   :root {
     color-scheme: light dark;
@@ -20,7 +32,7 @@
     --accent: #2757c9;
   }
   @media (prefers-color-scheme: dark) {
-    :root {
+    :root:not([data-theme="light"]) {
       --bg: #16171a;
       --panel: #1f2023;
       --text: #eaeaea;
@@ -32,6 +44,19 @@
       --accent: #6f97f0;
     }
   }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --bg: #16171a;
+    --panel: #1f2023;
+    --text: #eaeaea;
+    --muted: #9a9a9a;
+    --border: #35363a;
+    --must-bg: #3a1f1d;
+    --may-bg: #3a2f14;
+    --certified-bg: #163524;
+    --accent: #6f97f0;
+  }
+  :root[data-theme="light"] { color-scheme: light; }
   * { box-sizing: border-box; }
   body {
     margin: 0;
@@ -140,11 +165,24 @@
     background: var(--may-bg); border-radius: 999px; padding: 0.1rem 0.5rem;
     margin-left: 0.4rem; vertical-align: middle;
   }
+  .theme-toggle {
+    border: 1px solid var(--border);
+    background: var(--panel);
+    color: var(--muted);
+    border-radius: 999px;
+    padding: 0.35rem 0.7rem;
+    font-size: 0.78rem;
+    font-weight: 600;
+    cursor: pointer;
+    float: right;
+  }
+  .theme-toggle:hover { color: var(--accent); border-color: var(--accent); }
 </style>
 </head>
 <body>
 
 <header>
+  <button class="theme-toggle" id="theme-toggle" type="button">Dark mode</button>
   <a class="back-link" href="/">&larr; Dashboard</a>
   <h1 id="guideline-title">Guideline compliance checker</h1>
   <p class="meta" id="guideline-meta">Loading&hellip;</p>
@@ -404,6 +442,28 @@ async function loadRulesTable() {
     el.innerHTML = `<div class="error">Could not load the rule list: ${err.message}</div>`;
   }
 }
+
+const THEME_KEY = "gf_theme";
+
+function currentTheme() {
+  let saved = null;
+  try { saved = localStorage.getItem(THEME_KEY); } catch (err) {}
+  if (saved === "light" || saved === "dark") return saved;
+  return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+}
+
+function refreshThemeToggle() {
+  document.getElementById("theme-toggle").textContent =
+    currentTheme() === "dark" ? "Light mode" : "Dark mode";
+}
+
+document.getElementById("theme-toggle").addEventListener("click", () => {
+  const next = currentTheme() === "dark" ? "light" : "dark";
+  document.documentElement.setAttribute("data-theme", next);
+  try { localStorage.setItem(THEME_KEY, next); } catch (err) {}
+  refreshThemeToggle();
+});
+refreshThemeToggle();
 
 document.getElementById("check-btn").addEventListener("click", runCheck);
 exampleEl.addEventListener("change", (e) => loadExample(Number(e.target.value)));

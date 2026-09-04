@@ -251,6 +251,25 @@ def upload_guideline():
     return jsonify(entry), 201
 
 
+@app.post("/guidelines/<guideline_id>/process")
+def process_guideline(guideline_id):
+    """Reprocess an existing guideline live, against its original upload --
+    the other half of upload_guideline() for a guideline that was first
+    uploaded without 'process live' checked and came back with zero rules."""
+    is_json = request.is_json
+    json_body = (request.get_json(silent=True) if is_json else None) or {}
+    api_key = (request.form.get("api_key") or json_body.get("api_key") or "").strip() or None
+
+    try:
+        entry = guidelines.reprocess(guideline_id, api_key=api_key)
+    except guidelines.IngestError as error:
+        return jsonify({"error": str(error)}), 400
+    except Exception as error:  # a bad reprocess must not take the app down
+        return jsonify({"error": f"reprocessing failed: {error}"}), 502
+
+    return jsonify(entry), 200
+
+
 @app.get("/guidelines/<guideline_id>")
 def guideline_detail(guideline_id):
     found = guidelines.get_guideline(guideline_id)
