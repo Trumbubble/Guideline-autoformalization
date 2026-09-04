@@ -23,6 +23,19 @@ cp .env.example .env
 # guideline live -- the ten example rules work with no key at all)
 ```
 
+Optional, and only for the CQL half: the checker and the demo need none of
+it, but compiling a rule to ELM and executing it against a FHIR bundle uses
+HL7's Java translator and a Node engine.
+
+```sh
+cd patient_checker/engine && npm ci && cd ../..
+```
+
+Without it, `toolchain.available()` is False, `test_toolchain.py`'s two
+execution tests fail, and an upload records `compiler_available: false`
+rather than reporting its CQL as compiled -- an absent toolchain is never
+counted as a pass.
+
 ## Run it
 
 ```sh
@@ -34,6 +47,17 @@ cd "patient_checker"
 That's a dashboard of guidelines -- click one to check a patient against it,
 or use "+ Upload guideline" to formalize your own document. New here? Open
 `http://localhost:8000/demo` first for a 30-second live example, no setup.
+
+## Checking it works
+
+```sh
+cd CQL_converter
+python3 -m pytest -q        # 325 pass offline, no API key
+```
+
+The demo page's sample patients exercise the checker end to end in a browser:
+each button posts a real patient to `/guidelines/<id>/check` and shows the
+verdict, including the undetermined case and what it is waiting on.
 
 ## More detail
 
