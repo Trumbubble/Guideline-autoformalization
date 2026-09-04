@@ -22,6 +22,12 @@ from real_rules import DOMAIN_AXIOMS as FIXTURE_DOMAIN_AXIOMS
 app = Flask(__name__)
 APP_DIR = Path(__file__).parent
 
+# Registers demo.html's two fixed-id guidelines from their committed bundles
+# on this machine's local store, if they aren't there yet -- see
+# guidelines.seed_demo_guidelines. Runs on import, not just __main__, so it
+# also happens under a WSGI server that imports this module directly.
+guidelines.seed_demo_guidelines()
+
 
 def _python_value(ref, model):
     value = model.eval(ref, model_completion=True)
