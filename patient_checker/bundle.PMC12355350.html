@@ -1,13 +1,33 @@
 <title>PMC12355350 — formalization report</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap">
+<script>
+(function(){try{var s=localStorage.getItem("gf_theme");
+if(s==="light"||s==="dark"){document.documentElement.setAttribute("data-theme",s);}
+}catch(e){}})();
+</script>
 <style>
-:root{--bg:#fbfbfa;--fg:#1a1a1a;--muted:#6b6b6b;--line:#e3e1dd;--card:#fff;
---ok:#1a7f4b;--part:#9a6700;--no:#a4342a;--accent:#2b5c8a;--code:#f5f4f1}
-@media(prefers-color-scheme:dark){:root{--bg:#16181c;--fg:#e8e6e3;--muted:#9a9a9a;
---line:#2c2f36;--card:#1c1f24;--ok:#4ec48a;--part:#e0b341;--no:#f0857a;
---accent:#7fb3e0;--code:#22252b}}
+:root{--bg:#f8f5f1;--fg:#27221b;--muted:#756f67;--line:#dfdcd7;--card:#fffdf9;
+--ok:#006f36;--part:#864d00;--no:#963a34;--accent:#25559b;--code:#f2f0ec}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#191713;
+--fg:#f1ece5;--muted:#a7a29c;
+--line:#37332f;--card:#23201d;--ok:#80d498;--part:#edb163;--no:#ff9f94;
+--accent:#76acf1;--code:#13110d}}
+/* The explicit choice the app's other pages store, honoured here too so a
+   report opened from the dashboard does not snap back to the OS setting. */
+:root[data-theme="dark"]{color-scheme:dark;--bg:#191713;--fg:#f1ece5;--muted:#a7a29c;
+--line:#37332f;--card:#23201d;--ok:#80d498;--part:#edb163;--no:#ff9f94;
+--accent:#76acf1;--code:#13110d}
+:root[data-theme="light"]{color-scheme:light}
+.theme-toggle{border:1px solid var(--line);background:var(--card);color:var(--muted);
+border-radius:999px;padding:0;width:34px;height:34px;display:inline-flex;
+align-items:center;justify-content:center;cursor:pointer;float:right}
+.theme-toggle:hover{color:var(--accent);border-color:var(--accent)}
+.theme-toggle svg{display:block}
+.theme-toggle circle.ring{fill:none;stroke:currentColor;stroke-width:1.6}
+.theme-toggle circle.dot{fill:currentColor}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--fg);
-font:16px/1.6 ui-sans-serif,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+font:16px/1.6 "Archivo","Helvetica Neue",Helvetica,Arial,sans-serif}
 .wrap{max-width:920px;margin:0 auto;padding:40px 24px 80px}
 .back{display:inline-block;margin-bottom:18px;font-size:13.5px;color:var(--accent);
 text-decoration:none}
@@ -44,7 +64,7 @@ border:1px solid var(--line);border-radius:6px;padding:4px 11px;cursor:pointer}
 .card.refuse{border-left:4px solid var(--no)}
 .head{display:flex;justify-content:space-between;align-items:baseline;gap:12px;
 margin-bottom:10px}
-.id{font:12px ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--muted)}
+.id{font:12px "JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--muted)}
 .badge{font-size:12px;font-weight:600;padding:2px 9px;border-radius:20px;
 white-space:nowrap}
 .badge.encode{background:color-mix(in srgb,var(--ok) 16%,transparent);color:var(--ok)}
@@ -55,12 +75,12 @@ color:var(--fg);font-size:15px}
 .label{font-size:11px;text-transform:uppercase;letter-spacing:.07em;
 color:var(--muted);margin:14px 0 5px;font-weight:600}
 .rule.logic{font-size:13.5px;color:var(--accent)}
-.rule{font:14px/1.7 ui-monospace,SFMono-Regular,Menlo,monospace;background:var(--code);
+.rule{font:14px/1.7 "JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace;background:var(--code);
 border-radius:7px;padding:12px 14px;white-space:pre-wrap;overflow-x:auto}
 .why{font-size:14px;color:var(--fg)}
 ul{margin:6px 0 0;padding-left:20px;font-size:14px}
 li{margin:3px 0}
-.hole{font:12px ui-monospace,Menlo,monospace;background:color-mix(in srgb,var(--part) 15%,transparent);
+.hole{font:12px "JetBrains Mono",ui-monospace,Menlo,monospace;background:color-mix(in srgb,var(--part) 15%,transparent);
 padding:1px 6px;border-radius:4px;margin-right:5px;display:inline-block}
 .caution{border-left:3px solid var(--part);padding:8px 12px;margin:8px 0 0;
 background:color-mix(in srgb,var(--part) 7%,transparent);border-radius:0 6px 6px 0;
@@ -69,7 +89,10 @@ font-size:13.5px}
 details{margin-top:14px}
 summary{cursor:pointer;font-size:13px;color:var(--accent);user-select:none}
 pre{background:var(--code);border-radius:7px;padding:14px;overflow-x:auto;
-font:12.5px/1.55 ui-monospace,SFMono-Regular,Menlo,monospace;margin:10px 0 0}
+font:12.5px/1.55 "JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+margin:10px 0 0}
+button,input,select,textarea{font-family:inherit}
+code,kbd,samp{font-family:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace}
 table{border-collapse:collapse;width:100%;font-size:14px;margin-top:8px}
 th,td{text-align:left;padding:7px 10px;border-bottom:1px solid var(--line)}
 th{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
@@ -81,9 +104,15 @@ font-size:13px;color:var(--muted)}
 details:not(.card){display:none}}
 </style>
 <div class="wrap">
+<button class="theme-toggle" id="theme-toggle" type="button"
+ aria-label="Toggle colour theme" title="Toggle colour theme">
+<svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true">
+<circle class="ring" cx="9" cy="9" r="7"></circle>
+<circle class="dot" id="theme-dot" cx="9" cy="9" r="3"></circle>
+</svg></button>
 
 <h1>PMC12355350 — formalization report</h1>
-<p class="sub">5 recommendation statement(s) &middot; generated 2026-09-01 &middot; 11 bound variable(s)</p>
+<p class="sub">5 recommendation statement(s) &middot; generated 2026-09-04 &middot; 11 bound variable(s)</p>
 <div class="bar"><span style="width:60.0%;background:var(--ok)"></span><span style="width:0.0%;background:var(--part)"></span><span style="width:40.0%;background:var(--no)"></span></div>
 <div class="legend"><span><i class="dot" style="background:var(--ok)"></i>3 encoded</span><span><i class="dot" style="background:var(--part)"></i>0 partial &mdash; encoded with a named gap</span><span><i class="dot" style="background:var(--no)"></i>2 refused</span></div>
 <h2>Why statements were refused</h2>
@@ -183,6 +212,23 @@ THEN must (strong recommendation): SGLT2 Inhibitors OR GLP-1 Receptor Agonist</d
 </div></details>
 <footer>
 <strong>What this report does not claim.</strong> A refusal is a statement this tool declined to encode &mdash; it is not a judgement about the guideline. A rule shown here typechecked and compiled; that is not the same as being clinically correct, which is what the sentence beside it is for. Statements marked <em>partial</em> carry named free variables and answer <em>cannot tell</em> until those are supplied.
-
 </footer></div>
 <script>function setAll(open){document.querySelectorAll("details.card").forEach(function(d){d.open=open;});}</script>
+<script>
+(function(){
+  var KEY="gf_theme";
+  function current(){var s=null;try{s=localStorage.getItem(KEY);}catch(e){}
+    if(s==="light"||s==="dark")return s;
+    return window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light";}
+  function refresh(){var d=current()==="dark";
+    document.getElementById("theme-dot").setAttribute("r",d?"4.5":"2.5");
+    document.getElementById("theme-toggle").title=
+      d?"Switch to light mode":"Switch to dark mode";}
+  document.getElementById("theme-toggle").addEventListener("click",function(){
+    var n=current()==="dark"?"light":"dark";
+    document.documentElement.setAttribute("data-theme",n);
+    try{localStorage.setItem(KEY,n);}catch(e){}
+    refresh();});
+  refresh();
+})();
+</script>

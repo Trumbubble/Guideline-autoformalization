@@ -3,41 +3,108 @@
 <head>
 <meta charset="utf-8">
 <title>Demo</title>
+<script>
+// Set before the stylesheet paints, so a saved override never flashes the
+// wrong theme for a frame -- same as the other pages.
+(function () {
+  try {
+    var saved = localStorage.getItem("gf_theme");
+    if (saved === "light" || saved === "dark") {
+      document.documentElement.setAttribute("data-theme", saved);
+    }
+  } catch (err) {}
+})();
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
 <style>
   :root {
     color-scheme: light dark;
-    --bg: #f7f7f8;
-    --panel: #ffffff;
-    --text: #1a1a1a;
-    --muted: #6b6b6b;
-    --border: #dcdcdc;
-    --must: #b3261e;
-    --must-bg: #fdecea;
-    --may: #8a5a00;
-    --may-bg: #fff4dc;
-    --certified: #1e6b3a;
-    --certified-bg: #e8f5ec;
-    --accent: #2757c9;
+    --bg: #f8f5f1;
+    --panel: #fffdf9;
+    --sunken: #f2f0ec;
+    --border: #dfdcd7;
+    --border-s: #d0cbc5;
+    --text: #27221b;
+    --muted: #756f67;
+    --faint: #96918b;
+    --accent: #25559b;
+    --accent-hover: #134488;
+    --btn-text: #ffffff;
+    --must: #963a34;      --must-bg: #ffe9e5;      --must-line: #f7c7c1;
+    --may: #864d00;       --may-bg: #feedd9;       --may-line: #ebcfad;
+    --certified: #006f36; --certified-bg: #e1f7e6; --certified-line: #badfc3;
+    --sans: "Archivo", "Helvetica Neue", Helvetica, Arial, sans-serif;
+    --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   }
   @media (prefers-color-scheme: dark) {
-    :root {
-      --bg: #16171a;
-      --panel: #1f2023;
-      --text: #eaeaea;
-      --muted: #9a9a9a;
-      --border: #35363a;
-      --must-bg: #3a1f1d;
-      --may-bg: #3a2f14;
-      --certified-bg: #163524;
-      --accent: #6f97f0;
+    :root:not([data-theme="light"]) {
+      --bg: #191713;
+      --panel: #23201d;
+      --sunken: #13110d;
+      --border: #37332f;
+      --border-s: #4d4842;
+      --text: #f1ece5;
+      --muted: #a7a29c;
+      --faint: #7f7b77;
+      --accent: #76acf1;
+      --accent-hover: #92c9ff;
+      --btn-text: #0f1216;
+      --must: #ff9f94;      --must-bg: #42231f;      --must-line: #683b36;
+      --may: #edb163;       --may-bg: #3b280f;       --may-line: #5f431e;
+      --certified: #80d498; --certified-bg: #193320; --certified-line: #2c5337;
     }
   }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --bg: #191713;
+    --panel: #23201d;
+    --sunken: #13110d;
+    --border: #37332f;
+    --border-s: #4d4842;
+    --text: #f1ece5;
+    --muted: #a7a29c;
+    --faint: #7f7b77;
+    --accent: #76acf1;
+    --accent-hover: #92c9ff;
+    --btn-text: #0f1216;
+    --must: #ff9f94;    --must-bg: #42231f;    --must-line: #683b36;
+    --may: #edb163;     --may-bg: #3b280f;     --may-line: #5f431e;
+    --certified: #80d498; --certified-bg: #193320; --certified-line: #2c5337;
+  }
+  :root[data-theme="light"] { color-scheme: light; }
+  .theme-toggle {
+    border: 1px solid var(--border);
+    background: var(--panel);
+    color: var(--muted);
+    border-radius: 999px;
+    padding: 0;
+    width: 34px;
+    height: 34px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    float: right;
+  }
+  .theme-toggle:hover { color: var(--accent); border-color: var(--accent); }
+  /* Ring plus a filled centre -- the dot grows in dark mode, so the control
+     reads as a state rather than as an instruction to click it. */
+  .theme-toggle svg { display: block; }
+  .theme-toggle circle.ring { fill: none; stroke: currentColor; stroke-width: 1.6; }
+  .theme-toggle circle.dot { fill: currentColor; }
   * { box-sizing: border-box; }
+  /* Controls do not inherit font-family from body; browsers substitute the
+     OS UI font unless told otherwise. */
+  button, input, select, textarea { font-family: inherit; }
+  code, pre, kbd, samp { font-family: var(--mono); }
+
   body {
     margin: 0;
     background: var(--bg);
     color: var(--text);
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    font-family: var(--sans);
     line-height: 1.5;
   }
   header { padding: 1.5rem 2rem 0.5rem; }
@@ -64,7 +131,7 @@
   }
   .facts { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.9rem; }
   .fact {
-    font-size: 0.8rem; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 0.8rem; font-family: var(--mono);
     background: var(--bg); border: 1px solid var(--border); border-radius: 6px;
     padding: 0.25rem 0.55rem;
   }
@@ -99,14 +166,23 @@
 <body>
 
 <header>
-  <a class="back-link" href="/">&larr; Guideline library</a>
-  <h1>See it work, on one rule</h1>
+  <button class="theme-toggle" id="theme-toggle" type="button"
+          aria-label="Toggle colour theme" title="Toggle colour theme">
+    <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true">
+      <circle class="ring" cx="9" cy="9" r="7"></circle>
+      <circle class="dot" id="theme-dot" cx="9" cy="9" r="3"></circle>
+    </svg>
+  </button>
+  <a class="back-link" href="/demo">&larr; Demo</a>
+  <h1>Toy example: one rule, three verdicts</h1>
   <p>
-    This runs live against the checker below -- no setup, no upload, nothing
-    hand-picked for effect. The rule: an ACE inhibitor should not be started
-    if serum potassium is above 5.0&nbsp;mmol/L, and potassium should be
-    checked within 14&nbsp;days of starting one. Three patients, three
-    different amounts of information, three different verdicts.
+    A hand-authored rule rather than one extracted from a document, because it
+    isolates the thing worth seeing: the same drug, three different amounts of
+    information about the patient, three different verdicts. The rule: an ACE
+    inhibitor should not be started if serum potassium is above
+    5.0&nbsp;mmol/L, and potassium should be checked within 14&nbsp;days of
+    starting one. For the same checker running against real guideline
+    documents, see the <a href="/demo">demo</a>.
   </p>
 </header>
 
@@ -266,11 +342,35 @@ async function run() {
         this system doesn't have to guess.
       </p>
       <div class="cta-row">
-        <a class="cta primary" href="/check?guideline=fixtures">Try your own patient &rarr;</a>
+        <a class="cta primary" href="/check?guideline=fixtures&from=demo">Try your own patient &rarr;</a>
         <a class="cta secondary" href="/">Explore the guideline library &rarr;</a>
       </div>
     </div>`;
 }
+
+const THEME_KEY = "gf_theme";
+
+function currentTheme() {
+  let saved = null;
+  try { saved = localStorage.getItem(THEME_KEY); } catch (err) {}
+  if (saved === "light" || saved === "dark") return saved;
+  return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+}
+
+function refreshThemeToggle() {
+  const dark = currentTheme() === "dark";
+  document.getElementById("theme-dot").setAttribute("r", dark ? "4.5" : "2.5");
+  document.getElementById("theme-toggle").title =
+    dark ? "Switch to light mode" : "Switch to dark mode";
+}
+
+document.getElementById("theme-toggle").addEventListener("click", () => {
+  const next = currentTheme() === "dark" ? "light" : "dark";
+  document.documentElement.setAttribute("data-theme", next);
+  try { localStorage.setItem(THEME_KEY, next); } catch (err) {}
+  refreshThemeToggle();
+});
+refreshThemeToggle();
 
 run();
 </script>

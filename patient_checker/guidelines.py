@@ -5,6 +5,7 @@ duplicates that logic, and nothing is written into CQL_converter. See CHECKER.md
 
 from __future__ import annotations
 
+import concurrent.futures as cf
 import contextlib
 import json
 import os
@@ -16,6 +17,12 @@ import threading
 import time
 import uuid
 from pathlib import Path
+
+# Concurrent statements per live upload. Each is ~4 sequential model round
+# trips, so this is the wall-clock multiplier; it is bounded because every
+# worker holds an API connection and the account's rate limit is shared with
+# whatever else is running. Override with GF_LIVE_WORKERS.
+_LIVE_WORKERS = max(1, int(os.environ.get("GF_LIVE_WORKERS", "8")))
 
 _PART_A = str(Path(__file__).resolve().parent.parent / "CQL_converter")
 if _PART_A not in sys.path:
@@ -48,6 +55,11 @@ class IngestError(RuntimeError):
 # terminal status, so this never accumulates finished runs forever.
 _PROGRESS_LOCK = threading.Lock()
 _PROGRESS: dict[str, dict] = {}
+
+# guideline_id -> ((mtime_ns, size), loaded) for bundles already lowered.
+# See get_guideline for why this exists and how it is invalidated.
+_BUNDLE_CACHE_LOCK = threading.Lock()
+_BUNDLE_CACHE: dict[str, tuple] = {}
 
 
 def _progress_set(guideline_id: str, **fields) -> None:
@@ -205,23 +217,46 @@ def _events_in(rule) -> list:
 
 
 def _merged_registry(triages, index, mention_llm, select_llm) -> "dsl.Registry":
-    """One registry a bundle can carry: every triage's own bound vocabulary,
-    every open hole, and every event a surviving rule refers to. Same
+    """Union of the registries the rules were WRITTEN AGAINST. Same
     construction as demo.py's `_merge_registries` -- duplicated rather than
     imported, since demo.py is a script, not a library, and CQL_converter is not to
-    be modified for this."""
+    be modified for this.
+
+    This copy used to re-bind each statement from scratch, which demo.py's
+    original was fixed not to do (RESULTS.md R17a) -- the fix never reached
+    here. It is wrong twice over. Correctness: binding runs through a model
+    selector, so the second call can disagree with the first, and the
+    delivered rule then references a variable the delivered registry does not
+    contain (Track B rejects it as UNKNOWN_VAR -- the safety net working, not
+    the pipeline working). Cost: it is a second full binding pass, three-ish
+    model calls per encodable statement, after every statement has already
+    been bound once.
+
+    Re-binding is kept only as the fallback for a Triage from an older run
+    that has no registry attached."""
     seen, events = {}, {}
     for t in triages:
         if not t.encodable:
             continue
-        bindings, _ = bind.bind_statement(t.text, index, mention_llm, select_llm)
-        for v in bind.registry_from_bindings(bindings)._v.values():
-            seen.setdefault(v.name, v)
-        for h in t.open_holes:
-            seen.setdefault(h, dsl.VarDef(h, "bool", None, h, unbound=True))
+        if t.registry is not None:
+            for n in t.registry.names():
+                seen.setdefault(n, t.registry[n])
+        else:
+            bindings, _ = bind.bind_statement(t.text, index, mention_llm, select_llm)
+            for v in bind.registry_from_bindings(bindings)._v.values():
+                seen.setdefault(v.name, v)
+        # Events BEFORE holes: a `Delta` baseline is derived from an event, and
+        # `hole_defs` needs the event declared to recognise it as the lowering's
+        # to emit rather than the registry's (RESULTS.md R34).
         if t.rule is not None:
             for e in _events_in(t.rule):
-                events.setdefault(e, dsl.EventDef(e, e.replace("_", " ")))
+                events.setdefault(e, (t.registry.event(e)
+                                      if t.registry is not None
+                                      and e in t.registry.event_names()
+                                      else dsl.EventDef(e, e.replace("_", " "))))
+        _reg_so_far = dsl.Registry(list(seen.values()), list(events.values()))
+        for v in dsl.hole_defs(_reg_so_far, t.open_holes, t.rule):
+            seen.setdefault(v.name, v)
     return dsl.Registry(list(seen.values()), list(events.values()))
 
 
@@ -373,16 +408,47 @@ def _run_ingest(guideline_id, title, filename, live, api_key, stmts,
     index = _build_index(live)
     total = len(stmts)
     with _temporary_api_key(api_key if live else None):
-        triages = []
-        for i, s in enumerate(stmts):
-            triages.append(gate.triage(
+
+        def _one(s):
+            return gate.triage(
                 s.text, index, statement_id=s.statement_id,
                 mention_llm=mention_llm, select_llm=select_llm, formalize=formalize,
                 source_page=s.prov.page, source_span=s.text,
-            ))
-            if track:
-                _progress_set(guideline_id, done=i + 1, total=total,
-                              status="processing")
+            )
+
+        # Statements are independent -- one statement's triage reads nothing
+        # another writes -- and each is ~4 sequential model round trips
+        # (propose mentions, select a code per mention, formalize), so a real
+        # document spent almost all of its wall clock waiting on the network
+        # one statement at a time. gate.triage already pools internally for
+        # K-sampling and llm.USAGE is RLock-guarded, so the accounting holds.
+        #
+        # Sequential when a cassette is active: record and replay key K samples
+        # as an ordered list per prompt, and interleaving threads would write
+        # the tape in an order replay cannot reproduce.
+        import cassette
+        workers = 1 if (cassette.mode() != "off" or not live) else _LIVE_WORKERS
+        if workers <= 1:
+            triages = []
+            for i, s in enumerate(stmts):
+                triages.append(_one(s))
+                if track:
+                    _progress_set(guideline_id, done=i + 1, total=total,
+                                  status="processing")
+        else:
+            triages = [None] * total
+            done = 0
+            with cf.ThreadPoolExecutor(max_workers=workers) as pool:
+                futures = {pool.submit(_one, s): i for i, s in enumerate(stmts)}
+                for fut in cf.as_completed(futures):
+                    # Results land out of order; the bundle must not, so they
+                    # go back into their own slot rather than an append order
+                    # that would vary run to run.
+                    triages[futures[fut]] = fut.result()
+                    done += 1
+                    if track:
+                        _progress_set(guideline_id, done=done, total=total,
+                                      status="processing")
 
         rules, refusals = [], []
         needs_model = 0
@@ -506,10 +572,67 @@ def register_bundle(bundle_path, title: str | None = None,
     return entry
 
 
+def delete_guideline(guideline_id: str) -> dict:
+    """Remove an uploaded guideline: its index entry, its bundle, and the raw
+    upload kept for reprocessing. The fixture set is built in, not stored, so
+    it cannot be deleted -- refused rather than silently ignored, since a
+    delete that reports success and changes nothing is the worse failure."""
+    if guideline_id == FIXTURES_ID:
+        raise IngestError("the built-in fixture set cannot be deleted")
+    entries = _load_index()
+    meta = next((e for e in entries if e.get("id") == guideline_id), None)
+    if meta is None:
+        raise IngestError(f"unknown guideline {guideline_id!r}")
+
+    (STORE_DIR / f"{guideline_id}.json").unlink(missing_ok=True)
+    raw = _raw_source_path(guideline_id, meta.get("source_filename"))
+    raw.unlink(missing_ok=True)
+    # Older entries may have been stored under the other raw naming, so clear
+    # both rather than leaving an orphan behind for a later id collision.
+    _raw_source_path(guideline_id, None).unlink(missing_ok=True)
+
+    _save_index([e for e in entries if e.get("id") != guideline_id])
+    with _PROGRESS_LOCK:
+        _PROGRESS.pop(guideline_id, None)
+    with _BUNDLE_CACHE_LOCK:
+        _BUNDLE_CACHE.pop(guideline_id, None)
+    return {"id": guideline_id, "deleted": True}
+
+
+def rename_guideline(guideline_id: str, title: str) -> dict:
+    """Change a guideline's display title in place.
+
+    The id is left alone deliberately: it names the bundle on disk, the raw
+    upload, and every URL the dashboard has already handed out, so renaming
+    the title is a label change and nothing more."""
+    if guideline_id == FIXTURES_ID:
+        raise IngestError("the built-in fixture set cannot be renamed")
+    title = (title or "").strip()
+    if not title:
+        raise IngestError("a title is required")
+    entries = _load_index()
+    meta = next((e for e in entries if e.get("id") == guideline_id), None)
+    if meta is None:
+        raise IngestError(f"unknown guideline {guideline_id!r}")
+    meta["title"] = title
+    _save_index(entries)
+    return meta
+
+
 def list_guidelines() -> list:
     fixture_entry = {
         "id": FIXTURES_ID,
         "title": "Hand-authored fixtures",
+        # Says where these came from, because "fixtures" alone reads as though
+        # they fell out of the pipeline like every other entry, and they did
+        # not -- they are the checker's own test set, written by hand.
+        "description": (
+            "Written by hand for the checker, not extracted from any document "
+            "-- ACE inhibitor with hyperkalaemia, DOAC dosing by renal "
+            "function, drug-drug interaction flags. Each one is run through "
+            "the same validator and non-degeneracy check a formalized rule "
+            "gets, at import time."
+        ),
         "created_at": None,
         "source_filename": None,
         "live": False,
@@ -539,10 +662,28 @@ def get_guideline(guideline_id: str):
     from from_dsl import load_bundle
 
     bundle_path = STORE_DIR / f"{guideline_id}.json"
-    # Track B re-verifies before it loads: a bundle can be written by an
-    # older Track A or hand-edited, and a VACUOUS_RULE that survived doesn't
-    # fail loudly -- it reports CERTIFIED-compliant for everyone. Rejects
-    # are OUR defect, not the guideline's residue, so they travel separately
-    # from refusals rather than being folded into that count.
-    rules, refusals, reg, rejected = load_bundle(str(bundle_path))
+    # Loading lowers every rule through z3, which is neither free nor
+    # thread-safe (dsl.Z3_LOCK), and one dashboard or demo page view fans out
+    # into several requests that each want the same bundle. Cache the lowered
+    # result and key it on the file's mtime and size, so a re-upload or a
+    # reprocess -- which rewrites this path -- invalidates it, while repeated
+    # reads of an unchanged bundle cost nothing.
+    try:
+        st = bundle_path.stat()
+        stamp = (st.st_mtime_ns, st.st_size)
+    except OSError:
+        return None
+    with _BUNDLE_CACHE_LOCK:
+        hit = _BUNDLE_CACHE.get(guideline_id)
+    if hit is not None and hit[0] == stamp:
+        rules, refusals, reg, rejected = hit[1]
+    else:
+        # Track B re-verifies before it loads: a bundle can be written by an
+        # older Track A or hand-edited, and a VACUOUS_RULE that survived doesn't
+        # fail loudly -- it reports CERTIFIED-compliant for everyone. Rejects
+        # are OUR defect, not the guideline's residue, so they travel separately
+        # from refusals rather than being folded into that count.
+        rules, refusals, reg, rejected = load_bundle(str(bundle_path))
+        with _BUNDLE_CACHE_LOCK:
+            _BUNDLE_CACHE[guideline_id] = (stamp, (rules, refusals, reg, rejected))
     return rules, refusals, reg, dict(meta, builtin=False, rejected=rejected)

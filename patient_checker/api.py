@@ -194,6 +194,16 @@ def demo_page():
     return send_from_directory(APP_DIR, "demo.html")
 
 
+@app.get("/demo/toy")
+def demo_toy_page():
+    """The single hand-authored rule, three patients, three verdicts. Kept
+    because it isolates the three-valued verdict better than a real document
+    can -- a real guideline's rules carry their own vocabulary and their own
+    reasons for refusing -- but it is a toy, so /demo leads with the real
+    documents and links here rather than the other way round."""
+    return send_from_directory(APP_DIR, "demo-toy.html")
+
+
 # ---------------------------------------------------------------- guidelines
 
 @app.get("/settings")
@@ -285,6 +295,29 @@ def guideline_progress(guideline_id):
     if progress is None:
         return jsonify({"error": f"no live progress tracked for {guideline_id!r}"}), 404
     return jsonify(progress)
+
+
+@app.delete("/guidelines/<guideline_id>")
+def delete_guideline(guideline_id):
+    """Remove an uploaded guideline and everything stored for it."""
+    try:
+        result = guidelines.delete_guideline(guideline_id)
+    except guidelines.IngestError as error:
+        return jsonify({"error": str(error)}), 400
+    return jsonify(result)
+
+
+@app.patch("/guidelines/<guideline_id>")
+def rename_guideline(guideline_id):
+    """Change a guideline's title. The id, and so every URL already handed
+    out for it, is unchanged."""
+    body = request.get_json(silent=True) or {}
+    title = body.get("title") or request.form.get("title")
+    try:
+        entry = guidelines.rename_guideline(guideline_id, title)
+    except guidelines.IngestError as error:
+        return jsonify({"error": str(error)}), 400
+    return jsonify(entry)
 
 
 @app.get("/guidelines/<guideline_id>")
@@ -412,10 +445,15 @@ def guideline_report(guideline_id):
                       {v for r in rules for v in getattr(r, "var_refs", {})})]},
                   "rules": [], "refusals": [],
                   "findings": [_fixture_finding(r) for r in rules]}
+    # Go back where the reader came from: the demo's links carry ?from=demo,
+    # and sending them to the library instead drops them somewhere they never
+    # were.
+    from_demo = request.args.get("from") == "demo"
     html = _report.render(bundle,
                           title=f"{entry.get('title', guideline_id)} "
                                 f"\u2014 formalization report",
-                          home_url="/")
+                          home_url="/demo" if from_demo else "/",
+                          home_label="Demo" if from_demo else "All guidelines")
     return Response(html, mimetype="text/html")
 
 

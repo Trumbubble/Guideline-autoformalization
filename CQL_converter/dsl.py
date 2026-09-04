@@ -37,8 +37,35 @@ from __future__ import annotations
 from dataclasses import dataclass, field, replace
 from datetime import date as _date
 from typing import Any, Iterable, Literal, Union
+import functools
 import json
 import re
+import threading
+
+# z3's Python bindings share one global context, and it is NOT thread-safe:
+# two threads building terms or running a solver at the same time segfault the
+# interpreter -- no exception, no traceback, the process is simply gone.
+# Demonstrated with plain `z3.Real(...)` + `Solver().check()` across 12
+# threads, which dies with SIGSEGV every time.
+#
+# That is easy to hit without meaning to. Serving the checker with Flask's
+# `threaded=True` is enough: two browser requests that each load a bundle
+# lower it through `to_z3` concurrently and take the process down with them.
+#
+# So every entry point here that touches z3 is serialised. RLock, not Lock,
+# because these call each other (validate_rule -> to_z3, check_nondegenerate
+# -> make_env). The critical sections are microseconds of term building and
+# small solver queries, so the contention cost is not the thing that makes a
+# run slow -- the model calls are, and those are outside this lock.
+Z3_LOCK = threading.RLock()
+
+
+def _z3_guarded(fn):
+    @functools.wraps(fn)
+    def guarded(*args, **kwargs):
+        with Z3_LOCK:
+            return fn(*args, **kwargs)
+    return guarded
 
 # ---------------------------------------------------------------- variables
 
@@ -898,6 +925,7 @@ def rule_to_english(rule: Rule, reg: Registry) -> str:
     return (f"IF {to_english(rule.when, reg)}\n"
             f"THEN {deontic_force(rule)}: {to_english(rule.then, reg)}")
 
+@_z3_guarded
 def validate_rule(rule: Rule, reg: Registry) -> list[Issue]:
     issues = validate(rule.when, reg, "when") + validate(rule.then, reg, "then")
     # Provenance means a POINTER BACK TO THE SOURCE, and what that pointer is
@@ -998,6 +1026,7 @@ HORIZON_DAYS = 3650   # bound on days_since_*, so the solver cannot invent 10^9
 def days_since_var(event: str) -> str: return f"days_since_{event}"
 def occurred_var(event: str) -> str:   return f"{event}_occurred"
 
+@_z3_guarded
 def make_env(reg: Registry) -> dict:
     import z3
     env: dict = {}
@@ -1021,6 +1050,7 @@ def make_env(reg: Registry) -> dict:
                 env[b] = z3.Real(b) if reg.type_of(n) == "real" else z3.Int(b)
     return env
 
+@_z3_guarded
 def domain_axioms(reg: Registry, env: dict) -> list:
     """Physiological + well-formedness constraints. Without these the solver
     returns counterexamples at eGFR = 2.0 that no clinician will accept."""
@@ -1054,6 +1084,7 @@ def domain_axioms(reg: Registry, env: dict) -> list:
                 ax.append(z3.And(b >= vd.plausible[0], b <= vd.plausible[1]))
     return ax
 
+@_z3_guarded
 def to_z3(expr: Expr, env: dict):
     """Lower to z3. This is the Track B interface for the solver work."""
     import z3
@@ -1107,6 +1138,7 @@ def to_z3(expr: Expr, env: dict):
     if isinstance(expr, Or):  return z3.Or([to_z3(o, env) for o in expr.operands])
     raise TypeError(expr)
 
+@_z3_guarded
 def rule_to_z3(rule: Rule, env: dict):
     """phi = when -> then. THIS is the object Track B verifies."""
     import z3
@@ -1266,6 +1298,7 @@ def deontic_of(rule: "Rule") -> str:
         return "permission"
     return "obligation"
 
+@_z3_guarded
 def violation_condition(rule: "Rule", env: dict):
     """What it takes to VIOLATE this rule -- the formula Track B negates.
 
@@ -1280,6 +1313,7 @@ def violation_condition(rule: "Rule", env: dict):
         return z3.BoolVal(False)
     return z3.And(to_z3(rule.when, env), z3.Not(to_z3(rule.then, env)))
 
+@_z3_guarded
 def conflicts(rules: "Iterable[Rule]", reg: Registry) -> list[dict]:
     """Statements that PERMIT and FORBID the same action for the same patient.
 
@@ -1400,6 +1434,7 @@ def modal_only(name: str) -> bool:
 
 # ---------------------------------------------------------------- degeneracy
 
+@_z3_guarded
 def check_nondegenerate(rule: Rule, reg: Registry) -> list[Issue]:
     """The vacuity sweep. A rule can typecheck, compile, and still forbid
     nothing (arXiv:2606.29493) or fire for nobody. Separate from validate() so
@@ -1461,6 +1496,7 @@ def check_nondegenerate(rule: Rule, reg: Registry) -> list[Issue]:
 
 # ---------------------------------------------------------------- equivalence
 
+@_z3_guarded
 def distinguishing_patient(a: Rule, b: Rule, reg: Registry) -> dict | None:
     """A patient the two rules disagree about, or None if they are equivalent.
 

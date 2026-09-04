@@ -15,54 +15,76 @@
   } catch (err) {}
 })();
 </script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
 <style>
   :root {
     color-scheme: light dark;
-    --bg: #f7f7f8;
-    --panel: #ffffff;
-    --text: #1a1a1a;
-    --muted: #6b6b6b;
-    --border: #dcdcdc;
-    --must: #b3261e;
-    --must-bg: #fdecea;
-    --may: #8a5a00;
-    --may-bg: #fff4dc;
-    --certified: #1e6b3a;
-    --certified-bg: #e8f5ec;
-    --accent: #2757c9;
+    --bg: #f8f5f1;
+    --panel: #fffdf9;
+    --sunken: #f2f0ec;
+    --border: #dfdcd7;
+    --border-s: #d0cbc5;
+    --text: #27221b;
+    --muted: #756f67;
+    --faint: #96918b;
+    --accent: #25559b;
+    --accent-hover: #134488;
+    --btn-text: #ffffff;
+    --must: #963a34;      --must-bg: #ffe9e5;      --must-line: #f7c7c1;
+    --may: #864d00;       --may-bg: #feedd9;       --may-line: #ebcfad;
+    --certified: #006f36; --certified-bg: #e1f7e6; --certified-line: #badfc3;
+    --sans: "Archivo", "Helvetica Neue", Helvetica, Arial, sans-serif;
+    --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   }
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) {
-      --bg: #16171a;
-      --panel: #1f2023;
-      --text: #eaeaea;
-      --muted: #9a9a9a;
-      --border: #35363a;
-      --must-bg: #3a1f1d;
-      --may-bg: #3a2f14;
-      --certified-bg: #163524;
-      --accent: #6f97f0;
+      --bg: #191713;
+      --panel: #23201d;
+      --sunken: #13110d;
+      --border: #37332f;
+      --border-s: #4d4842;
+      --text: #f1ece5;
+      --muted: #a7a29c;
+      --faint: #7f7b77;
+      --accent: #76acf1;
+      --accent-hover: #92c9ff;
+      --btn-text: #0f1216;
+      --must: #ff9f94;      --must-bg: #42231f;      --must-line: #683b36;
+      --may: #edb163;       --may-bg: #3b280f;       --may-line: #5f431e;
+      --certified: #80d498; --certified-bg: #193320; --certified-line: #2c5337;
     }
   }
   :root[data-theme="dark"] {
     color-scheme: dark;
-    --bg: #16171a;
-    --panel: #1f2023;
-    --text: #eaeaea;
-    --muted: #9a9a9a;
-    --border: #35363a;
-    --must-bg: #3a1f1d;
-    --may-bg: #3a2f14;
-    --certified-bg: #163524;
-    --accent: #6f97f0;
+    --bg: #191713;
+    --panel: #23201d;
+    --sunken: #13110d;
+    --border: #37332f;
+    --border-s: #4d4842;
+    --text: #f1ece5;
+    --muted: #a7a29c;
+    --faint: #7f7b77;
+    --accent: #76acf1;
+    --accent-hover: #92c9ff;
+    --btn-text: #0f1216;
+    --must: #ff9f94;    --must-bg: #42231f;    --must-line: #683b36;
+    --may: #edb163;     --may-bg: #3b280f;     --may-line: #5f431e;
+    --certified: #80d498; --certified-bg: #193320; --certified-line: #2c5337;
   }
   :root[data-theme="light"] { color-scheme: light; }
   * { box-sizing: border-box; }
+  /* Controls do not inherit font-family from body; browsers substitute the
+     OS UI font unless told otherwise. */
+  button, input, select, textarea { font-family: inherit; }
+  code, pre, kbd, samp { font-family: var(--mono); }
+
   body {
     margin: 0;
     background: var(--bg);
     color: var(--text);
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    font-family: var(--sans);
     line-height: 1.45;
   }
   header { padding: 1.5rem 2rem 0.5rem; }
@@ -94,6 +116,10 @@
   .g-card:hover { transform: translateY(-2px); box-shadow: 0 6px 18px rgba(0,0,0,0.08); }
   .g-card h3 { margin: 0 0 0.4rem; font-size: 1.02rem; }
   .g-card .counts { font-size: 0.82rem; color: var(--muted); }
+  .g-card .g-desc {
+    margin: 0.45rem 0 0; font-size: 0.79rem; line-height: 1.45;
+    color: var(--muted);
+  }
   .g-card .badges { margin-top: 0.5rem; }
   .pill {
     display: inline-block; font-size: 0.68rem; font-weight: 700; letter-spacing: 0.02em;
@@ -113,6 +139,36 @@
     color: var(--muted); text-decoration: none;
   }
   .g-report:hover { color: var(--accent); text-decoration: underline; }
+
+  /* The demo is the one thing a first-time visitor should click, so it gets a
+     banner rather than a sentence-ending link. */
+  .demo-banner {
+    display: flex; align-items: center; justify-content: center;
+    gap: 0.6rem; margin-top: 0.9rem; padding: 0.9rem 1.1rem;
+    background: var(--panel); color: inherit; text-decoration: none;
+    border: 1px solid var(--accent); border-radius: 14px;
+    text-align: center;
+  }
+  .demo-banner:hover { filter: brightness(1.04); box-shadow: 0 4px 14px rgba(0,0,0,0.08); }
+  .demo-banner strong { font-size: 0.98rem; }
+  .demo-banner-go { color: var(--accent); font-weight: 700; font-size: 0.85rem; white-space: nowrap; }
+
+  /* Per-card management. Kept to the wrapper, not the card itself, because the
+     card is a link and a button inside a link is invalid. */
+  .g-tools { display: flex; gap: 0.6rem; margin-top: 0.35rem; }
+  .g-tool {
+    background: none; border: none; padding: 0; cursor: pointer;
+    font-size: 0.78rem; font-weight: 600; color: var(--muted);
+  }
+  .g-tool:hover { color: var(--accent); }
+  .g-tool.danger:hover { color: var(--must); }
+  .g-rename-row { display: flex; gap: 0.4rem; margin-top: 0.35rem; }
+  .g-rename-row input {
+    flex: 1; font-size: 0.82rem; padding: 0.3rem 0.4rem;
+    border-radius: 6px; border: 1px solid var(--border);
+    background: var(--bg); color: var(--text);
+  }
+  .g-rename-row button { padding: 0.3rem 0.6rem; font-size: 0.78rem; }
   .g-card.upload {
     border: 2px dashed var(--border);
     background: transparent;
@@ -132,13 +188,21 @@
     background: var(--panel);
     color: var(--muted);
     border-radius: 999px;
-    padding: 0.35rem 0.7rem;
-    font-size: 0.78rem;
-    font-weight: 600;
+    padding: 0;
+    width: 34px;
+    height: 34px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     cursor: pointer;
     float: right;
   }
   .theme-toggle:hover { color: var(--accent); border-color: var(--accent); }
+  /* Ring plus a filled centre -- the dot grows in dark mode, so the control
+     reads as a state rather than as an instruction to click it. */
+  .theme-toggle svg { display: block; }
+  .theme-toggle circle.ring { fill: none; stroke: currentColor; stroke-width: 1.6; }
+  .theme-toggle circle.dot { fill: currentColor; }
 
   .modal-backdrop {
     display: none;
@@ -169,7 +233,7 @@
     background: var(--bg);
     color: var(--text);
   }
-  textarea { min-height: 140px; resize: vertical; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.82rem; }
+  textarea { min-height: 140px; resize: vertical; font-family: var(--mono); font-size: 0.82rem; }
   .tabs { display: flex; gap: 0.5rem; margin-top: 0.6rem; }
   .tab-btn {
     flex: 1; padding: 0.4rem; border-radius: 6px; border: 1px solid var(--border);
@@ -212,10 +276,20 @@
 <body>
 
 <header>
-  <button class="theme-toggle" id="theme-toggle" type="button">Dark mode</button>
+  <button class="theme-toggle" id="theme-toggle" type="button"
+          aria-label="Toggle colour theme" title="Toggle colour theme">
+    <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true">
+      <circle class="ring" cx="9" cy="9" r="7"></circle>
+      <circle class="dot" id="theme-dot" cx="9" cy="9" r="3"></circle>
+    </svg>
+  </button>
   <h1>Guideline library</h1>
-  <p>Pick a guideline to check a patient and plan against it, or upload a new one.
-    New here? <a href="/demo">See a 30-second demo &rarr;</a></p>
+  <p>Pick a guideline to check a patient and plan against it, or upload a new one.</p>
+
+  <a class="demo-banner" href="/demo">
+    <strong>Demo: try it on pre-uploaded guidelines</strong>
+    <span class="demo-banner-go">&rarr;</span>
+  </a>
 </header>
 
 <main>
@@ -337,17 +411,87 @@ function renderCard(g) {
     ? `<a class="g-report g-process" href="#" data-process-id="${encodeURIComponent(g.id)}"
          data-process-title="${g.title.replace(/"/g, "&quot;")}">Process live with model &rarr;</a>`
     : "";
+  // The fixture set is built in rather than stored, so there is nothing on
+  // disk to rename or delete -- it gets no tools rather than tools that fail.
+  const tools = g.builtin ? "" : `
+      <div class="g-tools">
+        <button class="g-tool" type="button" data-rename-id="${encodeURIComponent(g.id)}"
+                data-rename-title="${escAttr(g.title)}">Rename</button>
+        <button class="g-tool danger" type="button" data-delete-id="${encodeURIComponent(g.id)}"
+                data-delete-title="${escAttr(g.title)}">Delete</button>
+      </div>`;
   return `
-    <div class="g-wrap">
+    <div class="g-wrap" data-card="${encodeURIComponent(g.id)}">
       <a class="g-card" href="/check?guideline=${encodeURIComponent(g.id)}">
         <h3>${g.title}</h3>
         <div class="counts">${g.builtin ? "Always available" : (g.created_at || "").slice(0, 10)}</div>
+        ${g.description ? `<p class="g-desc">${escAttr(g.description)}</p>` : ""}
         <div class="badges">${pills.join("")}</div>
       </a>
       <a class="g-report" href="/guidelines/${encodeURIComponent(g.id)}/report"
          target="_blank" rel="noopener">Formalization report &rarr;</a>
       ${processLink}
+      ${tools}
     </div>`;
+}
+
+function escAttr(s) {
+  return String(s == null ? "" : s).replace(/[&<>"]/g, (c) =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+}
+
+async function deleteGuideline(id, title) {
+  if (!window.confirm(`Delete "${title}"? Its bundle and the original upload are removed. This cannot be undone.`)) {
+    return;
+  }
+  try {
+    const response = await fetch(`/guidelines/${id}`, { method: "DELETE" });
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      throw new Error(data.error || "delete failed");
+    }
+    await loadGuidelines();
+  } catch (err) {
+    grid.insertAdjacentHTML("afterbegin",
+      `<p class="status error">${escAttr(err.message)}</p>`);
+  }
+}
+
+function startRename(id, title) {
+  const card = document.querySelector(`[data-card="${id}"]`);
+  if (!card || card.querySelector(".g-rename-row")) return;
+  const row = document.createElement("div");
+  row.className = "g-rename-row";
+  row.innerHTML = `<input type="text" value="${escAttr(title)}" aria-label="New title">
+                   <button type="button">Save</button>`;
+  card.appendChild(row);
+  const input = row.querySelector("input");
+  input.focus();
+  input.select();
+
+  const commit = async () => {
+    const next = input.value.trim();
+    if (!next || next === title) { row.remove(); return; }
+    try {
+      const response = await fetch(`/guidelines/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: next }),
+      });
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.error || "rename failed");
+      }
+      await loadGuidelines();
+    } catch (err) {
+      row.innerHTML = `<span class="status error">${escAttr(err.message)}</span>`;
+    }
+  };
+  row.querySelector("button").addEventListener("click", commit);
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") commit();
+    if (e.key === "Escape") row.remove();
+  });
 }
 
 async function loadGuidelines() {
@@ -362,6 +506,14 @@ async function loadGuidelines() {
         e.preventDefault();
         openModal({ id: el.dataset.processId, title: el.dataset.processTitle });
       });
+    });
+    document.querySelectorAll("[data-rename-id]").forEach((el) => {
+      el.addEventListener("click", () =>
+        startRename(el.dataset.renameId, el.dataset.renameTitle));
+    });
+    document.querySelectorAll("[data-delete-id]").forEach((el) => {
+      el.addEventListener("click", () =>
+        deleteGuideline(el.dataset.deleteId, el.dataset.deleteTitle));
     });
   } catch (err) {
     grid.innerHTML = `<p class="status error">Could not load guidelines: ${err.message}</p>`;
@@ -594,8 +746,12 @@ function currentTheme() {
 }
 
 function refreshThemeToggle() {
-  document.getElementById("theme-toggle").textContent =
-    currentTheme() === "dark" ? "Light mode" : "Dark mode";
+  // Same ring either way; the centre dot fills out in dark mode, so the icon
+  // shows the current state rather than naming the one you'd switch to.
+  const dark = currentTheme() === "dark";
+  document.getElementById("theme-dot").setAttribute("r", dark ? "4.5" : "2.5");
+  document.getElementById("theme-toggle").title =
+    dark ? "Switch to light mode" : "Switch to dark mode";
 }
 
 document.getElementById("theme-toggle").addEventListener("click", () => {

@@ -1,0 +1,467 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Demo</title>
+<script>
+// Set before the stylesheet paints, so a saved override never flashes the
+// wrong theme for a frame -- same trick as the dashboard.
+(function () {
+  try {
+    var saved = localStorage.getItem("gf_theme");
+    if (saved === "light" || saved === "dark") {
+      document.documentElement.setAttribute("data-theme", saved);
+    }
+  } catch (err) {}
+})();
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #f8f5f1;
+    --panel: #fffdf9;
+    --sunken: #f2f0ec;
+    --border: #dfdcd7;
+    --border-s: #d0cbc5;
+    --text: #27221b;
+    --muted: #756f67;
+    --faint: #96918b;
+    --accent: #25559b;
+    --accent-hover: #134488;
+    --btn-text: #ffffff;
+    --must: #963a34;      --must-bg: #ffe9e5;      --must-line: #f7c7c1;
+    --may: #864d00;       --may-bg: #feedd9;       --may-line: #ebcfad;
+    --certified: #006f36; --certified-bg: #e1f7e6; --certified-line: #badfc3;
+    --sans: "Archivo", "Helvetica Neue", Helvetica, Arial, sans-serif;
+    --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #191713;
+      --panel: #23201d;
+      --sunken: #13110d;
+      --border: #37332f;
+      --border-s: #4d4842;
+      --text: #f1ece5;
+      --muted: #a7a29c;
+      --faint: #7f7b77;
+      --accent: #76acf1;
+      --accent-hover: #92c9ff;
+      --btn-text: #0f1216;
+      --must: #ff9f94;      --must-bg: #42231f;      --must-line: #683b36;
+      --may: #edb163;       --may-bg: #3b280f;       --may-line: #5f431e;
+      --certified: #80d498; --certified-bg: #193320; --certified-line: #2c5337;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --bg: #191713;
+    --panel: #23201d;
+    --sunken: #13110d;
+    --border: #37332f;
+    --border-s: #4d4842;
+    --text: #f1ece5;
+    --muted: #a7a29c;
+    --faint: #7f7b77;
+    --accent: #76acf1;
+    --accent-hover: #92c9ff;
+    --btn-text: #0f1216;
+    --must: #ff9f94;    --must-bg: #42231f;    --must-line: #683b36;
+    --may: #edb163;     --may-bg: #3b280f;     --may-line: #5f431e;
+    --certified: #80d498; --certified-bg: #193320; --certified-line: #2c5337;
+  }
+  :root[data-theme="light"] { color-scheme: light; }
+  * { box-sizing: border-box; }
+  /* Controls do not inherit font-family from body; browsers substitute the
+     OS UI font unless told otherwise. */
+  button, input, select, textarea { font-family: inherit; }
+  code, pre, kbd, samp { font-family: var(--mono); }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    line-height: 1.5;
+  }
+  header { padding: 1.5rem 2rem 0.5rem; max-width: 1040px; margin: 0 auto; }
+  .back-link { color: var(--accent); text-decoration: none; font-size: 0.85rem; font-weight: 600; }
+  .back-link:hover { text-decoration: underline; }
+  header h1 { margin: 0.3rem 0 0.4rem; font-size: 1.5rem; }
+  header p { margin: 0 0 0.6rem; color: var(--muted); font-size: 0.95rem; max-width: 680px; }
+  main { max-width: 1040px; margin: 0 auto; padding: 0.5rem 2rem 3rem; }
+
+  .theme-toggle {
+    border: 1px solid var(--border);
+    background: var(--panel);
+    color: var(--muted);
+    border-radius: 999px;
+    padding: 0;
+    width: 34px;
+    height: 34px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    float: right;
+  }
+  .theme-toggle:hover { color: var(--accent); border-color: var(--accent); }
+  /* Ring plus a filled centre -- the dot grows in dark mode, so the control
+     reads as a state rather than as an instruction to click it. */
+  .theme-toggle svg { display: block; }
+  .theme-toggle circle.ring { fill: none; stroke: currentColor; stroke-width: 1.6; }
+  .theme-toggle circle.dot { fill: currentColor; }
+
+  .toy-link {
+    display: inline-block; margin-top: 0.2rem;
+    font-size: 0.85rem; font-weight: 600;
+    color: var(--muted); text-decoration: none;
+    border: 1px solid var(--border); border-radius: 999px;
+    padding: 0.3rem 0.8rem; background: var(--panel);
+  }
+  .toy-link:hover { color: var(--accent); border-color: var(--accent); }
+
+  /* Copied verbatim from the guideline library so the two pages are the same
+     UI, not two takes on it. */
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 1rem;
+    margin-top: 1rem;
+  }
+  .g-wrap { display: flex; flex-direction: column; }
+  .g-card {
+    display: block;
+    text-align: left;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 1.1rem 1.2rem;
+    cursor: pointer;
+    text-decoration: none;
+    color: inherit;
+    transition: transform 0.08s ease, box-shadow 0.08s ease;
+  }
+  .g-card:hover { transform: translateY(-2px); box-shadow: 0 6px 18px rgba(0,0,0,0.08); }
+  .g-card h3 { margin: 0 0 0.4rem; font-size: 1.02rem; }
+  .g-card .counts { font-size: 0.82rem; color: var(--muted); }
+  .g-card .g-desc {
+    margin: 0.45rem 0 0; font-size: 0.79rem; line-height: 1.45;
+    color: var(--muted);
+  }
+  .g-card .badges { margin-top: 0.5rem; }
+  .pill {
+    display: inline-block; font-size: 0.68rem; font-weight: 700; letter-spacing: 0.02em;
+    padding: 0.15rem 0.5rem; border-radius: 999px; margin-right: 0.3rem; margin-top: 0.25rem;
+  }
+  .pill.rules { color: var(--certified); background: var(--certified-bg); }
+  .pill.refused { color: var(--must); background: var(--must-bg); }
+  .g-report {
+    display: block; margin-top: 0.4rem; font-size: 0.82rem;
+    color: var(--muted); text-decoration: none;
+  }
+  .g-report:hover { color: var(--accent); text-decoration: underline; }
+
+  /* Sample patients: a reviewer should be able to confirm the rules actually
+     run without inventing variable names for a guideline they didn't write. */
+  .try { margin-top: 0.55rem; }
+  .try h4 {
+    margin: 0 0 0.3rem; font-size: 0.7rem; font-weight: 700;
+    letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted);
+  }
+  .try .rule-note { font-size: 0.76rem; color: var(--muted); margin: 0 0 0.45rem; }
+  .scn { display: flex; flex-wrap: wrap; gap: 0.35rem; }
+  .scn button {
+    padding: 0.3rem 0.6rem; border-radius: 999px; cursor: pointer;
+    font-size: 0.75rem; font-weight: 600;
+    border: 1px solid var(--border); background: var(--bg); color: var(--text);
+  }
+  .scn button:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+  .scn button:disabled { opacity: 0.55; cursor: default; }
+  .verdict { margin-top: 0.5rem; font-size: 0.8rem; }
+  .vbadge {
+    display: inline-block; font-size: 0.7rem; font-weight: 700;
+    padding: 0.15rem 0.5rem; border-radius: 999px; margin-right: 0.35rem;
+  }
+  .vbadge.must { color: var(--must); background: var(--must-bg); }
+  .vbadge.may { color: var(--may); background: var(--may-bg); }
+  .vbadge.certified { color: var(--certified); background: var(--certified-bg); }
+  .vbadge.option { color: var(--accent); background: transparent; border: 1px solid var(--accent); }
+  .verdict .facts { color: var(--muted); font-size: 0.75rem; margin: 0.25rem 0 0; }
+  .verdict .facts code {
+    background: var(--bg); border: 1px solid var(--border);
+    border-radius: 4px; padding: 0 0.25rem;
+  }
+
+  .loading { color: var(--muted); font-size: 0.9rem; }
+  .error { color: var(--must); font-size: 0.9rem; }
+  .note {
+    margin-top: 1.6rem; padding-top: 1rem; border-top: 1px solid var(--border);
+    font-size: 0.85rem; color: var(--muted); max-width: 680px;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <button class="theme-toggle" id="theme-toggle" type="button"
+          aria-label="Toggle colour theme" title="Toggle colour theme">
+    <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true">
+      <circle class="ring" cx="9" cy="9" r="7"></circle>
+      <circle class="dot" id="theme-dot" cx="9" cy="9" r="3"></circle>
+    </svg>
+  </button>
+  <a class="back-link" href="/">&larr; Guideline library</a>
+  <h1>Two real guidelines, formalized</h1>
+  <p>
+    Two of the nine open-access guidelines in the corpus, run through the
+    actual pipeline rather than written by hand for the demo. Each card has
+    sample patients you can run against it, and links to the full
+    formalization report &mdash; including every statement the system declined
+    to encode, with the reason.
+  </p>
+  <a class="toy-link" href="/demo/toy">Toy example: one rule, three verdicts &rarr;</a>
+</header>
+
+<main id="docs">
+  <p class="loading">Loading the formalized guidelines&hellip;</p>
+</main>
+
+<script>
+// Sample patients, so the rules can be checked without first reading the
+// guideline to learn its variable names. Every payload below was run against
+// this endpoint and returns the verdict named in `expect` -- they are recorded
+// observations, not predictions, and `expect` is displayed so a reviewer can
+// see immediately whether the run agreed.
+const DOCS = [
+  {
+    id: "pmc12355350",
+    pmcid: "PMC12355350",
+    note: "A living guideline on type 2 diabetes therapeutics. Three rules " +
+          "encoded; the refusals below are what the prose would not carry.",
+    ruleNote: "Rule PMC12355350:0049 -- a patient at higher risk (established " +
+              "CVD) should be on an SGLT-2 inhibitor or a GLP-1 receptor agonist.",
+    scenarios: [
+      {
+        label: "CVD, on neither drug",
+        expect: "MUST-violate",
+        body: { rule_id: "PMC12355350:0049",
+                patient: { has_cardiovascular_disease_cvd: true },
+                plan: { on_sglt_2_inhibitors: false, on_glp_1_receptor_agonists: false } },
+      },
+      {
+        label: "CVD, on an SGLT-2 inhibitor",
+        expect: "CERTIFIED-compliant",
+        body: { rule_id: "PMC12355350:0049",
+                patient: { has_cardiovascular_disease_cvd: true },
+                plan: { on_sglt_2_inhibitors: true } },
+      },
+      {
+        label: "CVD, plan says nothing about either drug",
+        expect: "MAY-violate",
+        body: { rule_id: "PMC12355350:0049",
+                patient: { has_cardiovascular_disease_cvd: true }, plan: {} },
+      },
+    ],
+  },
+  {
+    id: "pmc13270348",
+    pmcid: "PMC13270348",
+    note: "Pain management in acute pancreatitis. Both encoded rules are " +
+          "PERMISSIONS -- the guideline offers the option rather than " +
+          "requiring it, so no patient can violate them.",
+    ruleNote: "Rule PMC13270348:0159 -- acupuncture MAY be considered in acute " +
+              "pancreatitis. Declining an option is not a deviation, so neither " +
+              "run below can return a violation.",
+    scenarios: [
+      {
+        label: "Acute pancreatitis, no acupuncture",
+        expect: "OPTION-not-taken",
+        body: { rule_id: "PMC13270348:0159",
+                patient: { has_acute_pancreatitis: true },
+                plan: { acupuncture: false } },
+      },
+      {
+        label: "Acute pancreatitis, acupuncture given",
+        expect: "OPTION-taken",
+        body: { rule_id: "PMC13270348:0159",
+                patient: { has_acute_pancreatitis: true },
+                plan: { acupuncture: true } },
+      },
+    ],
+  },
+];
+
+const REASON_GLOSS = {
+  vague_predicate: "a qualifier the source states but never defines",
+  not_patient_level: "about a service or the guideline itself, not a patient",
+  unbound_concept: "no code for this concept in any vocabulary we use",
+  defeasible: "the source says a clinician may override it",
+  beyond_dsl: "expressible in principle, not in this fragment",
+  unsupported_temporal: "a time pattern the fragment cannot express",
+};
+
+function esc(s) {
+  return String(s == null ? "" : s).replace(/[&<>"]/g, (c) =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+}
+
+function truncate(s, n) {
+  s = String(s || "").trim();
+  return s.length > n ? s.slice(0, n - 1).trimEnd() + "…" : s;
+}
+
+function loadDocCard(doc, meta, rules, residue) {
+  const refused = Object.values(residue.by_reason || {}).reduce((a, b) => a + b, 0);
+  const pills =
+    `<span class="pill rules">${rules.length} rule${rules.length === 1 ? "" : "s"}</span>` +
+    (refused ? `<span class="pill refused">${refused} refused</span>` : "");
+  return `
+    <div class="g-wrap">
+      <a class="g-card" href="/check?guideline=${encodeURIComponent(doc.id)}&from=demo">
+        <h3>${esc(meta.title || doc.pmcid)}</h3>
+        <div class="counts">${esc(doc.pmcid)} &middot; PubMed Central open access</div>
+        <p class="g-desc">${esc(doc.note)}</p>
+        <div class="badges">${pills}</div>
+      </a>
+      <a class="g-report" href="/guidelines/${encodeURIComponent(doc.id)}/report?from=demo"
+         target="_blank" rel="noopener">Formalization report &rarr;</a>
+      <div class="try">
+        <h4>Sample patients</h4>
+        <p class="rule-note">${esc(doc.ruleNote)}</p>
+        <div class="scn">
+          ${doc.scenarios.map((s, i) => `
+            <button type="button" data-doc="${esc(doc.id)}" data-scn="${i}">
+              ${esc(s.label)}</button>`).join("")}
+        </div>
+        <div class="verdict" id="verdict-${esc(doc.id)}"></div>
+      </div>
+    </div>`;
+}
+
+async function loadDoc(doc) {
+  const [metaRes, rulesRes, residueRes] = await Promise.all([
+    fetch(`/guidelines/${doc.id}`),
+    fetch(`/guidelines/${doc.id}/rules`),
+    fetch(`/guidelines/${doc.id}/residue`),
+  ]);
+  if (!metaRes.ok) throw new Error(`could not load ${doc.pmcid}`);
+  const meta = await metaRes.json();
+  const rules = rulesRes.ok ? await rulesRes.json() : [];
+  const residue = residueRes.ok ? await residueRes.json() : { by_reason: {} };
+  return loadDocCard(doc, meta, rules, residue);
+}
+
+function verdictClass(v) {
+  if (v === "MUST-violate") return "must";
+  if (v === "CERTIFIED-compliant") return "certified";
+  if (v === "MAY-violate") return "may";
+  return "option";  // the permission lattice: no accusing state
+}
+
+function factLine(body) {
+  const bits = [];
+  Object.entries(body.patient || {}).forEach(([k, v]) =>
+    bits.push(`<code>${esc(k)} = ${esc(String(v))}</code>`));
+  Object.entries(body.plan || {}).forEach(([k, v]) =>
+    bits.push(`<code>${esc(k)} = ${esc(String(v))}</code>`));
+  return bits.length ? bits.join(" ") : "<em>nothing supplied</em>";
+}
+
+async function runScenario(docId, index) {
+  const doc = DOCS.find((d) => d.id === docId);
+  const scn = doc.scenarios[index];
+  const out = document.getElementById(`verdict-${docId}`);
+  const buttons = document.querySelectorAll(`[data-doc="${docId}"]`);
+  buttons.forEach((b) => (b.disabled = true));
+  out.innerHTML = `<span class="facts">Checking&hellip;</span>`;
+  try {
+    const response = await fetch(`/guidelines/${encodeURIComponent(docId)}/check`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(scn.body),
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || "check failed");
+    const r = Array.isArray(data) ? data[0] : data;
+    const v = r.verdict;
+    // The core is the point of an undetermined verdict: it names what the
+    // answer is waiting on rather than guessing at it.
+    const core = r.counterexample_core && Object.keys(r.counterexample_core).length
+      ? `<p class="facts">Undetermined until: ${
+          Object.entries(r.counterexample_core)
+            .map(([k, val]) => `<code>${esc(k)} = ${esc(String(val))}</code>`).join(" ")
+        }</p>`
+      : "";
+    const agrees = v === scn.expect
+      ? ""
+      : ` <strong style="color:var(--must)">(expected ${esc(scn.expect)})</strong>`;
+    out.innerHTML =
+      `<span class="vbadge ${verdictClass(v)}">${esc(v)}</span>${agrees}` +
+      `<p class="facts">Given: ${factLine(scn.body)}</p>${core}`;
+  } catch (err) {
+    out.innerHTML = `<span class="facts" style="color:var(--must)">${esc(err.message)}</span>`;
+  } finally {
+    buttons.forEach((b) => (b.disabled = false));
+  }
+}
+
+async function load() {
+  const host = document.getElementById("docs");
+  try {
+    const sections = await Promise.all(DOCS.map(loadDoc));
+    host.innerHTML = `<div class="grid">${sections.join("")}</div>` + `
+      <p class="note" id="try-note">
+        The sample patients above post to
+        <code>/guidelines/&lt;id&gt;/check</code> &mdash; the same endpoint the
+        checker page uses. Each button states the verdict it should produce, so
+        a disagreement is visible rather than something you would have to know
+        the guideline to notice.
+      </p>
+      <p class="note">
+        Both documents were formalized by the same pipeline the upload button
+        runs. The refusals are the point: each one names a specific reason the
+        statement could not be carried into logic faithfully, rather than being
+        dropped from the count.
+      </p>`;
+    document.querySelectorAll("[data-scn]").forEach((btn) => {
+      btn.addEventListener("click", () =>
+        runScenario(btn.dataset.doc, Number(btn.dataset.scn)));
+    });
+  } catch (err) {
+    host.innerHTML = `<p class="error">${esc(err.message)}</p>`;
+  }
+}
+
+const THEME_KEY = "gf_theme";
+
+function currentTheme() {
+  let saved = null;
+  try { saved = localStorage.getItem(THEME_KEY); } catch (err) {}
+  if (saved === "light" || saved === "dark") return saved;
+  return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+}
+
+function refreshThemeToggle() {
+  const dark = currentTheme() === "dark";
+  document.getElementById("theme-dot").setAttribute("r", dark ? "4.5" : "2.5");
+  document.getElementById("theme-toggle").title =
+    dark ? "Switch to light mode" : "Switch to dark mode";
+}
+
+document.getElementById("theme-toggle").addEventListener("click", () => {
+  const next = currentTheme() === "dark" ? "light" : "dark";
+  document.documentElement.setAttribute("data-theme", next);
+  try { localStorage.setItem(THEME_KEY, next); } catch (err) {}
+  refreshThemeToggle();
+});
+refreshThemeToggle();
+
+load();
+</script>
+
+</body>
+</html>
