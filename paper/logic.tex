@@ -13,26 +13,7 @@
 \section{Formalisation \& logic}
 \label{sec:logic}
 
-The rule language is quantifier-free first-order logic over linear arithmetic:
-propositional connectives whose atoms are arithmetic comparisons on the reals
-and integers, rather than bare propositions. It is the SMT fragment
-$\mathrm{QF\_LIRA}$, and is decidable. Two constructs are added --- a bounded
-past-time temporal operator, flattened to derived state, and a relative-change
-operator over a value at an earlier event --- and two things are deliberately
-absent: quantifiers, and arithmetic relating two variables.
-
-No rule contains a quantifier; every variable is free, which is what allows a
-satisfying assignment to \emph{be} a patient. The quantification sits one level
-up, in the verdict: a patient record is a \emph{partial} interpretation, and the
-two definite verdicts are universal statements over the interpretations
-extending it --- every completion violates, or none does --- each discharged as a
-single unsatisfiability check. That is the whole reason a third verdict is
-needed (Propositions~\ref{prop:determinacy} and~\ref{prop:onequery}).
-
-Deontic force is a dyadic annotation selecting a rule's violation condition, not
-a modal operator over formulas; it is never nested, which keeps the standard
-deontic paradoxes out of scope. Each proposition below was machine-checked
-before being stated.
+The rule language is quantifier-free first-order logic over linear arithmetic: propositional connectives whose atoms are arithmetic comparisons on the reals and integers. It is the SMT fragment QF$\textunderscore$LIRA, and is decidable.Everything below is therefore decidable, and every claim in this section is discharged by an SMT solver. Two departures from a textbook setting do the work: first, a patient record is a partial interpretation, so a verdict is a statement about the set of interpretations extending it rather than a truth value; this is what makes a third verdict necessary (Propositions 2 and 4). Second, deontic force is a dyadic annotation selecting a rule's violation condition, not a modal operator over formulas — we never nest it, which is what keeps the standard deontic paradoxes out of scope. Each proposition below was machine-checked with GuidelineForge. 
 
 \paragraph{Setup.}
 A rule $R$ denotes the material implication
@@ -184,6 +165,41 @@ implies satisfiability whenever $\mathcal{D}\wedge P$ is satisfiable;
 A two-valued checker therefore reports ``some completion of this record
 violates'' in the same words as ``every completion violates'' --- the first is a
 missing datum, the second is a deviation.
+
+\subsection{Why a single-variable core need not be an actionable measurement}
+
+A minimal counterexample core naming one variable $X$ is sufficient for a
+single outcome: the value it carries forces a violation. It does not follow
+that measuring $X$ tells a clinician anything for certain, since a different
+value of $X$ may leave the verdict open. Fix $R$, $P$, and $X \notin
+\mathrm{dom}(P)$, and write $\bar S$ for the remaining free variables of
+$\Phi_R$. Say $X$ \emph{settles} $(R,P)$ if, for every value $v$ with
+$\mathcal{D}\wedge P \wedge X{=}v$ satisfiable, $\mathrm{verdict}(R, P \wedge
+X{=}v) \neq \textsc{may-violate}$ --- learning $X$ always yields a definite
+answer, whichever value it takes.
+
+\begin{proposition}[Settling a variable is decidable without enumeration]
+\label{prop:settle}
+Let $\bar S_1, \bar S_2$ be two disjoint fresh copies of $\bar S$, sharing
+only $X$. Then $X$ settles $(R,P)$ iff
+\[
+  \mathrm{SAT}\bigl[\, (\mathcal{D} \wedge P \wedge \Phi_R)[\bar S {\mapsto} \bar S_1]
+    \ \wedge\ (\mathcal{D} \wedge P \wedge \neg\Phi_R)[\bar S {\mapsto} \bar S_2] \,\bigr]
+\]
+is unsatisfiable.
+\end{proposition}
+\begin{proof}
+The query is satisfiable exactly when some value of $X$ admits both a
+completion of $\bar S_1$ making $\Phi_R$ hold and a completion of $\bar S_2$
+making it fail --- i.e.\ some $v$ leaves $\mathrm{verdict}(R,P\wedge X{=}v) =
+\textsc{may-violate}$, since the two copies range independently over every
+completion of the rest. Unsatisfiability is the negation of that statement,
+which is exactly $X$ settling $(R,P)$.
+\end{proof}
+
+A single-variable core is therefore an actionable measurement precisely when
+its variable also settles the record in this sense, which is checkable by one
+further solver call rather than by counting the core's size (\S\ref{sec:may}).
 
 \subsection{Why deontic force is an operator and not a label}
 
