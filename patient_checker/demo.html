@@ -218,10 +218,8 @@
   <h1>Two real guidelines, formalized</h1>
   <p>
     Two of the nine open-access guidelines in the corpus, run through the
-    actual pipeline rather than written by hand for the demo. Each card has
-    sample patients you can run against it, and links to the full
-    formalization report &mdash; including every statement the system declined
-    to encode, with the reason.
+    actual pipeline. Each card has sample patients you can run against it, and
+    links to the full formalization report.
   </p>
   <a class="toy-link" href="/demo/toy">Toy example: one rule, three verdicts &rarr;</a>
 </header>
@@ -237,9 +235,44 @@
 // observations, not predictions, and `expect` is displayed so a reviewer can
 // see immediately whether the run agreed.
 const DOCS = [
+  // The hand-authored set sits here rather than in the guideline library: it
+  // is a demonstration fixture, not a formalized document, and listing it
+  // beside real uploads implied it came out of the pipeline like they did.
+  {
+    id: "fixtures",
+    source: "Hand-authored \u00b7 not extracted from any document",
+    note: "The checker's own test set -- ACE inhibitor with hyperkalaemia, " +
+          "DOAC dosing by renal function, drug-drug interaction flags. Each " +
+          "one goes through the same validator and non-degeneracy check a " +
+          "formalized rule gets.",
+    ruleNote: "Rule ace_inhibitor_hyperkalemia_contraindication -- do not " +
+              "start an ACE inhibitor when serum potassium is above 5.0 mmol/L.",
+    scenarios: [
+      { label: "ACE inhibitor, potassium 5.4",
+        body: { patient: { potassium: 5.4 }, plan: { ace_inhibitor_on: true } } },
+      { label: "ACE inhibitor, potassium 4.0",
+        body: { patient: { potassium: 4.0 }, plan: { ace_inhibitor_on: true } } },
+      { label: "ACE inhibitor, nothing measured yet",
+        body: { patient: {}, plan: { ace_inhibitor_on: true } } },
+      { label: "ACE inhibitor, potassium confirmed never checked",
+        body: { patient: { potassium_check_occurred: false }, plan: { ace_inhibitor_on: true } } },
+      { label: "Apixaban, 2 of 3 dose-reduction criteria met",
+        body: { patient: { patient_age_years: 82, patient_weight_kg: 58 }, plan: { apixaban_on: true } } },
+      { label: "Rivaroxaban, creatinine clearance 10",
+        body: { patient: { creatinine_clearance_ml_min: 10 }, plan: { rivaroxaban_on: true } } },
+      { label: "Warfarin + NSAID together",
+        body: { patient: {}, plan: { warfarin_on: true, nsaid_on: true } } },
+      { label: "Clarithromycin + simvastatin together",
+        body: { patient: {}, plan: { clarithromycin_on: true, simvastatin_on: true } } },
+      { label: "Non-selective beta-blocker in asthma",
+        body: { patient: { asthma_diagnosis: true }, plan: { nonselective_beta_blocker_on: true } } },
+      { label: "Digoxin, creatinine clearance 45",
+        body: { patient: { creatinine_clearance_ml_min: 45 }, plan: { digoxin_on: true } } },
+    ],
+  },
   {
     id: "pmc12355350",
-    pmcid: "PMC12355350",
+    source: "PMC12355350 \u00b7 PubMed Central open access",
     note: "A living guideline on type 2 diabetes therapeutics. Three rules " +
           "encoded; the refusals below are what the prose would not carry.",
     ruleNote: "Rule PMC12355350:0049 -- a patient at higher risk (established " +
@@ -269,7 +302,7 @@ const DOCS = [
   },
   {
     id: "pmc13270348",
-    pmcid: "PMC13270348",
+    source: "PMC13270348 \u00b7 PubMed Central open access",
     note: "Pain management in acute pancreatitis. Both encoded rules are " +
           "PERMISSIONS -- the guideline offers the option rather than " +
           "requiring it, so no patient can violate them.",
@@ -322,8 +355,8 @@ function loadDocCard(doc, meta, rules, residue) {
   return `
     <div class="g-wrap">
       <a class="g-card" href="/check?guideline=${encodeURIComponent(doc.id)}&from=demo">
-        <h3>${esc(meta.title || doc.pmcid)}</h3>
-        <div class="counts">${esc(doc.pmcid)} &middot; PubMed Central open access</div>
+        <h3>${esc(meta.title || doc.source)}</h3>
+        <div class="counts">${esc(doc.source)}</div>
         <p class="g-desc">${esc(doc.note)}</p>
         <div class="badges">${pills}</div>
       </a>
@@ -348,7 +381,7 @@ async function loadDoc(doc) {
     fetch(`/guidelines/${doc.id}/rules`),
     fetch(`/guidelines/${doc.id}/residue`),
   ]);
-  if (!metaRes.ok) throw new Error(`could not load ${doc.pmcid}`);
+  if (!metaRes.ok) throw new Error(`could not load ${doc.id}`);
   const meta = await metaRes.json();
   const rules = rulesRes.ok ? await rulesRes.json() : [];
   const residue = residueRes.ok ? await residueRes.json() : { by_reason: {} };
@@ -386,21 +419,32 @@ async function runScenario(docId, index) {
     });
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || "check failed");
-    const r = Array.isArray(data) ? data[0] : data;
-    const v = r.verdict;
+    // A case with no rule_id is checked against EVERY rule its variables
+    // touch, so several verdicts come back. Show them all: collapsing to one
+    // would hide exactly the interesting case -- a patient who is compliant
+    // with the contraindication rule and undetermined on the monitoring one.
+    const rows = Array.isArray(data) ? data : [data];
+    const badges = rows.map((r) =>
+      `<span class="vbadge ${verdictClass(r.verdict)}">${esc(r.verdict)}</span>` +
+      (rows.length > 1 ? `<span class="facts">${esc(r.title || r.rule_id)}</span><br>` : "")
+    ).join("");
     // The core is the point of an undetermined verdict: it names what the
     // answer is waiting on rather than guessing at it.
-    const core = r.counterexample_core && Object.keys(r.counterexample_core).length
+    const withCore = rows.find(
+      (r) => r.counterexample_core && Object.keys(r.counterexample_core).length);
+    const core = withCore
       ? `<p class="facts">Undetermined until: ${
-          Object.entries(r.counterexample_core)
+          Object.entries(withCore.counterexample_core)
             .map(([k, val]) => `<code>${esc(k)} = ${esc(String(val))}</code>`).join(" ")
         }</p>`
       : "";
-    const agrees = v === scn.expect
+    // `expect` is optional: only the single-rule cases claim a verdict up
+    // front, and for those a disagreement should be visible, not silent.
+    const verdicts = rows.map((r) => r.verdict);
+    const agrees = (!scn.expect || verdicts.includes(scn.expect))
       ? ""
       : ` <strong style="color:var(--must)">(expected ${esc(scn.expect)})</strong>`;
-    out.innerHTML =
-      `<span class="vbadge ${verdictClass(v)}">${esc(v)}</span>${agrees}` +
+    out.innerHTML = badges + agrees +
       `<p class="facts">Given: ${factLine(scn.body)}</p>${core}`;
   } catch (err) {
     out.innerHTML = `<span class="facts" style="color:var(--must)">${esc(err.message)}</span>`;
@@ -414,18 +458,9 @@ async function load() {
   try {
     const sections = await Promise.all(DOCS.map(loadDoc));
     host.innerHTML = `<div class="grid">${sections.join("")}</div>` + `
-      <p class="note" id="try-note">
-        The sample patients above post to
-        <code>/guidelines/&lt;id&gt;/check</code> &mdash; the same endpoint the
-        checker page uses. Each button states the verdict it should produce, so
-        a disagreement is visible rather than something you would have to know
-        the guideline to notice.
-      </p>
       <p class="note">
         Both documents were formalized by the same pipeline the upload button
-        runs. The refusals are the point: each one names a specific reason the
-        statement could not be carried into logic faithfully, rather than being
-        dropped from the count.
+        runs.
       </p>`;
     document.querySelectorAll("[data-scn]").forEach((btn) => {
       btn.addEventListener("click", () =>

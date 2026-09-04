@@ -332,15 +332,6 @@ async function run() {
     renderStep(SCENARIOS[1], second.result, second.error) +
     renderStep(SCENARIOS[2], third.result, third.error) +
     `<div class="closing">
-      <p>
-        Every one of those verdicts came from proving satisfiability with
-        Z3, not from a hand-written flag -- and the third one's
-        counterexample (the exact missing fact that would make it a
-        violation) was minimized down from every unspecified variable to
-        just the one that matters. A naive "does this look wrong" check
-        can't tell that middle case apart from either of the other two;
-        this system doesn't have to guess.
-      </p>
       <div class="cta-row">
         <a class="cta primary" href="/check?guideline=fixtures&from=demo">Try your own patient &rarr;</a>
         <a class="cta secondary" href="/">Explore the guideline library &rarr;</a>

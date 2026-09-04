@@ -498,7 +498,11 @@ async function loadGuidelines() {
   try {
     const response = await fetch("/guidelines");
     const data = await response.json();
-    grid.innerHTML = data.map(renderCard).join("") +
+    // The hand-authored fixture set lives on the demo page now. It is still
+    // served by /guidelines and still reachable at /check?guideline=fixtures;
+    // it just isn't listed here, where everything else came from a document.
+    const uploaded = data.filter((g) => !g.builtin);
+    grid.innerHTML = uploaded.map(renderCard).join("") +
       `<div class="g-card upload" id="upload-card">+ Upload guideline</div>`;
     document.getElementById("upload-card").addEventListener("click", () => openModal(null));
     document.querySelectorAll("[data-process-id]").forEach((el) => {

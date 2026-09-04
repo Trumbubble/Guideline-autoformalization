@@ -3,6 +3,7 @@ See CHECKER.md for the endpoints, the verdict semantics, and how the
 counterexample is minimized."""
 
 from pathlib import Path
+from urllib.parse import quote
 
 from flask import Flask, Response, jsonify, request, send_from_directory
 from z3 import Not, Solver, is_bool, is_int, sat, unsat
@@ -445,15 +446,17 @@ def guideline_report(guideline_id):
                       {v for r in rules for v in getattr(r, "var_refs", {})})]},
                   "rules": [], "refusals": [],
                   "findings": [_fixture_finding(r) for r in rules]}
-    # Go back where the reader came from: the demo's links carry ?from=demo,
-    # and sending them to the library instead drops them somewhere they never
-    # were.
+    # Back goes to the checker for THIS guideline, not to the library: someone
+    # reading the report is looking at one document, and the useful next move
+    # is to run a patient against it. ?from=demo is carried through so the
+    # checker's own back link still returns to the demo.
     from_demo = request.args.get("from") == "demo"
+    check_url = f"/check?guideline={quote(guideline_id)}"
     html = _report.render(bundle,
                           title=f"{entry.get('title', guideline_id)} "
                                 f"\u2014 formalization report",
-                          home_url="/demo" if from_demo else "/",
-                          home_label="Demo" if from_demo else "All guidelines")
+                          home_url=check_url + ("&from=demo" if from_demo else ""),
+                          home_label="Check a patient")
     return Response(html, mimetype="text/html")
 
 
