@@ -3,6 +3,18 @@
 <head>
 <meta charset="utf-8">
 <title>Guideline library</title>
+<script>
+// Set before the stylesheet paints, so a saved override never flashes the
+// wrong theme for a frame -- see the toggle logic at the bottom of the page.
+(function () {
+  try {
+    var saved = localStorage.getItem("gf_theme");
+    if (saved === "light" || saved === "dark") {
+      document.documentElement.setAttribute("data-theme", saved);
+    }
+  } catch (err) {}
+})();
+</script>
 <style>
   :root {
     color-scheme: light dark;
@@ -20,7 +32,7 @@
     --accent: #2757c9;
   }
   @media (prefers-color-scheme: dark) {
-    :root {
+    :root:not([data-theme="light"]) {
       --bg: #16171a;
       --panel: #1f2023;
       --text: #eaeaea;
@@ -32,6 +44,19 @@
       --accent: #6f97f0;
     }
   }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --bg: #16171a;
+    --panel: #1f2023;
+    --text: #eaeaea;
+    --muted: #9a9a9a;
+    --border: #35363a;
+    --must-bg: #3a1f1d;
+    --may-bg: #3a2f14;
+    --certified-bg: #163524;
+    --accent: #6f97f0;
+  }
+  :root[data-theme="light"] { color-scheme: light; }
   * { box-sizing: border-box; }
   body {
     margin: 0;
@@ -99,6 +124,21 @@
     min-height: 92px;
   }
   .g-card.upload:hover { color: var(--accent); border-color: var(--accent); }
+  .g-process { color: var(--may); }
+  .g-process:hover { color: var(--accent); }
+
+  .theme-toggle {
+    border: 1px solid var(--border);
+    background: var(--panel);
+    color: var(--muted);
+    border-radius: 999px;
+    padding: 0.35rem 0.7rem;
+    font-size: 0.78rem;
+    font-weight: 600;
+    cursor: pointer;
+    float: right;
+  }
+  .theme-toggle:hover { color: var(--accent); border-color: var(--accent); }
 
   .modal-backdrop {
     display: none;
@@ -164,6 +204,7 @@
 <body>
 
 <header>
+  <button class="theme-toggle" id="theme-toggle" type="button">Dark mode</button>
   <h1>Guideline library</h1>
   <p>Pick a guideline to check a patient and plan against it, or upload a new one.
     New here? <a href="/demo">See a 30-second demo &rarr;</a></p>
@@ -177,8 +218,8 @@
 
 <div class="modal-backdrop" id="modal-backdrop">
   <div class="modal">
-    <h2>Upload a guideline</h2>
-    <p class="hint">
+    <h2 id="modal-title">Upload a guideline</h2>
+    <p class="hint" id="modal-hint">
       Runs the real pipeline (segment &rarr; bind &rarr; formalize) against
       this document. Formalizing statements into checkable rules is a model
       step -- without a configured <code>ANTHROPIC_API_KEY</code>, the
@@ -186,26 +227,29 @@
       zero rules.
     </p>
 
-    <label for="title">Title</label>
-    <input type="text" id="title" placeholder="e.g. KDIGO CKD 2024">
+    <div id="new-upload-fields">
+      <label for="title">Title</label>
+      <input type="text" id="title" placeholder="e.g. KDIGO CKD 2024">
 
-    <div class="tabs">
-      <button type="button" class="tab-btn active" data-tab="paste">Paste text</button>
-      <button type="button" class="tab-btn" data-tab="file">Upload file</button>
-    </div>
-    <div class="tab-panel active" id="tab-paste">
-      <label for="text">Guideline text</label>
-      <textarea id="text" placeholder="Paste guideline prose here, one recommendation per paragraph&hellip;"></textarea>
-    </div>
-    <div class="tab-panel" id="tab-file">
-      <label for="file">Document (.pdf, .html, .xml, .txt)</label>
-      <input type="file" id="file" accept=".pdf,.html,.htm,.xml,.txt">
+      <div class="tabs">
+        <button type="button" class="tab-btn active" data-tab="paste">Paste text</button>
+        <button type="button" class="tab-btn" data-tab="file">Upload file</button>
+      </div>
+      <div class="tab-panel active" id="tab-paste">
+        <label for="text">Guideline text</label>
+        <textarea id="text" placeholder="Paste guideline prose here, one recommendation per paragraph&hellip;"></textarea>
+      </div>
+      <div class="tab-panel" id="tab-file">
+        <label for="file">Document (.pdf, .html, .xml, .txt)</label>
+        <input type="file" id="file" accept=".pdf,.html,.htm,.xml,.txt">
+      </div>
+
+      <div class="checkbox-row">
+        <input type="checkbox" id="live">
+        <label for="live">Process live with the model</label>
+      </div>
     </div>
 
-    <div class="checkbox-row">
-      <input type="checkbox" id="live">
-      <label for="live">Process live with the model</label>
-    </div>
     <div id="key-panel" style="display:none;">
       <label for="api-key">Anthropic API key</label>
       <input type="password" id="api-key" placeholder="sk-ant-...">
@@ -271,8 +315,13 @@ function renderCard(g) {
   if (g.needs_model_count) pills.push(pill("pending", `${g.needs_model_count} awaiting model`));
   if (g.rejected_count) pills.push(pill("refused", `${g.rejected_count} rejected on verification`));
   if (g.builtin) pills.push(pill("builtin", "built in"));
-  // The card links to the checker; the report is a second destination, so the
-  // card is wrapped rather than nested (an <a> inside an <a> is invalid).
+  // The card links to the checker; the report (and, for a non-live upload,
+  // the "process live" action) are second destinations, so the card is
+  // wrapped rather than nested (an <a> inside an <a> is invalid).
+  const processLink = (!g.builtin && !g.live)
+    ? `<a class="g-report g-process" href="#" data-process-id="${encodeURIComponent(g.id)}"
+         data-process-title="${g.title.replace(/"/g, "&quot;")}">Process live with model &rarr;</a>`
+    : "";
   return `
     <div class="g-wrap">
       <a class="g-card" href="/check?guideline=${encodeURIComponent(g.id)}">
@@ -282,6 +331,7 @@ function renderCard(g) {
       </a>
       <a class="g-report" href="/guidelines/${encodeURIComponent(g.id)}/report"
          target="_blank" rel="noopener">Formalization report &rarr;</a>
+      ${processLink}
     </div>`;
 }
 
@@ -291,15 +341,48 @@ async function loadGuidelines() {
     const data = await response.json();
     grid.innerHTML = data.map(renderCard).join("") +
       `<div class="g-card upload" id="upload-card">+ Upload guideline</div>`;
-    document.getElementById("upload-card").addEventListener("click", openModal);
+    document.getElementById("upload-card").addEventListener("click", () => openModal(null));
+    document.querySelectorAll("[data-process-id]").forEach((el) => {
+      el.addEventListener("click", (e) => {
+        e.preventDefault();
+        openModal({ id: el.dataset.processId, title: el.dataset.processTitle });
+      });
+    });
   } catch (err) {
     grid.innerHTML = `<p class="status error">Could not load guidelines: ${err.message}</p>`;
   }
 }
 
-function openModal() {
+// `process` is null for a fresh upload, or {id, title} to reprocess an
+// existing guideline live against its original upload instead.
+let processTarget = null;
+
+function openModal(process) {
+  processTarget = process || null;
   statusEl.textContent = "";
   statusEl.className = "status";
+  const newFields = document.getElementById("new-upload-fields");
+  if (processTarget) {
+    document.getElementById("modal-title").textContent = `Process "${processTarget.title}" live`;
+    document.getElementById("modal-hint").textContent =
+      "Re-runs the pipeline against the document originally uploaded for this " +
+      "guideline, this time with the model, so it produces real rules instead " +
+      "of binder-only refusals.";
+    newFields.style.display = "none";
+    keyPanel.style.display = "block";
+    submitBtn.textContent = "Process";
+  } else {
+    document.getElementById("modal-title").textContent = "Upload a guideline";
+    document.getElementById("modal-hint").innerHTML =
+      "Runs the real pipeline (segment &rarr; bind &rarr; formalize) against " +
+      "this document. Formalizing statements into checkable rules is a model " +
+      "step -- without a configured <code>ANTHROPIC_API_KEY</code>, the " +
+      "upload will still segment and triage the document, but will produce " +
+      "zero rules.";
+    newFields.style.display = "block";
+    keyPanel.style.display = liveCheckbox.checked ? "block" : "none";
+    submitBtn.textContent = "Upload";
+  }
   backdrop.classList.add("open");
   loadKeyStatus();
 }
@@ -320,7 +403,15 @@ document.querySelectorAll(".tab-btn").forEach((btn) => {
 document.getElementById("cancel-btn").addEventListener("click", closeModal);
 backdrop.addEventListener("click", (e) => { if (e.target === backdrop) closeModal(); });
 
-submitBtn.addEventListener("click", async () => {
+submitBtn.addEventListener("click", () => {
+  if (processTarget) {
+    submitProcess();
+  } else {
+    submitUpload();
+  }
+});
+
+async function submitUpload() {
   const title = document.getElementById("title").value.trim();
   const activeTab = document.querySelector(".tab-btn.active").dataset.tab;
   const live = document.getElementById("live").checked;
@@ -379,7 +470,63 @@ submitBtn.addEventListener("click", async () => {
   } finally {
     submitBtn.disabled = false;
   }
+}
+
+async function submitProcess() {
+  const form = new FormData();
+  if (keyInput.value) {
+    form.set("api_key", keyInput.value);
+  }
+
+  submitBtn.disabled = true;
+  statusEl.className = "status loading";
+  statusEl.textContent = "Processing… re-running the pipeline live against the original document.";
+
+  try {
+    const response = await fetch(
+      `/guidelines/${encodeURIComponent(processTarget.id)}/process`,
+      { method: "POST", body: form }
+    );
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || "processing failed");
+
+    statusEl.className = "status ok";
+    const bits = [`${data.rule_count} rule(s) encoded`];
+    if (data.refusal_count) bits.push(`${data.refusal_count} refused`);
+    if (data.needs_model_count) bits.push(`${data.needs_model_count} need${data.needs_model_count === 1 ? "s" : ""} a model to formalize`);
+    statusEl.textContent = bits.join(", ") + ".";
+
+    await loadGuidelines();
+    setTimeout(closeModal, 1400);
+  } catch (err) {
+    statusEl.className = "status error";
+    statusEl.textContent = err.message;
+  } finally {
+    submitBtn.disabled = false;
+  }
+}
+
+const THEME_KEY = "gf_theme";
+
+function currentTheme() {
+  let saved = null;
+  try { saved = localStorage.getItem(THEME_KEY); } catch (err) {}
+  if (saved === "light" || saved === "dark") return saved;
+  return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+}
+
+function refreshThemeToggle() {
+  document.getElementById("theme-toggle").textContent =
+    currentTheme() === "dark" ? "Light mode" : "Dark mode";
+}
+
+document.getElementById("theme-toggle").addEventListener("click", () => {
+  const next = currentTheme() === "dark" ? "light" : "dark";
+  document.documentElement.setAttribute("data-theme", next);
+  try { localStorage.setItem(THEME_KEY, next); } catch (err) {}
+  refreshThemeToggle();
 });
+refreshThemeToggle();
 
 loadGuidelines();
 </script>

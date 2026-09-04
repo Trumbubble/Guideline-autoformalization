@@ -192,6 +192,40 @@ def _merged_registry(triages, index, mention_llm, select_llm) -> "dsl.Registry":
     return dsl.Registry(list(seen.values()), list(events.values()))
 
 
+def _build_index(live: bool):
+    """Local terms.db plus live remote fallback when `live`, the fixture set
+    otherwise -- same construction as demo.py's `_build_index`, duplicated
+    rather than imported for the same reason `_merged_registry` is: demo.py
+    is a script, not a library, and CQL_converter is not to be modified for
+    this. Getting this wrong (fixture_index() regardless of `live`) is why a
+    real live upload previously bound against 22 fixture concepts instead of
+    terms.db's 634k and came back with everything refused."""
+    if not live:
+        return bind.fixture_index()
+    local = bind.SqliteIndex(os.path.join(_PART_A, "terms.db"))
+    for system, loader in [(bind.LOINC, bind.load_loinc),
+                            (bind.SNOMED, bind.load_snomed),
+                            (bind.RXNORM, bind.load_rxnorm)]:
+        if local.version(system):
+            continue
+        try:
+            loader(local)
+        except FileNotFoundError:
+            pass  # degrades to the free endpoints via RemoteIndex below
+    return bind.CachedIndex(local, bind.RemoteIndex())
+
+
+def _raw_source_path(guideline_id: str, filename: str | None) -> Path:
+    """Where the ORIGINAL uploaded bytes/text live, so a guideline first
+    ingested with live=False can later be reprocessed with the model without
+    re-uploading the document from scratch -- ingest() itself only ever
+    persisted the resulting bundle, never the input it was built from."""
+    raw_dir = STORE_DIR / "raw"
+    if filename:
+        return raw_dir / f"{guideline_id}{Path(filename).suffix or '.bin'}"
+    return raw_dir / f"{guideline_id}.txt"
+
+
 def ingest(title: str, *, file_bytes=None, filename=None, text=None,
            live: bool = False, api_key: str | None = None) -> dict:
     """Turn an uploaded document (or pasted text) into a stored bundle.
@@ -211,13 +245,55 @@ def ingest(title: str, *, file_bytes=None, filename=None, text=None,
     """
     if not (file_bytes or text):
         raise IngestError("no document provided")
-
     guideline_id = _slug(title)
+    return _ingest_into(
+        guideline_id, title, file_bytes=file_bytes, filename=filename,
+        text=text, live=live, api_key=api_key,
+    )
+
+
+def reprocess(guideline_id: str, *, api_key: str | None = None) -> dict:
+    """Re-run ingest, live, against an existing guideline's ORIGINAL upload,
+    in place -- the fix for "uploaded without live, got zero rules, and then
+    had no way to go back and process it with the model" (the raw content
+    ingest() saves via `_raw_source_path` is what makes this possible; a
+    guideline registered from a Track A bundle via `register_bundle` has no
+    raw upload behind it and can't be reprocessed this way)."""
+    meta = next((e for e in _load_index() if e["id"] == guideline_id), None)
+    if meta is None:
+        raise IngestError(f"unknown guideline {guideline_id!r}")
+    raw_path = _raw_source_path(guideline_id, meta.get("source_filename"))
+    if not raw_path.exists():
+        raise IngestError(
+            "the original upload for this guideline isn't available to "
+            "reprocess -- try uploading it again with 'process live' checked"
+        )
+    if meta.get("source_filename"):
+        file_bytes, text = raw_path.read_bytes(), None
+    else:
+        file_bytes, text = None, raw_path.read_text(encoding="utf-8")
+    return _ingest_into(
+        guideline_id, meta["title"], file_bytes=file_bytes,
+        filename=meta.get("source_filename"), text=text,
+        live=True, api_key=api_key,
+    )
+
+
+def _ingest_into(guideline_id: str, title: str, *, file_bytes=None,
+                 filename=None, text=None, live: bool = False,
+                 api_key: str | None = None) -> dict:
     blocks = _blocks_for_upload(
         guideline_id, file_bytes=file_bytes, filename=filename, text=text
     )
     if not blocks:
         raise IngestError("no text could be extracted from the upload")
+
+    raw_path = _raw_source_path(guideline_id, filename)
+    raw_path.parent.mkdir(parents=True, exist_ok=True)
+    if text is not None:
+        raw_path.write_text(text, encoding="utf-8")
+    else:
+        raw_path.write_bytes(file_bytes)
 
     stmts, manifest = segment.segment(blocks, guideline_id)
 
@@ -228,7 +304,7 @@ def ingest(title: str, *, file_bytes=None, filename=None, text=None,
         mention_llm, select_llm = llm.propose_mentions, llm.select_candidate
         formalize = lambda t, r: llm.formalize(t, r, effort="medium")
 
-    index = bind.fixture_index()
+    index = _build_index(live)
     with _temporary_api_key(api_key if live else None):
         triages = [
             gate.triage(
@@ -288,7 +364,7 @@ def ingest(title: str, *, file_bytes=None, filename=None, text=None,
         "needs_model_count": needs_model,
         "rejected_count": len(rejected),
     }
-    entries = _load_index()
+    entries = [e for e in _load_index() if e.get("id") != guideline_id]
     entries.append(entry)
     _save_index(entries)
     return entry

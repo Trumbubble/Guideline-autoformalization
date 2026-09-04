@@ -1,10 +1,7 @@
 # CQL_converter: Documentation
 
-Track A turns a clinical guideline document into formally checkable rules —
-refusing rather than guessing wherever it can't. This file is self-contained:
-everything below used to be split across `SEGMENT.md` / `BIND.md` / `GATE.md`
-/ `DSL.md` / `CQL.md` / `GOLD.md` / `NOTES.md` / `RESULTS.md`; those files may
-not travel with this one, so their load-bearing content is folded in here.
+CQL_converter turns a clinical guideline document into formally checkable rules —
+refusing rather than guessing wherever it can't.
 
 ---
 
