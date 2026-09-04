@@ -228,6 +228,11 @@ patient_checker/engine/classes/
 patient_checker/engine/cp.txt
 patient_checker/engine/*.json
 !patient_checker/engine/package.json
+# toolchain.cql_to_elm compiles by writing the CQL to a temp file HERE, not in
+# /tmp -- the translator resolves `include FHIRHelpers` by looking for a
+# sibling file. It unlinks it in a finally block, which does not run when the
+# process dies abnormally (a segfault, a kill), so the odd tmp*.cql survives.
+patient_checker/engine/tmp*.cql
 
 # Uploaded guidelines are runtime data, not source.
 patient_checker/guidelines/
