@@ -165,6 +165,29 @@
   }
   .g-report:hover { color: var(--accent); text-decoration: underline; }
 
+  /* Per-card management, same as the guideline library. Kept to the wrapper,
+     not the card itself, because the card is a link and a button inside a
+     link is invalid. */
+  .g-tools { display: flex; gap: 0.6rem; margin-top: 0.35rem; }
+  .g-tool {
+    background: none; border: none; padding: 0; cursor: pointer;
+    font-size: 0.78rem; font-weight: 600; color: var(--muted);
+  }
+  .g-tool:hover { color: var(--accent); }
+  .g-tool.danger:hover { color: var(--must); }
+  .g-rename-row { display: flex; gap: 0.4rem; margin-top: 0.35rem; }
+  .g-rename-row input {
+    flex: 1; font-size: 0.82rem; padding: 0.3rem 0.4rem;
+    border-radius: 6px; border: 1px solid var(--border);
+    background: var(--bg); color: var(--text);
+  }
+  .g-rename-row button { padding: 0.3rem 0.6rem; font-size: 0.78rem; }
+  .g-missing {
+    background: var(--panel); border: 1px dashed var(--border);
+    border-radius: 16px; padding: 1.1rem 1.2rem;
+    font-size: 0.84rem; color: var(--muted);
+  }
+
   /* Sample patients: a reviewer should be able to confirm the rules actually
      run without inventing variable names for a guideline they didn't write. */
   .try { margin-top: 0.55rem; }
@@ -215,7 +238,7 @@
     </svg>
   </button>
   <a class="back-link" href="/">&larr; Guideline library</a>
-  <h1>Two real guidelines, formalized</h1>
+  <h1>Demo</h1>
   <p>
     Two of the nine open-access guidelines in the corpus, run through the
     actual pipeline. Each card has sample patients you can run against it, and
@@ -352,8 +375,17 @@ function loadDocCard(doc, meta, rules, residue) {
   const pills =
     `<span class="pill rules">${rules.length} rule${rules.length === 1 ? "" : "s"}</span>` +
     (refused ? `<span class="pill refused">${refused} refused</span>` : "");
+  // The fixture set is built in rather than stored, so there is nothing on
+  // disk to rename or delete -- it gets no tools rather than tools that fail.
+  const tools = meta.builtin ? "" : `
+      <div class="g-tools">
+        <button class="g-tool" type="button" data-rename-id="${encodeURIComponent(doc.id)}"
+                data-rename-title="${esc(meta.title || doc.id)}">Rename</button>
+        <button class="g-tool danger" type="button" data-delete-id="${encodeURIComponent(doc.id)}"
+                data-delete-title="${esc(meta.title || doc.id)}">Delete</button>
+      </div>`;
   return `
-    <div class="g-wrap">
+    <div class="g-wrap" data-card="${encodeURIComponent(doc.id)}">
       <a class="g-card" href="/check?guideline=${encodeURIComponent(doc.id)}&from=demo">
         <h3>${esc(meta.title || doc.source)}</h3>
         <div class="counts">${esc(doc.source)}</div>
@@ -372,7 +404,62 @@ function loadDocCard(doc, meta, rules, residue) {
         </div>
         <div class="verdict" id="verdict-${esc(doc.id)}"></div>
       </div>
+      ${tools}
     </div>`;
+}
+
+async function deleteGuideline(id, title) {
+  if (!window.confirm(`Delete "${title}"? Its bundle and the original upload are removed. This cannot be undone.`)) {
+    return;
+  }
+  try {
+    const response = await fetch(`/guidelines/${id}`, { method: "DELETE" });
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      throw new Error(data.error || "delete failed");
+    }
+    await load();
+  } catch (err) {
+    document.getElementById("docs").insertAdjacentHTML("afterbegin",
+      `<p class="error">${esc(err.message)}</p>`);
+  }
+}
+
+function startRename(id, title) {
+  const card = document.querySelector(`[data-card="${id}"]`);
+  if (!card || card.querySelector(".g-rename-row")) return;
+  const row = document.createElement("div");
+  row.className = "g-rename-row";
+  row.innerHTML = `<input type="text" value="${esc(title)}" aria-label="New title">
+                   <button type="button">Save</button>`;
+  card.appendChild(row);
+  const input = row.querySelector("input");
+  input.focus();
+  input.select();
+
+  const commit = async () => {
+    const next = input.value.trim();
+    if (!next || next === title) { row.remove(); return; }
+    try {
+      const response = await fetch(`/guidelines/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: next }),
+      });
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.error || "rename failed");
+      }
+      await load();
+    } catch (err) {
+      row.innerHTML = `<span class="error">${esc(err.message)}</span>`;
+    }
+  };
+  row.querySelector("button").addEventListener("click", commit);
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") commit();
+    if (e.key === "Escape") row.remove();
+  });
 }
 
 async function loadDoc(doc) {
@@ -381,6 +468,13 @@ async function loadDoc(doc) {
     fetch(`/guidelines/${doc.id}/rules`),
     fetch(`/guidelines/${doc.id}/residue`),
   ]);
+  // These cards can now be deleted from this very page, so a missing one is
+  // an expected state, not a page-level failure: say so in its own slot and
+  // leave the other cards working.
+  if (metaRes.status === 404) {
+    return `<div class="g-missing"><strong>${esc(doc.source)}</strong><br>
+            No longer in the library &mdash; it was deleted.</div>`;
+  }
   if (!metaRes.ok) throw new Error(`could not load ${doc.id}`);
   const meta = await metaRes.json();
   const rules = rulesRes.ok ? await rulesRes.json() : [];
@@ -465,6 +559,14 @@ async function load() {
     document.querySelectorAll("[data-scn]").forEach((btn) => {
       btn.addEventListener("click", () =>
         runScenario(btn.dataset.doc, Number(btn.dataset.scn)));
+    });
+    document.querySelectorAll("[data-rename-id]").forEach((el) => {
+      el.addEventListener("click", () =>
+        startRename(el.dataset.renameId, el.dataset.renameTitle));
+    });
+    document.querySelectorAll("[data-delete-id]").forEach((el) => {
+      el.addEventListener("click", () =>
+        deleteGuideline(el.dataset.deleteId, el.dataset.deleteTitle));
     });
   } catch (err) {
     host.innerHTML = `<p class="error">${esc(err.message)}</p>`;

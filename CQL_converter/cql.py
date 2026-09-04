@@ -217,6 +217,27 @@ def _kind_of(vd: dsl.VarDef) -> str:
 
 CQL_OPS = {"<": "<", "<=": "<=", ">": ">", ">=": ">=", "==": "=", "!=": "!="}
 
+# UCUM is stricter than the way a guideline writes a unit, and a quantity
+# literal in CQL must be UCUM. The recurring case is the body-surface-area
+# normalisation every eGFR threshold carries: 'mL/min/1.73m2' is rejected,
+# because '73m' parses as an unknown unit. The 1.73 m^2 is not a unit at all
+# -- it is a note about what the number was normalised to -- so UCUM wants it
+# as an ANNOTATION, {1.73_m2}.
+#
+# Found by putting the real translator in the loop: the source's own spelling
+# went through our structural checks as well-formed and was rejected by
+# cql-to-elm. Anything not matched here is emitted verbatim and left for the
+# compiler to judge, which is the point of compiling.
+_BSA_NORMALISED = re.compile(r"\s*/\s*1\.73\s*_?\s*m\s*(?:\^?\s*2|²)\s*$", re.I)
+
+
+def ucum(unit: str) -> str:
+    """A guideline's unit spelling as a UCUM expression CQL will accept."""
+    if not unit:
+        return unit
+    fixed = _BSA_NORMALISED.sub("/{1.73_m2}", unit.strip())
+    return fixed
+
 def expr_to_cql(e: dsl.Expr, reg: dsl.Registry, indent: int = 1) -> str:
     pad = "  " * indent
     if isinstance(e, dsl.Cmp):
@@ -226,12 +247,12 @@ def expr_to_cql(e: dsl.Expr, reg: dsl.Registry, indent: int = 1) -> str:
         if isinstance(e.value, str):
             return f"{term} {CQL_OPS[e.op]} '{e.value}'"
         vd = reg[e.var] if e.var in reg else None
-        unit = f" '{vd.unit}'" if vd and vd.unit else ""
+        unit = f" '{ucum(vd.unit)}'" if vd and vd.unit else ""
         return f"{term} {CQL_OPS[e.op]} {e.value}{unit}"
     if isinstance(e, dsl.Between):
         term = cql_name(e.var, reg)
         vd = reg[e.var] if e.var in reg else None
-        unit = f" '{vd.unit}'" if vd and vd.unit else ""
+        unit = f" '{ucum(vd.unit)}'" if vd and vd.unit else ""
         lo = ">=" if e.lo_inclusive else ">"
         hi = "<=" if e.hi_inclusive else "<"
         return f"{term} {lo} {e.lo}{unit} and {term} {hi} {e.hi}{unit}"

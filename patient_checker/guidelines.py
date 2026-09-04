@@ -391,6 +391,63 @@ def _ingest_into(guideline_id: str, title: str, *, file_bytes=None,
     return {"id": guideline_id, "status": "processing", "total": total}
 
 
+CQL_DIR = Path(__file__).parent / "cql"
+
+
+def _lower_and_compile(guideline_id: str, rules, reg) -> dict:
+    """Lower every rule to CQL and put it through the REAL HL7 translator.
+
+    Without this the upload path produced no CQL at all, so "executable" was
+    a claim about the DSL rather than about anything a site could run, and
+    nothing the pipeline emitted had been seen by a compiler. `demo.py --live`
+    already gated its output this way (`compiler = toolchain.cql_to_elm`);
+    this is the same gate on the path the UI actually uses.
+
+    The translator is a JVM subprocess, ~0.6s per rule, which is nothing
+    beside the model calls that produced the rule. Its absence is recorded,
+    never silently treated as a pass: a missing toolchain and a clean compile
+    must not look alike (RESULTS.md R33a is exactly that bug).
+    """
+    import cql as _cql
+
+    out = {"cql_written": 0, "cql_compiled": 0, "cql_errors": 0,
+           "compiler_available": False}
+    if not rules:
+        return out
+    try:
+        import toolchain
+        compiler = toolchain.cql_to_elm if toolchain.available() else None
+    except Exception:
+        compiler = None
+    out["compiler_available"] = compiler is not None
+
+    dest = CQL_DIR / guideline_id
+    dest.mkdir(parents=True, exist_ok=True)
+    for rule in rules:
+        try:
+            lib = _cql.rule_to_cql(rule, reg)
+        except Exception:
+            # A rule that cannot be lowered is a real finding, but it must not
+            # take the whole upload down with it.
+            out["cql_errors"] += 1
+            continue
+        safe = re.sub(r"[^A-Za-z0-9_.-]+", "_", rule.rule_id)
+        (dest / f"{safe}.cql").write_text(lib.text, encoding="utf-8")
+        out["cql_written"] += 1
+        if compiler is None:
+            continue
+        try:
+            errs = compiler(lib.text)
+        except Exception:
+            out["cql_errors"] += 1
+            continue
+        if errs:
+            out["cql_errors"] += 1
+        else:
+            out["cql_compiled"] += 1
+    return out
+
+
 def _run_ingest(guideline_id, title, filename, live, api_key, stmts,
                 manifest, *, track: bool = False) -> dict:
     """The actual pipeline run: gate.triage per statement, then the bundle
@@ -488,6 +545,10 @@ def _run_ingest(guideline_id, title, filename, live, api_key, stmts,
     findings = [_report.finding(t, reg) for t in triages]
     dsl.write_bundle(str(bundle_path), reg, rules, refusals, findings)
 
+    if track:
+        _progress_set(guideline_id, status="compiling")
+    cql_stats = _lower_and_compile(guideline_id, rules, reg)
+
     # Re-load through the same path get_guideline() uses, so the stored
     # counts match what /guidelines/<id>/rules will actually serve -- a rule
     # that writes clean can still be rejected as VACUOUS_RULE on reload.
@@ -506,6 +567,11 @@ def _run_ingest(guideline_id, title, filename, live, api_key, stmts,
         "refusal_count": len(refusals),
         "needs_model_count": needs_model,
         "rejected_count": len(rejected),
+        # Whether the emitted CQL was seen by the official translator, and
+        # what it said. `compiler_available: false` is reported rather than
+        # folded into the pass count, so "nobody compiled it" cannot read as
+        # "it compiles".
+        **cql_stats,
     }
     entries = [e for e in _load_index() if e.get("id") != guideline_id]
     entries.append(entry)

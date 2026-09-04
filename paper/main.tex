@@ -195,7 +195,9 @@ asks a model to attempt formalisation only once that evidence has been collected
 
 \section{The demonstration}
 \label{sec:demo}
-\budget{1.0 pp --- screenshot-heavy}
+The system's primary user is the clinical informaticist or safety officer preparing a decision-support artefact for institutional review; its secondary user is the clinician who eventually receives its verdicts. The two are ordered — nothing reaches a clinician until a committee has signed off the rules — and most of what the system does is in service of that sign-off: source spans so a rule can be adjudicated against its origin, declared refusals so partial coverage is visible, deterministic lowering so the artefact can be re-derived and diffed.
+
+
 \todo{Insert the demo URL and the video link here, anonymised.}
 
 
@@ -220,26 +222,13 @@ and plan, and get MAY-violate with a minimised counterexample rendered in prose
 (``it becomes a certain violation if potassium check occurred = false''). Shot:
 the verdict badge and the prose counterexample.
 
-Then record a 2--3 minute screen capture of these three scenes and link it. The
-CFP names video explicitly and it is the cheapest evidence you can produce.}
-
-\ifdraftmode
-\begin{cmds}
-# scene 1 + 3 -- the app
-cd "patient_checker" && python3 api.py  # then open http://localhost:8000/
-
-# scene 2 -- the human-readable report
-python3 "CQL_converter/report.py" bundle.PMC12355350.json -o report.html
-
-# scene 3 -- a verdict with a minimised counterexample
-curl -s -X POST localhost:8000/guidelines/fixtures/check \
-  -H 'Content-Type: application/json' \
-  -d '{"patient":{"potassium":5.4},"plan":{"ace_inhibitor_on":true}}'
-\end{cmds}
-\fi
+Then record a 2--3 minute screen capture of these three scenes and link it. The CFP names video explicitly and it is the cheapest evidence you can produce.}
 
 \todo{Take the three screenshots, put them in figures/, and lay them out as a
 2- or 3-panel figure. Crop tightly --- a full browser window wastes the page.}
+
+\subsubsection{Stakeholders \& use}
+
 
 %==============================================================================
 \section{Method}
@@ -249,7 +238,7 @@ curl -s -X POST localhost:8000/guidelines/fixtures/check \
 
 Details of the 4 stages of the pipeline: extraction, grounding, formalization, and checking are outlined below (Figure~\ref{fig:arch}). Extraction takes a guideline document and produces a \emph{statement}: a span of text that is verbatim and locatable, carrying a locator and character offsets that let it be re-found in the source. Grounding takes a statement and produces a \emph{registry}: a closed vocabulary in which every name has been resolved to a version-pinned clinical code, or, when it could not be resolved, is declared absent rather than guessed. Formalization takes a statement and a registry and produces a \emph{rule} $\Phi_R = \mathit{when} \rightarrow \mathit{then}$ under a deontic operator, decoded against a grammar whose variable and event names are exactly the registry's to ensure an unknown name is not a decoding error to be caught after the fact, but a symbol the grammar does not contain. Checking takes a rule and a partial patient record and produces: 1) one of the three-valued verdicts of Proposition ~\ref{prop:exhaustive} (\textsc{must-violate}, \textsc{certified-compliant}, and \textsc{may-violate}), and 2) a minimized witness when the verdict is undetermined (\S\ref{sec:may}).
 
-Only four of the pipeline's components call an LLM, and each is built so that its output space is too small to contain the pipeline's characteristic failure mode. The mention proposer returns exact substrings of the sentence under formalization, never a free-form description of a clinical concept. The terminology selector is shown a numbered list of candidate codes and returns an index into that list, or abstains; a hallucinated code is not a value the selector's output type can express. The rule decoder's variable and event enumerations are populated directly from the registry a given statement produced, so a concept that failed to bind in grounding cannot subsequently appear in a rule. Every other component -- normalization, retrieval, validation, the solver checks of Section~\ref{sec:necessity}, the lowering to CQL -- is deterministic and requires no model call.
+Only four of the pipeline's components call an LLM, and each is built so that its output space is too small to contain the pipeline's characteristic failure mode. The mention proposer returns exact substrings of the sentence under formalization, never a free-form description of a clinical concept. The terminology selector is shown a numbered list of candidate codes and returns an index into that list, or abstains; a hallucinated code is not a value the selector's output type can express. The rule decoder's variable and event enumerations are populated directly from the registry a given statement produced, so a concept that failed to bind in grounding cannot subsequently appear in a rule. Every other component -- normalization, retrieval, validation, the solver checks of Section~\ref{sec:necessity}, the lowering to CQL -- is deterministic and requires no model call. The lowering is not merely emitted: every rule the pipeline produces is compiled by HL7's own \texttt{cql-to-elm} translator before it is shipped, and a rule whose CQL the translator rejects is recorded as such rather than counted as encoded. An absent toolchain is reported as absent, never as a pass.
 
 A statement that cannot be carried through this narrowing is not discarded: it becomes a \emph{refusal}, one of the six reason codes of Table~\ref{tab:attribution} (Appendix~\ref{app:repro}). The residue a guideline leaves behind is measured with the same rigour as the rules it yields, which is the property a coverage number alone cannot provide -- a refusal reason is itself informative about the guideline (a vague qualifier, a permissive recommendation, an obligation the source states is overridable), not merely an honest admission of the tool's limits. Two of the six reasons are set deterministically, and the remaining four are gated by deterministic checks even where the final call is the model's, rather than taken on the model's word alone.
 
@@ -281,11 +270,8 @@ appendix. My ranking if you can afford exactly one extra:
 
 \subsection{Justification for design choices}
 \label{sec:necessity}
-
-We perform an ablation with every guard in the checker, and measure the difference in verdicts about a patient. 
-
 \subsubsection{Procedure}
-For a rule $R$ and a partial patient record $P$ we compute the verdict of the
+We perform an ablation with every guard in the checker, and measure the difference in verdicts about a patient. For a rule $R$ and a partial patient record $P$ we compute the verdict of the
 full system and of the system with exactly one guard disabled, and record
 whether the verdict moved and in which direction. Records are drawn from the
 solver, so every value satisfies the domain theory; each record pins a random
@@ -388,15 +374,13 @@ Of $4{,}570$ records, $1{,}472$ returned \textsc{may-violate}. The core is small
 
 $1{,}014$ of the $1{,}472$ undetermined verdicts ($68.9\%$) rest on a single variable, but $97$ of those name an \emph{undefined predicate} -- a phrase a
 source states and never defines -- which no measurement resolves, because there is nothing to measure. Splitting them: $917$ ($62.3\%$) turn on a single bound concept, $97$ ($6.6\%$) on a single undefined predicate, and across all
-core sizes $176$ ($12.0\%$) involve an undefined predicate somewhere. A system that substituted a value for those predicates would return a definite verdict in every one of those cases, and would be asserting something the source does not say each time.
-
-Therefore, the distinction is \emph{visible} -- the system can say which undetermined verdicts are waiting on a measurement and which are waiting on a definition the source never gave.
+core sizes $176$ ($12.0\%$) involve an undefined predicate somewhere. A system that substituted a value for those predicates would return a definite verdict in every one of those cases, and would be asserting something the source does not say each time. Therefore, the distinction is \emph{visible} -- the system can say which undetermined verdicts are waiting on a measurement and which are waiting on a definition the source never gave.
 
 That a core is a single variable does not mean measuring it answers the
 question: the core is sufficient for \emph{one} outcome, those values force a
 violation, but a different value of the same variable may leave the verdict
-open. The claim a clinical reader takes from ``measure $X$'' is stronger ---
-that \emph{every} value of $X$ determines the verdict --- and whether it holds
+open. The claim a clinical reader takes from ``measure $X$'' is stronger --
+that \emph{every} value of $X$ determines the verdict -- and whether it holds
 is decidable without enumerating values (Proposition~\ref{prop:settle}).
 
 Of the $1{,}011$ single-variable cores, measuring the named variable determines
@@ -410,39 +394,27 @@ have claimed $68.8\%$ and overstated by nearly a third.
 \label{sec:limits}
 \budget{0.25 pp --- flat, no hedging}
 
-The real HL7 \texttt{cql-to-elm} translator and the Node \texttt{cql-execution}
-engine compile and execute for real: \texttt{test\_toolchain.py} runs a
-prose-derived rule through the whole chain, CQL to ELM to a verdict, against a
-shipped FHIR bundle, using the actual compiler rather than a syntax check. What
-this does not cover is narrower: the live upload path writes a bundle's CQL
-directly and never invokes that compiler --- \texttt{dsl.write\_bundle} takes
-already-formed rules and has no \texttt{compiler=} argument, unlike
-\texttt{cql.synthesize}'s repair loop, which does and is only exercised in
-tests. A rule generated from an uploaded guideline is therefore never itself
-compiled or executed; only the toolchain's own fixtures have been.
+\note{SHORT AND BLUNT. Reviewers reward this and it costs almost nothing.
+\begin{itemize}
+  \item No clinician has adjudicated anything. The gold labels are ours.
+  \item Corpus is 9 open-access guidelines; PMC OA over-represents journals that
+        publish structured recommendation abstracts. NICE, KDIGO and ACC/AHA are
+        not open access. State the sampling frame.
+  \item Physiological ranges are the caller's to supply and the live pipeline
+        supplies none, so on a Track A rule the unit-slip warning cannot fire and
+        the solver may return a counterexample at eGFR = 2.0. (Small fix: a
+        lookup table keyed by binding code, threaded into one call.)
+  \item There is no reference corpus with ground truth for this task. AHRQ CDS
+        Connect is not a rules artefact and eCQMs are cohort definitions rather
+        than recommendations. \textbf{This is a finding, not an apology} --- one
+        sentence, and it pre-empts ``why didn't you evaluate against X''.
+\end{itemize}}
 
-No clinician has reviewed any rule this system has produced, or the criteria
-by which one might be judged faithful. The corpus is nine open-access
-guidelines; PMC Open Access over-represents journals that publish structured,
-GRADE-style recommendation abstracts \citep{grade}, and guidelines that are
-not open access (NICE, KDIGO, ACC/AHA) are absent by construction, not by
-sampling. Physiological ranges are the caller's to supply, and the live
-pipeline currently supplies none, so a live-encoded rule is checked against a
-weaker domain theory than the generated rules of Section~\ref{sec:necessity}
---- a unit slip cannot be caught, and the solver may return a counterexample
-at a value no clinician would consider physiologically possible. There is no
-reference corpus with ground truth for this task: AHRQ's CDS Connect
-\citep{cdsconnect} publishes decision-support artefacts, not a labelled set of
-guideline sentences and the rules they should become, and an electronic
-Clinical Quality Measure \citep{cql} is a cohort definition against a
-population, not a per-patient recommendation with a source sentence to be
-faithful to. This is a property of the field's existing artefacts, not a gap
-we declined to fill.
-
-\texttt{cassette.py} and \texttt{test\_replay.py} record one real run's model
-responses and replay the full pipeline offline, so a reviewer can reproduce it
-with no API key; a tape that no longer matches the code skips rather than
-passes. Current state: 325 tests pass offline, 2 skipped.
+\note{END ON THE REPRODUCIBILITY LINE --- it is a genuine asset and almost nobody
+offers it. \texttt{cassette.py} and \texttt{test\_replay.py} record one real
+run's model responses and replay the full pipeline offline, so a reviewer can
+reproduce it \emph{with no API key}. A stale tape skips rather than passes.
+Current state: 325 tests pass, 2 skipped.}
 
 \ifdraftmode
 \begin{cmds}
@@ -678,7 +650,7 @@ fails if any deterministic path starts assigning \texttt{unsupported\_temporal}.
     \bottomrule
   \end{tabular}
 \end{table}
-
+ 
 \section{Engineering log}
 \note{One paragraph pointing at \texttt{CQL\_converter/RESULTS.md} in the anonymised
 repo. Do NOT try to compress 36 log entries into the appendix --- cite it as an
