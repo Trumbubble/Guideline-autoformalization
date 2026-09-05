@@ -42,8 +42,21 @@ import dsl
 
 # ---------------------------------------------------------------- systems
 
-def load_env(path: str | None = None) -> None:
-    """Read a .env into os.environ. No dependency; existing env vars win."""
+def load_env(path: str | None = None, *, override: bool = True) -> None:
+    """Read a .env into os.environ. No dependency.
+
+    The file WINS over an inherited environment variable, which is the opposite
+    of the usual `setdefault` convention and deliberate. Measured (R38): a stale
+    exported `UMLS_API_KEY` shadowed the key on disk for a whole run, VSAC
+    answered 401 to every lookup, and 48 of that document's 55
+    `unbound_concept` refusals were published qualified by a fault the file
+    would have avoided. A `.env` is the value the operator most recently chose;
+    an export is usually left over from a shell they have forgotten about, and
+    it fails SILENTLY -- the wrong key looks exactly like the right one.
+
+    A container is unaffected: it ships no `.env` (see DEPLOY.md), so this
+    returns early and platform secrets stand. Pass override=False for the old
+    precedence."""
     if path is None:
         here = os.path.dirname(os.path.abspath(__file__))
         path = os.path.join(os.path.dirname(here), ".env")
@@ -54,7 +67,14 @@ def load_env(path: str | None = None) -> None:
             line = line.strip()
             if line and not line.startswith("#") and "=" in line:
                 k, v = line.split("=", 1)
-                os.environ.setdefault(k.strip(), v.strip().strip("'\""))
+                k, v = k.strip(), v.strip().strip("'\"")
+                # An empty assignment in the file is not a value. It must not
+                # blank out a real environment variable, and it must not make
+                # `available` true on the strength of an empty string.
+                if not v:
+                    continue
+                if override or k not in os.environ:
+                    os.environ[k] = v
 
 SNOMED = "http://snomed.info/sct"
 LOINC = "http://loinc.org"
@@ -238,6 +258,20 @@ class TransportFailures:
         with self._lock:
             return [f"{p!r} ({k}): {e}" for p, k, e in self._items]
 
+# A RUN-level terminology fault, as distinct from a per-lookup one. The two
+# need separate channels because they qualify a refusal differently: a failed
+# lookup is counted per statement and its delta says "this binding attempt hit
+# a blip", while a degraded SOURCE is true for every statement in the document
+# and stays true no matter how many statements go by without another request.
+# Folding the second into the first is what produced 789 identical transport
+# failures across one document -- one per phrase, none of them the fact that
+# explained all of them.
+def degraded_of(index) -> tuple[str, ...]:
+    """Run-level faults an index reports, or () for an index that has none.
+    Mirrors `getattr(index, "failures", ())`: a caller must not have to know
+    which index class it was handed."""
+    return tuple(getattr(index, "degraded", ()) or ())
+
 class SqliteIndex:
     """Local terminology cache. Three jobs, and the third is the point:
 
@@ -257,6 +291,8 @@ class SqliteIndex:
         # No transport, so never any transport failures -- present so every
         # index answers `len(index.failures)` without the caller type-testing.
         self.failures = TransportFailures()
+        # Same reason: no remote source, so nothing can be degraded.
+        self.degraded: tuple[str, ...] = ()
         # A sqlite3 connection is bound to its creating thread unless told
         # otherwise, and the binder IS used from a thread pool (K samples, or
         # one worker per statement). So the connection is shared explicitly and
@@ -1343,6 +1379,10 @@ class RemoteIndex:
         self._versions: dict[str, str | None] = {}
         self.failures = TransportFailures()
 
+    @property
+    def degraded(self) -> tuple[str, ...]:
+        return degraded_of(self.vsac)
+
     # -- SNOMED, via a FHIR terminology server --------------------------
     def _snomed_search(self, phrase: str, kind: Kind, k: int) -> list[Candidate]:
         d = _get_json(f"{self.tx}/ValueSet/$expand",
@@ -1476,6 +1516,16 @@ class RemoteIndex:
 
 VSAC_FHIR = "https://cts.nlm.nih.gov/fhir"
 
+# VSAC's `title:contains` rejects a search string shorter than three characters
+# with a 400. The mention proposer legitimately emits two-letter abbreviations
+# -- "AP" for acute pancreatitis, "CT" for the scan -- so without this guard
+# every one of them is issued, rejected, and recorded as a TRANSPORT failure,
+# which then qualifies the statement's refusal as possibly not the
+# guideline's fault. Measured on PMC13270348: 88 such failures over four distinct phrases
+# ('AP', 'ap', 'CT', 'ct'), not one of them a network fault. A request the API
+# defines as invalid is ours not to make, not a blip to report.
+VSAC_MIN_QUERY = 3
+
 class VsacIndex:
     """Curated value sets from the NLM Value Set Authority Center.
 
@@ -1495,10 +1545,38 @@ class VsacIndex:
             api_key = os.environ.get("UMLS_API_KEY")
         self.api_key, self.base = api_key, base
         self.failures = TransportFailures()
+        self._auth_rejected = False
 
     @property
     def available(self) -> bool:
-        return bool(self.api_key)
+        """False once the credential has been rejected, which puts a bad key in
+        exactly the same state as an absent one. Every caller already guards on
+        `available`, so one 401 stops the whole run asking."""
+        return bool(self.api_key) and not self._auth_rejected
+
+    @property
+    def degraded(self) -> tuple[str, ...]:
+        if not self._auth_rejected:
+            return ()
+        return ("VSAC rejected the UMLS credential (HTTP 401), so curated value "
+                "sets were not consulted anywhere in this document",)
+
+    def _auth_failed(self, exc: BaseException) -> bool:
+        """True if `exc` says the credential is bad, in which case it is noted
+        once on the index rather than per phrase.
+
+        A 401 is a fact about our key, not about the phrase we asked for, and it
+        will be the answer to every subsequent lookup too. Recording it per
+        lookup is how a single expired key became 789 transport failures spread
+        over 157 findings on one document (R38): the report was accurate and
+        unreadable, and the one sentence that explained all of it was never
+        said. 403 is included -- a UMLS licence that has lapsed rather than a
+        key that is wrong -- because the operator response is the same."""
+        import urllib.error
+        if isinstance(exc, urllib.error.HTTPError) and exc.code in (401, 403):
+            self._auth_rejected = True
+            return True
+        return False
 
     def _get(self, path: str, params: dict, timeout: int = 40):
         import base64, urllib.parse, urllib.request
@@ -1517,11 +1595,14 @@ class VsacIndex:
         than `name=`: guideline prose says "ACE inhibitor", a steward titles the
         set "ACE Inhibitor or ARB Ingredient", and an exact-name match finds
         neither."""
+        if not self.available or len(phrase.strip()) < VSAC_MIN_QUERY:
+            return []
         try:
             d = self._get("ValueSet", {"title:contains": phrase,
                                        "_count": max(k * 6, 50)})
         except Exception as exc:
-            self.failures.note(phrase, kind, exc)
+            if not self._auth_failed(exc):
+                self.failures.note(phrase, kind, exc)
             return []
         out = []
         for e in d.get("entry", []) or []:
@@ -1544,7 +1625,8 @@ class VsacIndex:
         which looks like a patient not meeting the criterion."""
         try:
             d = self._get(f"ValueSet/{oid}/$expand", {"count": limit})
-        except Exception:
+        except Exception as exc:
+            self._auth_failed(exc)
             return ()
         return tuple((c.get("system", ""), c["code"])
                      for c in d.get("expansion", {}).get("contains", [])
@@ -1556,7 +1638,8 @@ class VsacIndex:
         try:
             d = self._get("ValueSet", {"_id": code, "_count": 1})
             return bool(d.get("entry"))
-        except Exception:
+        except Exception as exc:
+            self._auth_failed(exc)
             return False
 
     def version(self, system: str) -> str | None:
@@ -1585,6 +1668,13 @@ class CachedIndex:
             if self.remote.vsac is not None:
                 out._items += self.remote.vsac.failures._items
         return out
+
+    @property
+    def degraded(self) -> tuple[str, ...]:
+        """Whatever the remote reports. Same contract as `failures`:
+        `degraded_of(index)` must mean the same thing whichever index class the
+        caller was handed."""
+        return () if self.remote is None else degraded_of(self.remote)
 
     # Systems for which a licensed local release is strictly better than the
     # free keyword endpoints -- which do prefix matching, carry no synonyms and

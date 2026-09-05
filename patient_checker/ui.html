@@ -81,6 +81,7 @@
   :root[data-theme="light"] { color-scheme: light; }
 
   * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
   body {
     margin: 0;
     background: var(--bg);
@@ -389,6 +390,9 @@
 <main>
   <section class="panel">
     <h2>Check a case</h2>
+    <label for="example" id="example-label">Load an example</label>
+    <select id="example"></select>
+
     <label for="patient">Patient &middot; lab values</label>
     <textarea id="patient" spellcheck="false"></textarea>
 
@@ -537,6 +541,129 @@ function renderResult(result) {
   `;
 }
 
+// The fixture set is the only guideline whose examples are the built-in
+// ones; every other guideline uses GUIDELINE_EXAMPLES below.
+const HAS_BUILTIN_EXAMPLES = GUIDELINE_ID === "fixtures";
+
+const EXAMPLES = [
+  {
+    label: "ACE inhibitor + high potassium (violates)",
+    patient: { potassium: 5.4 },
+    plan: { ace_inhibitor_on: true },
+  },
+  {
+    label: "ACE inhibitor + safe potassium (compliant)",
+    patient: { potassium: 4.0 },
+    plan: { ace_inhibitor_on: true },
+  },
+  {
+    label: "ACE inhibitor, monitoring not yet done (undetermined)",
+    patient: {},
+    plan: { ace_inhibitor_on: true },
+  },
+  {
+    label: "ACE inhibitor, potassium confirmed never checked (violates)",
+    patient: { potassium_check_occurred: false },
+    plan: { ace_inhibitor_on: true },
+  },
+  {
+    label: "Apixaban, 2 of 3 criteria met, dose unspecified (undetermined)",
+    patient: { patient_age_years: 82, patient_weight_kg: 58 },
+    plan: { apixaban_on: true },
+  },
+  {
+    label: "Rivaroxaban + severe renal impairment (violates)",
+    patient: { creatinine_clearance_ml_min: 10 },
+    plan: { rivaroxaban_on: true },
+  },
+  {
+    label: "Warfarin + NSAID, monitoring frequency unspecified (undetermined)",
+    patient: {},
+    plan: { warfarin_on: true, nsaid_on: true },
+  },
+  {
+    label: "Clarithromycin + simvastatin (violates)",
+    patient: {},
+    plan: { clarithromycin_on: true, simvastatin_on: true },
+  },
+  {
+    label: "Non-selective beta-blocker in asthma (violates)",
+    patient: { asthma_diagnosis: true },
+    plan: { nonselective_beta_blocker_on: true },
+  },
+  {
+    label: "Digoxin + reduced renal function, dose unspecified (undetermined)",
+    patient: { creatinine_clearance_ml_min: 45 },
+    plan: { digoxin_on: true },
+  },
+];
+
+// A real guideline's variable names are not guessable, so the checker offers
+// worked cases for the seeded guidelines too, not only the fixtures. These
+// carry patient/plan ONLY -- runCheck evaluates every rule in the guideline,
+// so nothing here references a rule id and a re-run that renumbers rules
+// cannot silently empty this list.
+const GUIDELINE_EXAMPLES = {
+  "pmc12355350": [
+    { label: "Higher risk, on neither drug",
+      patient: { has_higher_risk: true },
+      plan: { on_sglt_2_inhibitors: false, on_glp_1_receptor_agonists: false } },
+    { label: "Higher risk, on an SGLT-2 inhibitor",
+      patient: { has_higher_risk: true },
+      plan: { on_sglt_2_inhibitors: true } },
+    { label: "Higher risk, plan silent on both drugs",
+      patient: { has_higher_risk: true }, plan: {} },
+    { label: "Not at higher risk",
+      patient: { has_higher_risk: false }, plan: {} },
+  ],
+  "pmc13270348": [
+    { label: "Acute pancreatitis, no acupuncture",
+      patient: { has_acute_pancreatitis: true }, plan: { acupuncture: false } },
+    { label: "Acute pancreatitis, acupuncture given",
+      patient: { has_acute_pancreatitis: true }, plan: { acupuncture: true } },
+    { label: "Acute pancreatitis, plan not yet decided",
+      patient: { has_acute_pancreatitis: true }, plan: {} },
+    { label: "No acute pancreatitis -- the option does not apply",
+      patient: { has_acute_pancreatitis: false }, plan: { acupuncture: false } },
+  ],
+};
+
+function examplesForGuideline() {
+  return GUIDELINE_EXAMPLES[GUIDELINE_ID] || (HAS_BUILTIN_EXAMPLES ? EXAMPLES : []);
+}
+
+const exampleEl = document.getElementById("example");
+
+function populateExamples() {
+  const list = examplesForGuideline();
+  if (!list.length) {
+    // A guideline uploaded through the library has no worked cases, and an
+    // empty disabled dropdown is worse than no dropdown: it advertises a
+    // control that cannot do anything. Hide it and let the rules table
+    // below carry the variable names instead. The demo guidelines always
+    // have cases, so this never hides anything there.
+    document.getElementById("example-label").hidden = true;
+    exampleEl.hidden = true;
+    exampleEl.innerHTML = "";
+    exampleEl.disabled = true;
+    return;
+  }
+  document.getElementById("example-label").hidden = false;
+  exampleEl.hidden = false;
+  exampleEl.disabled = false;
+  exampleEl.innerHTML = list
+    .map((ex, i) => `<option value="${i}">${ex.label}</option>`)
+    .join("");
+}
+
+async function loadExample(index) {
+  const ex = examplesForGuideline()[index];
+  if (!ex) return;
+  patientEl.value = JSON.stringify(ex.patient, null, 2);
+  planEl.value = JSON.stringify(ex.plan, null, 2);
+  await runCheck();
+}
+
 async function runCheck() {
   let patient, plan;
   try {
@@ -618,12 +745,18 @@ document.getElementById("theme-toggle").addEventListener("click", () => {
 refreshThemeToggle();
 
 document.getElementById("check-btn").addEventListener("click", runCheck);
+exampleEl.addEventListener("change", (e) => loadExample(Number(e.target.value)));
 
+populateExamples();
 // Sequential, not fire-and-forget: three concurrent requests on page load
 // can drop or corrupt connections on Flask's single-threaded dev server.
 (async () => {
-  patientEl.value = "{}";
-  planEl.value = "{}";
+  if (examplesForGuideline().length) {
+    await loadExample(0);
+  } else {
+    patientEl.value = "{}";
+    planEl.value = "{}";
+  }
   await loadGuidelineHeader();
   await loadRulesTable();
 })();

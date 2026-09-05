@@ -45,6 +45,7 @@
 \usepackage{graphicx}
 \usepackage{xcolor}
 \usepackage{listings}
+\usepackage{float}
 
 % ---------------------------------------------------------------------------
 % Figures: plain \includegraphics over the pre-rendered PDFs in figures/,
@@ -105,7 +106,7 @@
 \newtheorem{corollary}[proposition]{Corollary}
 
 %==============================================================================
-\title{Coverage Is Not a Safety Metric: Guideline Formalisation\\
+\title{GuidelineForge: Guideline Formalisation\\
        with Provenance, Refusal, and Three-Valued Verdicts}
 % ALTERNATIVES, in case a co-author hates the above:
 %   The Residue Is the Deliverable: An Auditable Pipeline from Clinical
@@ -153,50 +154,17 @@ Our contributions are as follows: we present a pipeline that converts an open-ac
 \label{sec:intro}
 \budget{1.5 pp}
 
-Clinical practice guidelines specify, in natural language, the conditions
-under which a given action -- a drug, a test, a referral -- should or should not be taken. Because that language is written for a clinician rather than a machine, guidelines are not directly checkable against a patient record: confirming that a specific care plan actually follows a specific
-recommendation still requires a person to read the sentence and reason about
-the case by hand. This is a growing body of work, translating guideline text into a machine-checkable representation that can be run against structured patient data to flag deviations automatically. PathWISE uses a 5-stage LLM pipeline (https://arxiv.org/pdf/2605.25970) and separates knowledge extraction from model outputs and executable clinical logic. Xie and Du similarly use a satisfiability (SAT) solver, and remedy the failure of standalone LLMs to detect logical inconsistencies between recommendation (https://arxiv.org/pdf/2604.17340). Shen, et al. (arXiv:2605.26567) present MedGuideX which compiles guidelines into executable decision functions and use them as a training oracle. Leonardi, et al. (https://arxiv.org/pdf/2606.09489) orchestrate LLMs to extract traces from discharge letters, derive rules from guideline text, and score conformance across an event log. 
+Clinical practice guidelines specify, in natural language, the conditions under which a given action — a drug, a test, a referral — should or should not be taken. Because that language is written for a clinician rather than a machine, guidelines are not directly checkable against a patient record: confirming that a care plan follows a recommendation still requires a person to read the sentence and reason about the case by hand. A growing body of work translates guideline text into a machine-checkable representation that can be run against structured patient data. PathWISE uses a five-stage LLM pipeline separating knowledge extraction from executable clinical logic \citep{pathwise}; Xie and Du use a SAT solver to detect logical inconsistencies between recommendations that standalone LLMs miss \citep{xiedu}; MedGuideX compiles guidelines into executable decision functions and uses them as a training oracle \citep{medguidex}; Leonardi et al. derive rules from guideline text and score conformance across an event log of patient traces \citep{leonardi}.
 
-Systems of this kind are almost universally evaluated, and in practice
-optimised, for \emph{coverage}: the fraction of guideline statements
-successfully translated into a rule. Coverage is attractive as a metric
-because it is cheap to compute and rises monotonically as a system is made
-more permissive, but it cannot distinguish a rule that is faithful to its source from one that is not. A predicate the formaliser cannot pin down -- a threshold the guideline never numbers, a condition it cannot resolve to a
-clinical code -- can simply be filled with a default value and counted as
-encoded; two variable names that both refer to the same underlying clinical
-concept can be treated as distinct symbols, yielding a rule that is
-well-formed but logically vacuous. Neither failure crashes the system or
-fails a syntax check, and both raise the coverage number. 
+Systems of this kind are almost universally evaluated, and in practice optimised, for \emph{coverage}: the fraction of guideline statements successfully translated into a rule. Coverage is cheap to compute and rises monotonically as a system is made more permissive, but it cannot distinguish a rule faithful to its source from one that is not. A predicate the formaliser cannot pin down can be filled with a default and counted as encoded; two names for the same clinical concept can be treated as distinct symbols, yielding a rule that is well-formed but vacuous. Neither failure fails a syntax check, and both raise the coverage number.
 
-This distinction motivates the position we take in this paper: a system that
-reports it could not encode a statement is making a true claim about its own limits, while a system that silently produces an unfalsifiable rule is making a false claim about the patient. We argue that a formalisation pipeline should treat refusal as a first-class, measured output rather than a failure to be minimised, and we describe a system built on that principle.
+This motivates the position we take: a system that reports it could not encode a statement makes a true claim about its own limits, while a system that silently produces an unfalsifiable rule makes a false claim about the patient. We argue that refusal should be a first-class, measured output rather than a failure to be minimised, and describe a system built on that principle.
 
-Three design choices are common to prior and plausible approaches to this
-problem, and each fails to prevent the class of error above for a specific,
-demonstrable reason. The first is filling a gap with a default value: when a
-formaliser meets a phrase it cannot pin down -- for example, a guideline
-stating that a drug should be started ``if eGFR is below 30 or the patient is
-at high risk,'' without ever defining what counts as high risk -- a
-coverage-maximising system in the spirit of (cite pathwise) substitutes a
-default, typically \texttt{false}, and counts the statement as encoded. PathWISE substitutes false for nodes its audit marks uncomputable, preserving compilability while surfacing the node for human review (cite pathwise). The authors are explicit that this trades against the alternative — emitting a partial definition — and describe the choice between them as an open governance question. That question is empirical, and the substitution is not neutral: \texttt{false} in a conjunctive position deterministically removes the branch, so a patient qualifying only via that criterion is never routed down it. We quantify how often a default of this kind changes a verdict in Section~\ref{sec:necessity}.
+Three approaches to the underlying problem each fail to prevent this class of error, for specific and demonstrable reasons. The first is \textbf{substituting a default}. Faced with a guideline stating that a drug should be started ``if eGFR is below 30 or the patient is at high risk'' without defining high risk, PathWISE substitutes \texttt{false} for nodes its audit marks uncomputable, preserving compilability while surfacing the node for human review \citep{pathwise}. Its authors describe the choice between this and emitting a partial definition as an open governance question. The question is empirical, and the substitution is not neutral: \texttt{false} in a conjunctive position removes the branch, so a patient qualifying only via that criterion is never routed down it. Section~\ref{sec:necessity} quantifies how often such a default changes a verdict.
 
-The second is detecting vagueness by sampling for disagreement, following the
-premise put forward by (cite ksample) that a genuinely ambiguous statement admits multiple readings, so repeatedly asking a model to formalise the same statement should produce encodings that disagree with one another, yielding a vagueness signal that needs no labelled data. The premise assumes that a model facing genuine ambiguity resolves it by guessing differently on each attempt, rather than settling on the same answer, or the same refusal, every time. Nothing about the method guarantees this: a model can be entirely uncertain about a statement and still handle that uncertainty consistently, particularly once declining to answer is an available action rather than a forced choice between competing readings. In that case the disagreement the method is built to detect never appears, and a genuinely vague statement becomes indistinguishable, on this signal, from a precise one -- the method fails in exactly the case it exists to catch. Consider a statement that pins down a numeric threshold precisely while leaving a clinical judgement undefined, such as \textit{"…eGFR below 45 and the patient is frail."} We ran such statements with the existing method: asked to formalise this repeatedly, a model does not need to produce several different guesses at what 'frail' means; it can recognise the same gap on every attempt and decline consistently, in which case the samples carry no disagreement for the method to detect even though the statement is genuinely underspecified. Our gate instead treats refusal as an explicit branch of a single constrained decode, so the signal a K-sample estimator is built to extract is available from one call rather than inferred indirectly from several.
+The second is \textbf{detecting vagueness by sampling for disagreement} \citep{ksample}: a genuinely ambiguous statement admits multiple readings, so repeated formalisation attempts should disagree, yielding a signal that needs no labelled data. This assumes a model facing ambiguity guesses differently each time rather than settling on one answer — or one refusal. Nothing guarantees it. Given \textit{eGFR below 45 and the patient is frail,''} a model need not produce several guesses at frail''; in our runs it recognised the same gap on every attempt and declined consistently, leaving no disagreement to detect even though the statement is genuinely underspecified. The method fails precisely where it is needed. Our gate instead makes refusal an explicit branch of a single constrained decode, so the signal is available from one call.
 
-The third is asking a model directly whether a statement is too vague to
-formalise. This is circular, since the same model that struggles to
-formalise vague language is being asked to adjudicate its own vagueness, and
-it is also empirically weak even when a model is purpose-built for the task,
-reaching only around $0.71$ F1 in prior evaluation (cite errorcat). Our gate
-instead aggregates evidence that earlier, deterministic pipeline stages have already produced -- whether a clinical concept fails to bind to any known code, whether the statement contains no action a care plan can act on -- and
-asks a model to attempt formalisation only once that evidence has been collected; two of the six refusal reasons we report never require a model call at all (Table~\ref{tab:attribution}).
-
-
-\section{The demonstration}
-\label{sec:demo}
-The system's primary user is the clinical informaticist or safety officer preparing a decision-support artefact for institutional review; its secondary user is the clinician who eventually receives its verdicts. The two are ordered — nothing reaches a clinician until a committee has signed off the rules — and most of what the system does is in service of that sign-off: source spans so a rule can be adjudicated against its origin, declared refusals so partial coverage is visible, deterministic lowering so the artefact can be re-derived and diffed.
-
+The third is \textbf{asking a model directly whether a statement is too vague to formalise}. This is circular — the model that struggles with vague language adjudicates its own vagueness — and empirically weak even when purpose-built, reaching around 0.71 F1 \citep{errorcat}. 
 
 \todo{Insert the demo URL and the video link here, anonymised.}
 
@@ -227,14 +195,11 @@ Then record a 2--3 minute screen capture of these three scenes and link it. The 
 \todo{Take the three screenshots, put them in figures/, and lay them out as a
 2- or 3-panel figure. Crop tightly --- a full browser window wastes the page.}
 
-\subsubsection{Stakeholders \& use}
-
-
 %==============================================================================
 \section{Method}
 \label{sec:design}
 \budget{1.25 pp}
-\subsection{Design}
+\subsection{Pipeline architecture}
 
 Details of the 4 stages of the pipeline: extraction, grounding, formalization, and checking are outlined below (Figure~\ref{fig:arch}). Extraction takes a guideline document and produces a \emph{statement}: a span of text that is verbatim and locatable, carrying a locator and character offsets that let it be re-found in the source. Grounding takes a statement and produces a \emph{registry}: a closed vocabulary in which every name has been resolved to a version-pinned clinical code, or, when it could not be resolved, is declared absent rather than guessed. Formalization takes a statement and a registry and produces a \emph{rule} $\Phi_R = \mathit{when} \rightarrow \mathit{then}$ under a deontic operator, decoded against a grammar whose variable and event names are exactly the registry's to ensure an unknown name is not a decoding error to be caught after the fact, but a symbol the grammar does not contain. Checking takes a rule and a partial patient record and produces: 1) one of the three-valued verdicts of Proposition ~\ref{prop:exhaustive} (\textsc{must-violate}, \textsc{certified-compliant}, and \textsc{may-violate}), and 2) a minimized witness when the verdict is undetermined (\S\ref{sec:may}).
 
@@ -248,13 +213,6 @@ A statement that cannot be carried through this narrowing is not discarded: it b
     \caption{The pipeline's four stages in detail. Shaded components are the four model calls; every other component is deterministic. The channel along the bottom is the declared residue.}
   \label{fig:arch}
 \end{figure}
-
-\note{OPTIONAL, ONLY IF YOU HAVE ROOM: Figures~\ref{fig:deontic} and
-\ref{fig:lowering} are each only $\sim$1.3in tall, so they are cheap. Figure
-\ref{fig:language} is 3.5in and probably does not fit --- send it to the
-appendix. My ranking if you can afford exactly one extra:
-\ref{fig:stub} $>$ \ref{fig:deontic} $>$ \ref{fig:lowering} $>$ \ref{fig:language}.}
-
 
 %==============================================================================
 %  SECTION 5.  This is the ELABORATE version -- longer than 5 pages can hold.
@@ -302,8 +260,8 @@ The rules are generated. Measured over the rules the system happens to have prod
 
 \begin{table}[t]
   \centering
-  \caption{$144$ rules, up to $50$ records each (mean $31.7$; a rule
-  with few variables admits fewer distinct partial records), $4{,}569$ rule-record pairs. \emph{Applies to} counts the pairs the guard can act on at all -- a substitution needs a boolean undefined predicate, the deontic row a permission, the occurrence row a time window --- and both percentages are over those. Zero means the guard never moves a verdict that way.}
+  \caption{$144$ rules, up to $50$ records each (mean $40.0$; a rule
+  with few variables admits fewer distinct partial records), $5{,}760$ rule-record pairs. \emph{Applies to} counts the pairs the guard can act on at all -- a substitution needs a boolean undefined predicate, the deontic row a permission, the occurrence row a time window --- and both percentages are over those. Zero means the guard never moves a verdict that way.}
   \label{tab:generated}
   \begin{tabular}{lrrr}
     \toprule
@@ -311,11 +269,11 @@ The rules are generated. Measured over the rules the system happens to have prod
     \cmidrule(l){3-4}
     Guard removed & applies to & \textsc{certified-compliant} & \textsc{must-violate} \\
     \midrule
-    Undefined predicate $\rightarrow$ \textsf{false} & 3277 & 137 (4.2\%) & 69 (2.1\%) \\
-    Undefined predicate $\rightarrow$ \textsf{true} & 3277 & 0 (0.0\%) & 368 (11.2\%) \\
-    Deontic operator (all rules obligations) & 2282 & 0 (0.0\%) & 1837 (80.5\%) \\
-    Occurrence flag on a time window & 1800 & 26 (1.4\%) & 0 (0.0\%) \\
-    Three-valued verdict $\rightarrow$ single query & 4569 & 0 (0.0\%) & 1468 (32.1\%) \\
+    Undefined predicate $\rightarrow$ \textsf{false} & 4304 & 207 (4.8\%) & 170 (4.0\%) \\
+    Undefined predicate $\rightarrow$ \textsf{true} & 4304 & 115 (2.7\%) & 219 (5.1\%) \\
+    Deontic operator (all rules obligations) & 2876 & 0 (0.0\%) & 2300 (80.0\%) \\
+    Occurrence flag on a time window & 1713 & 120 (7.0\%) & 0 (0.0\%) \\
+    Three-valued verdict $\rightarrow$ single query & 5760 & 0 (0.0\%) & 1776 (30.8\%) \\
     \bottomrule
   \end{tabular}
 \end{table}
@@ -327,16 +285,16 @@ one is unsafe in both directions, by position:
 \textsf{false} in the \emph{antecedent} narrows applicability and clears
 patients, while the same substitution in the \emph{consequent} makes the
 obligation unsatisfiable and manufactures alerts, broken down by position in
-Table~\ref{tab:holepos} (Appendix~\ref{app:repro}). Both columns above
-understate the effect, since half the generated rules are permissive and a
-permission cannot move to \textsc{certified-compliant} at all; restricted to
-obligations, substituting \textsf{false} clears $8.4\%$ of pairs and accuses
-$4.2\%$, and substituting \textsf{true} accuses $22.5\%$. The largest effect
+Table~\ref{tab:holepos} (Appendix~\ref{app:extra}). Both columns above
+average over that split, since half the generated rules are permissive; restricted to
+obligations, substituting \textsf{false} clears $9.6\%$ of pairs and accuses
+$7.9\%$, and substituting \textsf{true} accuses $10.2\%$ and clears $5.3\%$ ---
+the same magnitudes with the directions exchanged. The largest effect
 measured is dropping the deontic operator: once a rule is permissive, this
 changes the verdict for four pairs in five, always into an alert on a patient
 who declined an option the source offered. Dropping the occurrence flag on a
 time window lets a patient who was never tested satisfy the window, because
-the solver selects a small day count; all $26$ divergences move to
+the solver selects a small day count; all $120$ divergences move to
 compliant, and the rate is low only because the flag is decisive exclusively
 when the rest of the record already leaves the window in question, not
 because it rarely matters when it applies. The three-valued verdict is the
@@ -344,9 +302,9 @@ only row whose correctness is a theorem rather than an argument: a single
 satisfiability call returns the same answer for ``every completion violates''
 and ``some completion violates'', so it reports both as violations; measured
 against $\neg\Phi_R$ instead of the rule's own violation condition the figure
-reads $72.1\%$, which double-counts the deontic row above it.
+reads $71.1\%$, which double-counts the deontic row above it.
 
-Note that the generated vocabulary assigns every numeric variable a plausible physiological range; the pipeline currently supplies none, so a rule it produces is checked against a weaker domain theory. Re-running the sweep with the ranges stripped moves the rates by at most a few points (substituting \textsf{false}: $6.3\%$ to $8.7\%$; single query: $32.1\%$ to $36.2\%$), so the result does not rest on that difference.
+Note that the generated vocabulary assigns every numeric variable a plausible physiological range; the pipeline currently supplies none, so a rule it produces is checked against a weaker domain theory. Re-running the sweep with the ranges stripped ($5{,}800$ pairs rather than $5{,}760$, since the sampler explores a wider space) moves every rate by less than half a point --- substituting \textsf{false} clears $4.8\%$ of applicable pairs with the ranges and $4.9\%$ without, and the single-query row reads $30.8\%$ against $30.6\%$ --- so the result does not rest on that difference.
 
 \subsubsection{Justification for undetermined verdicts}
 \label{sec:may}
@@ -359,22 +317,22 @@ turns on. \texttt{minimal\_counterexample\_core} returns the smallest set of tho
   \toprule
   unstated variables & verdicts & mean core & reduction & single-variable core \\
   \midrule
-  1 & 277 & 1.00 & 1.00$\times$ & 100.0\% \\
-  2 & 497 & 1.21 & 1.65$\times$ & 78.7\% \\
-  3 & 420 & 1.44 & 2.08$\times$ & 58.8\% \\
-  4 & 202 & 1.70 & 2.35$\times$ & 38.6\% \\
-  5 &  68 & 1.82 & 2.74$\times$ & 30.9\% \\
+  1 & 396 & 1.00 & 1.00$\times$ & 100.0\% \\
+  2 & 619 & 1.29 & 1.56$\times$ & 71.4\% \\
+  3 & 479 & 1.58 & 1.90$\times$ & 50.1\% \\
+  4 & 205 & 1.78 & 2.25$\times$ & 34.6\% \\
+  5 &  76 & 1.97 & 2.53$\times$ & 21.1\% \\
   6 &   8 & 2.50 & 2.40$\times$ & 0.0\% \\
   \bottomrule
 \end{tabular}
 \end{center}
 
-Of $4{,}570$ records, $1{,}472$ returned \textsc{may-violate}. The core is smaller than the set of unstated variables ($1.34$ against $2.53$ on average), and the reduction grows as the record thins, because the core is bounded by the rule's structure -- the number of atoms that must be forced -- and not by how much the record omits.
+Of $5{,}764$ records, $1{,}783$ returned \textsc{may-violate}. The core is smaller than the set of unstated variables ($1.39$ against $2.42$ on average), and the reduction grows as the record thins, because the core is bounded by the rule's structure -- the number of atoms that must be forced -- and not by how much the record omits.
 
 
-$1{,}014$ of the $1{,}472$ undetermined verdicts ($68.9\%$) rest on a single variable, but $97$ of those name an \emph{undefined predicate} -- a phrase a
-source states and never defines -- which no measurement resolves, because there is nothing to measure. Splitting them: $917$ ($62.3\%$) turn on a single bound concept, $97$ ($6.6\%$) on a single undefined predicate, and across all
-core sizes $176$ ($12.0\%$) involve an undefined predicate somewhere. A system that substituted a value for those predicates would return a definite verdict in every one of those cases, and would be asserting something the source does not say each time. Therefore, the distinction is \emph{visible} -- the system can say which undetermined verdicts are waiting on a measurement and which are waiting on a definition the source never gave.
+$1{,}165$ of the $1{,}783$ undetermined verdicts ($65.3\%$) rest on a single variable, but $126$ of those name an \emph{undefined predicate} -- a phrase a
+source states and never defines -- which no measurement resolves, because there is nothing to measure. Splitting them: $1{,}039$ ($58.3\%$) turn on a single bound concept, $126$ ($7.1\%$) on a single undefined predicate, and across all
+core sizes $251$ ($14.1\%$) involve an undefined predicate somewhere. A system that substituted a value for those predicates would return a definite verdict in every one of those cases, and would be asserting something the source does not say each time. Therefore, the distinction is \emph{visible} -- the system can say which undetermined verdicts are waiting on a measurement and which are waiting on a definition the source never gave.
 
 That a core is a single variable does not mean measuring it answers the
 question: the core is sufficient for \emph{one} outcome, those values force a
@@ -383,49 +341,41 @@ open. The claim a clinical reader takes from ``measure $X$'' is stronger --
 that \emph{every} value of $X$ determines the verdict -- and whether it holds
 is decidable without enumerating values (Proposition~\ref{prop:settle}).
 
-Of the $1{,}011$ single-variable cores, measuring the named variable determines
-the verdict in $708$ ($70.0\%$), which is $48.2\%$ of all undetermined verdicts.
-In the other $303$ ($30.0\%$) some value of it leaves the case open. The naive
-reading --- counting single-variable cores as resolvable measurements --- would
-have claimed $68.8\%$ and overstated by nearly a third.
+Of the $1{,}183$ single-variable cores this experiment sees, measuring the named
+variable determines the verdict in $840$ ($71.0\%$), which is $46.6\%$ of all
+undetermined verdicts. In the other $343$ ($29.0\%$) some value of it leaves the
+case open, and $147$ of those name an undefined predicate, where no measurement
+exists to take. The naive reading --- counting single-variable cores as
+resolvable measurements --- would have claimed $65.7\%$ and overstated by nearly
+a third. (This experiment and the core-size table above are two draws from one
+sampler rather than two views of one sample, so their \textsc{may-violate}
+counts differ slightly; see Appendix~\ref{app:repro}.)
+
+\subsection{Language design}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[trim=0cm 11cm 0cm 0cm, clip, width=\linewidth]{figures/language_shorten.pdf}
+    \caption{The rule language, with one worked example at every layer.}
+    \label{fig:language_shorten}
+\end{figure}
+
+Every concept the language can talk about has to be declared and bound to a real code before it can be referenced anywhere, ensuring a term can mean exactly one thing. Conditions are built from a deliberately small grammar: four leaf comparisons (equality, range, time-since-event, change-from-baseline) and three logical connectives (negation, conjunction, and disjunction). Keeping the connective set minimal, rather than adding derived operators for convenience, means every expression reduces to a normal form, and its logical difficulty can be classified consistently, from simple propositional checks up to the temporal reasoning that "since" clauses require.
+
+The rule itself never carries a labelled action, only a formula wrapped in an obligation or permission. The recommended action, its target, and the source sentence exist as metadata for a human reviewer, not for evaluation logic to branch on. Because not every guideline sentence can be safely reduced to this form, refusal is built-in as a legitimate output in its own right: the system is designed to say it can't encode something, rather than force a best guess. A three-valued verdict sits naturally in the target language: CQL's Boolean type is nullable, so a comparison over an element the record does not contain evaluates to \texttt{null} rather than \texttt{false}. \texttt{null} propagates through the connectives under Kleene semantics, so the unknown reaches the top-level \texttt{define} instead of collapsing at the leaf.
+
+
+
 
 %==============================================================================
 \section{Limitations, and what a reviewer can run}
 \label{sec:limits}
 \budget{0.25 pp --- flat, no hedging}
 
-\note{SHORT AND BLUNT. Reviewers reward this and it costs almost nothing.
-\begin{itemize}
-  \item No clinician has adjudicated anything. The gold labels are ours.
-  \item Corpus is 9 open-access guidelines; PMC OA over-represents journals that
-        publish structured recommendation abstracts. NICE, KDIGO and ACC/AHA are
-        not open access. State the sampling frame.
-  \item Physiological ranges are the caller's to supply and the live pipeline
-        supplies none, so on a Track A rule the unit-slip warning cannot fire and
-        the solver may return a counterexample at eGFR = 2.0. (Small fix: a
-        lookup table keyed by binding code, threaded into one call.)
-  \item There is no reference corpus with ground truth for this task. AHRQ CDS
-        Connect is not a rules artefact and eCQMs are cohort definitions rather
-        than recommendations. \textbf{This is a finding, not an apology} --- one
-        sentence, and it pre-empts ``why didn't you evaluate against X''.
-\end{itemize}}
+The corpus is nine open-access guidelines, and the sampling frame is not incidental: PubMed Central's open-access subset over-represents journals that publish structured, GRADE-style \citep{grade} recommendation abstracts, which are easier to segment than a guideline leaving its recommendations in narrative prose. The documents a deployment would most want — NICE, KDIGO, ACC/AHA — are not open access, so they are absent by construction. More generally, guidelines follow no common structure, which makes a representative sample hard to assemble for any system of this kind. Because the pipeline takes a document rather than a corpus, extending it is a licensing question rather than an engineering one: an institution can run it over the guidelines it has already licensed, and we would expect the residue to grow on documents whose recommendations are narrative rather than structured.
 
-\note{END ON THE REPRODUCIBILITY LINE --- it is a genuine asset and almost nobody
-offers it. \texttt{cassette.py} and \texttt{test\_replay.py} record one real
-run's model responses and replay the full pipeline offline, so a reviewer can
-reproduce it \emph{with no API key}. A stale tape skips rather than passes.
-Current state: 325 tests pass, 2 skipped.}
-
-\ifdraftmode
-\begin{cmds}
-cd "CQL_converter"
-python3 -m pytest test_dsl.py test_bind.py test_segment.py \
-                  test_gate.py test_cql.py -q      # offline, no key
-python3 -m pytest test_toolchain.py -q             # real cql-to-elm + engine
-python3 -m pytest test_replay.py -q                # replays a real run
-\end{cmds}
-\fi
-
+There is no reference corpus with ground truth for this task, and that is a property of the field's existing artefacts. AHRQ's CDS Connect \citep{cdsconnect} is close — it publishes decision-support artefacts — but not a labelled set of guideline sentences paired with the rules they should become. An electronic Clinical Quality Measure \citep{cql} is a cohort definition over a population, not a per-patient recommendation with a source sentence to be faithful to. A system whose contribution is the distinction between encoding a statement and declining it therefore has nothing external to be scored against. Building that corpus — sentences paired with both their intended rule and, where none exists, the reason — is the obvious next step, and the per-statement refusal log this system emits is a candidate starting point for one.
+Finally, no clinician has yet adjudicated the system's output. Clinical review of the generated rules, and of the criteria by which a rule is judged faithful to its source, remains future work. The scope here is narrower by design: whether the artefact says what the sentence said, not whether the sentence should be followed.
 %==============================================================================
 % neurips_2026 loads natbib, so use a natbib-aware style.
 \bibliographystyle{plainnat}
@@ -440,28 +390,100 @@ check, and the honest phrasing costs you nothing.}
 
 %==============================================================================
 \appendix
-\section{Additional figures}
+\section{Additional results and figures}
+\label{app:extra}
 
-\note{The appendix does not count against the 5 pages. Put here: the language
-figure, the deontic figure, the lowering figure, the full residue log, per
-document statement counts, and the DSL grammar.}
+\note{Still to add here: the full residue log, per-document statement counts,
+and the DSL grammar. The hole-position split and the two benchmarks below are
+done, and their numbers come from the commands in Appendix~\ref{app:repro}.}
 
-\begin{figure}[h]
+\paragraph{Detection: does the checker flag what it should?}
+The ablation of Section~\ref{sec:necessity} shows that each guard moves
+verdicts; it does not show that the verdicts are right. For that a record needs
+a label fixed independently of the checker. \texttt{synthesize\_boundary\_tests.py}
+supplies one: for every numeric and temporal boundary in the hand-authored
+fixture rules it solves against $\Phi_R$ for a record on the compliant side and
+against $\neg\Phi_R$ for one on the violating side, so each record's true label
+follows from its construction rather than from our reading of the sentence.
+\texttt{detection\_benchmark.py} then pins every variable and re-derives the
+verdict through the ordinary checker. All $24$ boundary records matched the
+label they were built to carry --- $14$ \textsc{certified-compliant} and $10$
+\textsc{must-violate}, with no case flagged in the wrong direction and none
+left undetermined once fully pinned. This is a small set over eight fixture
+rules, not the generated sweep, so it bounds nothing about what the pipeline
+emits; what it establishes is that the three-valued classifier agrees with
+ground truth wherever ground truth exists.
+
+\paragraph{What a single call reports instead, and what the second one costs.}
+A three-valued verdict needs two satisfiability queries where a naive check
+makes one. Over $200$ synthetic patients against $25$ bounded-horizon clauses
+--- $5{,}000$ rule--patient pairs over generic \texttt{drug\_N}/\texttt{lab\_N}
+names rather than the fixtures, each plan pinning $14$ of $30$ candidate
+actions --- the naive single call reports a violation for $2{,}010$ pairs
+($40.2\%$). The three-valued checker returns \textsc{must-violate} for none of
+them: every one is a case in which some completion of the unmeasured facts is
+compliant, and the naive check cannot separate that from a violation because
+one query cannot distinguish ``every completion violates'' from ``some
+completion violates''. These are randomly generated plans, so no certain
+violation is expected --- the point is not that the naive check is wrong about
+a patient but that it has no vocabulary in which to be undetermined. The
+second query costs $2.1\times$ the first (Table~\ref{tab:perf}); the median
+check is $25.2$\,ms and the full sweep runs in $137$\,s, so on this workload
+not guessing is not what makes a check slow.
+
+\begin{table}[h]
   \centering
-  \includegraphics[width=\linewidth]{language.pdf}
-  \caption{The rule language, with one worked example at every layer. Leaves are
-  tagged with the logical fragment each requires; the rule's fragment is the
-  maximum over the tree, computed from the tree rather than annotated by hand.}
-  \label{fig:language}
-\end{figure}
+  \caption{Solve time per rule--patient pair, $5{,}000$ pairs, single process,
+  environment of Appendix~\ref{app:repro}. The three-valued column includes
+  extracting a minimal counterexample core for every undetermined verdict
+  ($2{,}010$ of them, mean core $3.27$ variables).}
+  \label{tab:perf}
+  \begin{tabular}{lrrrr}
+    \toprule
+    Check & mean & median & p95 & max \\
+    \midrule
+    naive, one query      & 13.0\,ms & 11.5\,ms & 20.3\,ms & 145.6\,ms \\
+    three-valued, two queries & 27.5\,ms & 25.2\,ms & 42.3\,ms & 386.4\,ms \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\paragraph{Hole position.}
+Table~\ref{tab:holepos} splits the two substitution rows of
+Table~\ref{tab:generated} by where the undefined predicate sits, which is
+what Section~\ref{sec:necessity} draws on to say the two substitutions are
+unsafe in opposite directions rather than simply averaging out. The split is
+exactly symmetric, and each of the four cells is empty in the direction the
+argument says it should be: \textsf{false} in the antecedent only ever clears
+a patient and \textsf{true} in the antecedent only ever accuses one, while in
+the consequent the two exchange roles. Each substitution also has a control on
+the rules with no undefined predicate at all --- nothing is substituted, and
+nothing moves.
+
+\begin{table}[h]
+  \centering
+  \caption{Split by where the undefined predicate sits. Each substitution has a control test: nothing is substituted and nothing moves.}
+  \label{tab:holepos}
+  \begin{tabular}{llrrr}
+    \toprule
+    Substitution & Predicate sits in & pairs & $\rightarrow$ \textsc{certified} & $\rightarrow$ \textsc{must-violate} \\
+    \midrule
+    \textsf{false} & the antecedent & 2152 & 9.6\% & 0.0\% \\
+    \textsf{false} & the consequent & 2152 & 0.0\% & 7.9\% \\
+    \textsf{false} & --- (control) & 1456 & 0.0\% & 0.0\% \\
+    \addlinespace
+    \textsf{true} & the antecedent & 2152 & 0.0\% & 10.2\% \\
+    \textsf{true} & the consequent & 2152 & 5.3\% & 0.0\% \\
+    \textsf{true} & --- (control) & 1456 & 0.0\% & 0.0\% \\
+    \bottomrule
+  \end{tabular}
+\end{table}
 
 \begin{figure}[h]
   \centering
   \includegraphics[width=\linewidth]{deontic.pdf}
-  \caption{Obligation and permission differ in exactly one place. The violation
-  condition of a permission is the constant \textsc{false}, so no patient and no
-  completion of the unknowns can yield a violation --- a structural guarantee
-  rather than a guard on a verdict string.}
+  \caption{Obligation and permission differ in exactly one place. The violation condition of a permission is the constant \textsc{false}, so no patient and no
+  completion of the unknowns can yield a violation --- a structural guarantee (Proposition 7) rather than a guard on a verdict string.}
   \label{fig:deontic}
 \end{figure}
 
@@ -479,8 +501,13 @@ document statement counts, and the DSL grammar.}
 \label{app:repro}
 
 \paragraph{Commands.}
-Every number in Section~\ref{sec:necessity} comes from one of four scripts in
-\texttt{patient\_checker/tests}. None makes a model call; none needs an API key.
+Every number in Section~\ref{sec:necessity} and Appendix~\ref{app:extra} comes
+from one of the five measurement scripts below, all in
+\texttt{patient\_checker/tests}; the last two rows produce no number, and are
+listed because they are what a reader would want to run next --- one prints the
+rule set, the other machine-checks the propositions. None makes a model call;
+none needs an API key; each is invoked separately, for the reason given under
+\emph{Determinism} below.
 \begin{center}
 \begin{tabular}{ll}
   \toprule
@@ -492,6 +519,10 @@ Every number in Section~\ref{sec:necessity} comes from one of four scripts in
     & \texttt{explanation\_size.py -{}-plans 50 -{}-seed 0} \\
   Both \textsc{may} experiments, \S\ref{sec:may}
     & \texttt{may\_actionability.py -{}-plans 50 -{}-seed 0} \\
+  Detection against ground truth, App.~\ref{app:extra}
+    & \texttt{detection\_benchmark.py} \\
+  Table \ref{tab:perf}, and the naive check's rate
+    & \texttt{benchmark.py} \\
   The rule set itself
     & \texttt{generated\_rules.py -{}-list} \\
   \addlinespace
@@ -501,14 +532,25 @@ Every number in Section~\ref{sec:necessity} comes from one of four scripts in
 \end{tabular}
 \end{center}
 Each writes a CSV of per-verdict rows beside a short summary, both in the
-artefact; the summaries are what the tables quote. Two variants are runnable and
-not reported: \texttt{ablation.py} without \texttt{-{}-generated} runs over the
-rules the pipeline itself produced, and \texttt{-{}-no-ranges} strips the
-plausible ranges from the generated vocabulary.
+artefact; the summaries are what the tables quote.
+\texttt{detection\_benchmark.py} imports \texttt{synthesize\_boundary\_tests.py}
+and re-solves its boundary records rather than reading a stored file, so the
+labels it checks against are regenerated on every run and cannot drift from the
+rules. Three variants are runnable and not reported: \texttt{ablation.py}
+without \texttt{-{}-generated} runs over the rules the pipeline itself
+produced, \texttt{-{}-no-ranges} strips the plausible ranges from the generated
+vocabulary, and \texttt{differential\_check.py} evaluates a second,
+independently worded encoding of three fixtures against the same boundary
+records --- a hand-built stand-in for a dual-encoding pass, too small to report
+as a result.
 
 \paragraph{Environment.}
 Python 3.14.2, \texttt{z3-solver} 5.1.0, macOS 15.5 (arm64). The commit is
-recorded in the artefact. Z3 is the only dependency of these two scripts.
+recorded in the artefact. Beyond the standard library these scripts need only
+\texttt{z3-solver} and the repository's own modules --- three of them reach the
+checker through \texttt{api.py}, which pulls Flask in with it, though no server
+is started and no port is opened. The timings in Table~\ref{tab:perf} are from
+this machine, single process, with no other load.
 
 \paragraph{Determinism.}
 Runs are reproducible byte for byte given the seed: three separate processes
@@ -524,9 +566,11 @@ single process.
 
 A second limit bounds that guarantee. Each script is reproducible \emph{in its
 own process}, but calling the record sampler twice inside one process is not:
-the same seed gave $4{,}568$ records and then $4{,}570$. The cause is below our
-code --- Z3 carries global state that constructing a fresh solver does not reset,
-so the second pass draws different models. Two consequences. Each script must be
+at seed $0$ the first pass draws $5{,}764$ records and the second $5{,}760$,
+which is exactly the gap between the record counts \texttt{explanation\_size.py}
+and \texttt{ablation.py} report. The cause is below our code --- Z3 carries global state
+that constructing a fresh solver does not reset, so the second pass draws
+different models. Two consequences. Each script must be
 invoked separately, which is how the commands above are written. And two scripts
 at the same seed do not see an identical record set, so figures from
 \texttt{ablation.py} and \texttt{may\_actionability.py} are two samples from one
@@ -535,10 +579,12 @@ sampler rather than two views of one sample, and are not row-for-row comparable.
 \paragraph{Record counts.}
 \texttt{-{}-plans} is a \emph{ceiling}, not a quantity. A record pins a subset
 of a rule's variables, so a rule with few variables admits few distinct
-records: at \texttt{-{}-plans 50} the actual counts range from $3$ to $50$
-(mean $31.7$). The unit of
-analysis is therefore the rule--record pair, and rules contribute unequally. A
-reported rate is not the fraction of \emph{rules} affected.
+records: at \texttt{-{}-plans 50} the actual counts range from $5$ to $50$
+(mean $40.0$ over $144$ rules, $5{,}760$ pairs), and the distribution is
+bimodal --- $100$ rules reach the ceiling while $8$ admit only $5$ records
+each. The unit of analysis is therefore the rule--record pair, and rules
+contribute unequally: a reported rate is not the fraction of \emph{rules}
+affected.
 
 \paragraph{How \emph{applicable} is determined.}
 Every rate is over the pairs the guard can act on, and that set is defined in
@@ -565,40 +611,16 @@ symbols behind, but they are integer and real valued, and substituting a truth
 value into a quantity is meaningless. Those rules are excluded from the
 substitution rows rather than coerced. Reporting over all pairs instead would
 dilute every rate by the rules the guard cannot touch --- on the generated set
-that is $1{,}292$ of $4{,}569$ pairs for the substitution rows alone.
-
-\paragraph{Hole position.}
-Table~\ref{tab:holepos} splits the two substitution rows of
-Table~\ref{tab:generated} by where the undefined predicate sits, which is
-what Section~\ref{sec:necessity} draws on to say the two substitutions are
-unsafe in opposite directions rather than simply averaging out. Each
-substitution has a control test on the same pairs: nothing is substituted
-and, as expected, nothing moves.
-
-\begin{table}[h]
-  \centering
-  \caption{Split by where the undefined predicate sits. Each substitution has a control test: nothing is substituted and nothing moves.}
-  \label{tab:holepos}
-  \begin{tabular}{llrrr}
-    \toprule
-    Substitution & Predicate sits in & pairs & $\rightarrow$ \textsc{certified} & $\rightarrow$ \textsc{must-violate} \\
-    \midrule
-    \textsf{false} & the antecedent & 1642 & 8.3\% & 0.0\% \\
-    \textsf{false} & the consequent & 1635 & 0.0\% & 4.2\% \\
-    \textsf{false} & --- (control) & 1292 & 0.0\% & 0.0\% \\
-    \addlinespace
-    \textsf{true} & the antecedent & 1642 & 0.0\% & 22.4\% \\
-    \textsf{true} & the consequent & 1635 & 0.0\% & 0.0\% \\
-    \textsf{true} & --- (control) & 1292 & 0.0\% & 0.0\% \\
-    \bottomrule
-  \end{tabular}
-\end{table}
+that is $1{,}456$ of $5{,}760$ pairs for the substitution rows alone, and
+$4{,}047$ for the occurrence-flag row, which applies to only the $1{,}713$
+pairs whose rule contains a time window.
 
 \paragraph{Artefacts.}
 \texttt{ablation.py} writes one row per (rule, record, guard) with columns
 \texttt{source}, \texttt{rule\_id}, \texttt{deontic}, \texttt{holes},
 \texttt{pinned}, \texttt{ablation}, \texttt{applies}, \texttt{full},
-\texttt{ablated}, \texttt{direction} --- $22{,}845$ rows.
+\texttt{ablated}, \texttt{direction} --- $28{,}800$ rows, one per
+(rule, record, guard) over five guards.
 \texttt{explanation\_size.py} writes one row per undetermined verdict with the
 count of unstated variables, the core size, and the core's variable names.
 \texttt{may\_actionability.py} adds, per verdict, the verdict after the core is
@@ -652,6 +674,38 @@ fails if any deterministic path starts assigning \texttt{unsupported\_temporal}.
 \end{table}
  
 \section{Engineering log}
+
+\paragraph{Engineering log.} 
+\texttt{CQL\_converter/RESULTS.md} in the anonymised repository records the full engineering log behind this pipeline: 36 dated entries, each a defect found by running real documents, with its fix and what changed as a result. It is cited here rather than reproduced -- compressing thirty-six entries into an appendix would either drown the table below or gut the entries into unverifiable one-liners. What is worth extracting is the shape common to the back half of the log: a recurring class of defect, and the structural check now in the codebase that catches every future instance of it, not only the one instance that was originally found by hand. 
+
+\begin{table}[h]
+\centering
+\caption{Defect class and the structural check that now catches it, cited against \texttt{CQL\_converter/RESULTS.md} entry numbers.}
+\label{tab:defect-classes}
+\footnotesize
+\renewcommand{\arraystretch}{1.05}
+\setlength{\aboverulesep}{0.3ex}
+\setlength{\belowrulesep}{0.3ex}
+\begin{tabular}{p{0.32\textwidth} p{0.53\textwidth} p{0.09\textwidth}}
+\toprule
+\textbf{Defect class} & \textbf{Structural check now in place} & \textbf{Log} \\
+\midrule
+A rule compiles clean but is logically vacuous or tautological & Non-degeneracy check re-applied on every load, not only at write time --- an artefact that shipped clean can still fail on read & R14, R16, R17a \\
+\midrule
+A new DSL node is added; some walker's dispatch does not name it and silently treats it as absent & \texttt{test\_exhaustive.py} reads the source, enumerates every dispatch over the expression union, and fails if one omits a variant without a written reason & R34, R34a, R34c \\
+\midrule
+Python's \texttt{bool} is an \texttt{int}, and any non-empty string is truthy, so type-confused code silently misreads a boolean & \texttt{dsl.\_is\_number} is a codebase rule, not a one-off fix --- \texttt{bool} is never treated as a number, strings are parsed explicitly & R33b, R33c \\
+\midrule
+An infrastructure failure (compiler crash, auth error, empty terminology fetch) returns a value indistinguishable from a genuine negative result & Failures are labelled explicitly: a non-zero exit and a clean exit with nothing written both now raise; ``inconclusive'' is reported separately from a real disagreement & R33a, R33d, R34b \\
+\midrule
+A permission is encoded with the same operator as an obligation, so ``may'' reads as ``must'' & Deontic force is a dedicated operator on the rule, not a flag on a shared one, so the two cannot be conflated at decode time & R17b, R18 \\
+\midrule
+The partial encoding path silently drops validator evidence that the strict path keeps & Both paths now record identical validator evidence; the same discrepancy had been independently rediscovered three times before this fix stuck & R28a, R34 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+
 \note{One paragraph pointing at \texttt{CQL\_converter/RESULTS.md} in the anonymised
 repo. Do NOT try to compress 36 log entries into the appendix --- cite it as an
 artefact. But DO extract one table: ``defect class $\rightarrow$ the structural
@@ -661,6 +715,9 @@ BECAUSE you built detectors for them. Presented as a closed arc it reads as
 rigour; presented as a list of past bugs it reads as a confession.}
 
 \input{logic}
+
+
+
 
 %\input{checklist}
 

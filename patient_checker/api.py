@@ -220,9 +220,23 @@ def settings():
     return jsonify({"server_key_configured": guidelines.server_has_api_key()})
 
 
+def _client_id() -> str | None:
+    """The browser's self-minted id, used to keep one visitor's uploads out
+    of another's dashboard. Not authentication -- it is client-supplied and
+    forgeable; see the note above guidelines._visible_to."""
+    value = (request.headers.get("X-GF-Client")
+             or request.form.get("client_id")
+             or ((request.get_json(silent=True) or {}).get("client_id")
+                 if request.is_json else None)
+             or "")
+    value = value.strip()
+    # Bound it: this lands in the index on disk.
+    return value[:64] or None
+
+
 @app.get("/guidelines")
 def list_guidelines():
-    return jsonify(guidelines.list_guidelines())
+    return jsonify(guidelines.list_guidelines(owner=_client_id()))
 
 
 @app.post("/guidelines")
@@ -258,7 +272,7 @@ def upload_guideline():
     try:
         entry = guidelines.ingest(
             title, file_bytes=file_bytes, filename=filename, text=text,
-            live=live, api_key=api_key,
+            live=live, api_key=api_key, owner=_client_id(),
         )
     except guidelines.IngestError as error:
         return jsonify({"error": str(error)}), 400
@@ -308,7 +322,7 @@ def guideline_progress(guideline_id):
 def delete_guideline(guideline_id):
     """Remove an uploaded guideline and everything stored for it."""
     try:
-        result = guidelines.delete_guideline(guideline_id)
+        result = guidelines.delete_guideline(guideline_id, owner=_client_id())
     except guidelines.IngestError as error:
         return jsonify({"error": str(error)}), 400
     return jsonify(result)
@@ -321,7 +335,8 @@ def rename_guideline(guideline_id):
     body = request.get_json(silent=True) or {}
     title = body.get("title") or request.form.get("title")
     try:
-        entry = guidelines.rename_guideline(guideline_id, title)
+        entry = guidelines.rename_guideline(guideline_id, title,
+                                            owner=_client_id())
     except guidelines.IngestError as error:
         return jsonify({"error": str(error)}), 400
     return jsonify(entry)
@@ -542,4 +557,9 @@ if __name__ == "__main__":
     # threaded=True: a live upload's background thread runs for as long as
     # the document takes, and the polling GETs against /progress need to be
     # served concurrently with it rather than queued behind it.
-    app.run(port=8000, debug=False, threaded=True)
+    # A container gets its port from the platform and must bind every
+    # interface; 127.0.0.1 would be unreachable from outside the container.
+    import os
+    app.run(host=os.environ.get("GF_HOST", "127.0.0.1"),
+            port=int(os.environ.get("PORT", "8000")),
+            debug=False, threaded=True)

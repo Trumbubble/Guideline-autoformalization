@@ -1,0 +1,107 @@
+{
+ "doc": "PMC12355350",
+ "abbrevs": {
+  "CKD": "chronic kidney disease",
+  "CVD": "cardiovascular disease",
+  "KDIGO": "Kidney Disease Improving Global Outcomes",
+  "eGFR": "estimated glomerular filtration rate"
+ },
+ "statements": [
+  [
+   "PMC12355350:0045",
+   "\u2022 Lower risk (three or fewer cardiovascular risk factors without established cardiovascular disease (CVD) or chronic kidney disease (CKD)): weak recommendation against SGLT-2 inhibitors or GLP-1 receptor agonists."
+  ],
+  [
+   "PMC12355350:0046",
+   "\u2022 Moderate risk (more than three cardiovascular risk factors without established CVD or CKD; or established CVD and/or CKD at lower risk of complications): weak recommendation in favour of SGLT-2 inhibitors or GLP-1 receptor agonists; and a weak recommendation against finerenone in adults with CKD."
+  ],
+  [
+   "PMC12355350:0047",
+   "and a weak recommendation against finerenone in adults with CKD."
+  ],
+  [
+   "PMC12355350:0048",
+   "\u2022 Higher risk (established CVD and/or CKD at higher risk of complications, or established heart failure): strong recommendation in favour of SGLT-2 inhibitors or GLP-1 receptor agonists; and a weak recommendation in favour of finerenone in adults with CKD."
+  ],
+  [
+   "PMC12355350:0050",
+   "Across risk strata: weak recommendation in favour of tirzepatide in adults with obesity."
+  ],
+  [
+   "PMC12355350:0085",
+   "Users should generally prioritise medications for which a strong recommendation in favour of use is provided for the relevant risk stratum, followed by medications for which a weak or conditional recommendation in favour is provided."
+  ],
+  [
+   "PMC12355350:0131",
+   "If replacing a GLP-1 receptor agonist with tirzepatide, initiation or continuation of an SGLT-2 inhibitor is indicated."
+  ],
+  [
+   "PMC12355350:0127",
+   "Tirzepatide should not be given in combination with GLP-1 receptor agonists, but can be combined with SGLT-2 inhibitors and finerenone."
+  ],
+  [
+   "PMC12355350:0141",
+   "For adults prioritising initiation of tirzepatide over GLP-1 receptor agonist therapy due to larger weight loss effects, initiation or continuation of an SGLT-2 inhibitor is indicated."
+  ],
+  [
+   "PMC12355350:0086",
+   "When faced with multiple recommended alternatives, choice of medications should be contextual, tailored to the individual and informed by shared decision making."
+  ],
+  [
+   "PMC12355350:0062",
+   "When considering which risk group is appropriate for an individual patient, users of the guideline should first consider whether they have established CVD or CKD."
+  ],
+  [
+   "PMC12355350:0071",
+   "Decision makers should additionally consider the presence (or absence) of factors such as: history of myocardial infarction, coronary intervention, ischaemic heart disease, heart failure, cerebrovascular disease, peripheral vascular disease, or atrial fibrillation; older age; male sex; cardiovascular risk factors (summarised above); and kidney function."
+  ],
+  [
+   "PMC12355350:0074",
+   "Beyond this, clinicians may consider a specific patient\u2019s risk of cardiovascular and kidney complications for more individualised decision making."
+  ],
+  [
+   "PMC12355350:0091",
+   "Clinicians and patients may choose to avoid combining candidate medications in certain contexts, including where the additive burden of administration or additive harms of treatment are substantial, or where additive benefits are not anticipated to be substantial."
+  ],
+  [
+   "PMC12355350:0093",
+   "Adults already taking medications with gastrointestinal side effects (such as metformin) may choose to avoid adding in other drugs with similar side effects (such as GLP-1 receptor agonists) if the cumulative risk of gastrointestinal events exceeds anticipated benefits or is perceived as being too large a harm overall."
+  ],
+  [
+   "PMC12355350:0111",
+   "When choosing between alternatives, patients should consider the relative impact of specific cardiovascular and kidney benefits and reduction in body weight offered by both medications."
+  ],
+  [
+   "PMC12355350:0128",
+   "When choosing between GLP-1 receptor agonists and tirzepatide, decision makers should weigh the higher certainty of cardiovascular and kidney benefits (offered by GLP-1 receptor agonists) against larger weight loss benefits (offered by tirzepatide)."
+  ],
+  [
+   "PMC12355350:0130",
+   "In adults at higher risk of cardiovascular and kidney complications, tirzepatide should generally not replace medications effective in reducing the risk of these complications. If replacing a GLP-1 receptor agonist with tirzepatide, initiation or continuation of an SGLT-2 inhibitor is indicated."
+  ],
+  [
+   "PMC12355350:0068",
+   "Adults with CKD may be classified based on eGFR and degree of albuminuria based on the KDIGO classification (supplement 2)."
+  ],
+  [
+   "PMC12355350:0069",
+   "For patients with established CVD, clinicians should rely on gestalt or one of several publicly available prognostic models (supplement 3) to assess a patient's risk of cardiovascular and kidney complications."
+  ],
+  [
+   "PMC12355350:0082",
+   "When applying this evidence and related recommendations to an individual, users should consider the proportional effect on weight anticipated and apply this to the individual\u2019s body weight."
+  ],
+  [
+   "PMC12355350:0098",
+   "Patients should ideally be involved in shared decision making."
+  ],
+  [
+   "PMC12355350:0120",
+   "Adults with established heart failure may favour SGLT-2 inhibitors over alternatives."
+  ],
+  [
+   "PMC12355350:0121",
+   "SGLT-2 inhibitors and GLP-1 receptor agonists can be combined."
+  ]
+ ]
+}

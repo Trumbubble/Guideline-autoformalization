@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>Demo</title>
+<title>Toy example &mdash; three verdicts</title>
 <script>
 // Set before the stylesheet paints, so a saved override never flashes the
 // wrong theme for a frame -- same as the other pages.
@@ -174,14 +174,14 @@
     </svg>
   </button>
   <a class="back-link" href="/demo">&larr; Demo</a>
-  <h1>Toy example: one rule, three verdicts</h1>
+  <h1>Toy example: one drug, three verdicts</h1>
   <p>
-    A hand-authored rule rather than one extracted from a document, because it
-    isolates the thing worth seeing: the same drug, three different amounts of
-    information about the patient, three different verdicts. The rule: an ACE
-    inhibitor should not be started if serum potassium is above
-    5.0&nbsp;mmol/L, and potassium should be checked within 14&nbsp;days of
-    starting one. For the same checker running against real guideline
+    Two of the ten hand-authored fixture rules, rather than rules extracted
+    from a document, because together they isolate the thing worth seeing: the
+    same drug, three different amounts of information about the patient, three
+    different verdicts. The rules: an ACE inhibitor should not be started if
+    serum potassium is above 5.0&nbsp;mmol/L, and potassium should be checked
+    within 14&nbsp;days of starting one. For the same checker running against real guideline
     documents, see the <a href="/demo">demo</a>.
   </p>
 </header>
@@ -334,7 +334,6 @@ async function run() {
     `<div class="closing">
       <div class="cta-row">
         <a class="cta primary" href="/check?guideline=fixtures&from=demo">Try your own patient &rarr;</a>
-        <a class="cta secondary" href="/">Explore the guideline library &rarr;</a>
       </div>
     </div>`;
 }

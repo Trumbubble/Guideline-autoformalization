@@ -112,36 +112,678 @@ details:not(.card){display:none}}
 </svg></button>
 
 <h1>PMC13270348 — formalization report</h1>
-<p class="sub">5 recommendation statement(s) &middot; generated 2026-09-04 &middot; 8 bound variable(s)</p>
-<div class="bar"><span style="width:40.0%;background:var(--ok)"></span><span style="width:0.0%;background:var(--part)"></span><span style="width:60.0%;background:var(--no)"></span></div>
-<div class="legend"><span><i class="dot" style="background:var(--ok)"></i>2 encoded</span><span><i class="dot" style="background:var(--part)"></i>0 partial &mdash; encoded with a named gap</span><span><i class="dot" style="background:var(--no)"></i>3 refused</span></div>
+<p class="sub">67 recommendation statement(s) &middot; generated 2026-09-05 &middot; 41 bound variable(s)</p>
+<div class="bar"><span style="width:22.4%;background:var(--ok)"></span><span style="width:11.9%;background:var(--part)"></span><span style="width:65.7%;background:var(--no)"></span></div>
+<div class="legend"><span><i class="dot" style="background:var(--ok)"></i>15 encoded</span><span><i class="dot" style="background:var(--part)"></i>8 partial &mdash; encoded with a named gap</span><span><i class="dot" style="background:var(--no)"></i>44 refused</span></div>
 <h2>Why statements were refused</h2>
 <table><tr><th>Reason</th><th>Meaning</th><th class="n">n</th></tr>
-<tr><td><span class="id">vague_predicate</span></td><td>the sentence turns on a judgement it does not define</td><td class="n">1</td></tr>
-<tr><td><span class="id">not_patient_level</span></td><td>the sentence is about a service or a system, not a patient</td><td class="n">1</td></tr>
-<tr><td><span class="id">unbound_concept</span></td><td>a clinical concept in the sentence could not be resolved to a terminology code</td><td class="n">1</td></tr>
+<tr><td><span class="id">vague_predicate</span></td><td>the sentence turns on a judgement it does not define</td><td class="n">14</td></tr>
+<tr><td><span class="id">unbound_concept</span></td><td>a clinical concept in the sentence could not be resolved to a terminology code</td><td class="n">13</td></tr>
+<tr><td><span class="id">beyond_dsl</span></td><td>the sentence needs a construct this logic does not have</td><td class="n">11</td></tr>
+<tr><td><span class="id">not_patient_level</span></td><td>the sentence is about a service or a system, not a patient</td><td class="n">2</td></tr>
+<tr><td><span class="id">unsupported_temporal</span></td><td>the timing the sentence describes cannot be expressed</td><td class="n">2</td></tr>
+<tr><td><span class="id">defeasible</span></td><td>the guideline hedged: the action is discretionary, not required</td><td class="n">2</td></tr>
 </table>
 <h2>Statement by statement</h2>
 <div class="controls"><button type="button" onclick="setAll(true)">Expand all</button><button type="button" onclick="setAll(false)">Collapse all</button><span class="hint">or click any statement</span></div>
 <details class="card encode">
 <summary>
 <div class="head">
-<span class="id">PMC13270348:0087</span>
+<span class="id">PMC13270348:0012</span>
 <span class="badge encode">Encoded</span>
 </div>
-<blockquote>We suggest that for mild to moderate pain, using the WHO ladder may be sufficient for achieving pain control in patients hospitalized with acute pancreatitis.</blockquote>
+<blockquote>Multidimensional pain assessment may be considered given its established benefit in chronic pancreatitis.</blockquote>
 </summary>
 <div class="body">
 <div class="label">Encoded as</div>
-<div class="rule">IF Acute pancreatitis AND mild to moderate pain
-THEN may: Pain control</div>
-<div class="why" style="margin-top:8px"><strong>Action:</strong> recommend WHO analgesic ladder for pain control</div>
-<div class="why" style="margin-top:4px;color:var(--muted)"><strong>Strength, as the guideline states it:</strong> conditional (suggestion, permissive wording: &#x27;may be sufficient&#x27;)</div>
+<div class="rule">IF Chronic pancreatitis
+THEN may: Pain assessment</div>
+<div class="why" style="margin-top:8px"><strong>Action:</strong> recommend multidimensional pain assessment</div>
 
 <details><summary>Show the logic and its bindings</summary>
-<div class="label">&phi; = when &rarr; then</div><div class="rule logic">has_acute_pancreatitis = true ∧ has_mild_moderate_pain = true
-    →  pain_control = true</div><div class="label">What each name is bound to</div><table><tr><th>Variable</th><th>Type</th><th>Terminology</th></tr><tr><td><span class="id">has_acute_pancreatitis</span><br><span style="font-size:12.5px;color:var(--muted)">Acute pancreatitis</span></td><td>bool</td><td style="word-break:break-all">http://snomed.info/sct|197456007|20260801 <span class="id">(+18 codes)</span></td></tr><tr><td><span class="id">has_mild_moderate_pain</span><br><span style="font-size:12.5px;color:var(--muted)">mild to moderate pain</span></td><td>bool</td><td style="word-break:break-all"><em style="color:var(--part)">left free &mdash; no code</em></td></tr><tr><td><span class="id">pain_control</span><br><span style="font-size:12.5px;color:var(--muted)">Pain control</span></td><td>bool</td><td style="word-break:break-all">http://snomed.info/sct|225782006|20260801 <span class="id">(+6 codes)</span></td></tr></table>
+<div class="label">&phi; = when &rarr; then</div><div class="rule logic">has_chronic_pancreatitis = true
+    →  multidimensional_pain_assessment = true</div><div class="label">What each name is bound to</div><table><tr><th>Variable</th><th>Type</th><th>Terminology</th></tr><tr><td><span class="id">has_chronic_pancreatitis</span><br><span style="font-size:12.5px;color:var(--muted)">Chronic pancreatitis</span></td><td>bool</td><td style="word-break:break-all">http://snomed.info/sct|235494005|20260801 <span class="id">(+13 codes)</span></td></tr><tr><td><span class="id">multidimensional_pain_assessment</span><br><span style="font-size:12.5px;color:var(--muted)">Pain assessment</span></td><td>bool</td><td style="word-break:break-all">http://snomed.info/sct|225399009|20260801 <span class="id">(+9 codes)</span></td></tr></table>
 </details>
+<details><summary>Show the executable CQL (45 lines)</summary>
+<pre>library Demopmc132703480012 version &#x27;1.0.000&#x27;
+
+using FHIR version &#x27;4.0.1&#x27;
+include FHIRHelpers version &#x27;4.0.1&#x27; called FHIRHelpers
+
+codesystem &quot;SNOMED&quot;: &#x27;http://snomed.info/sct&#x27;
+
+code &quot;Chronic pancreatitis codes&quot;: &#x27;235494005&#x27; from &quot;SNOMED&quot; display &#x27;Chronic pancreatitis&#x27;
+code &quot;Pain Assessment codes&quot;: &#x27;225399009&#x27; from &quot;SNOMED&quot;
+code &quot;Pain assessment codes&quot;: &#x27;225399009&#x27; from &quot;SNOMED&quot; display &#x27;Pain assessment&#x27;
+
+context Patient
+
+/* PMC13270348:0012
+   action: recommend multidimensional pain assessment
+   source: Multidimensional pain assessment may be considered given its established benefit in chronic pancreatitis.
+*/
+
+define &quot;Chronic pancreatitis&quot;:
+  exists ([Condition: &quot;Chronic pancreatitis codes&quot;])
+define &quot;Pain assessment&quot;:
+  exists ([MedicationRequest: &quot;Pain assessment codes&quot;])
+
+define &quot;Applicable&quot;:
+  &quot;Chronic pancreatitis&quot;
+
+define &quot;Satisfied&quot;:
+  &quot;Pain assessment&quot;
+
+define &quot;Compliant&quot;:
+  not &quot;Applicable&quot; or &quot;Satisfied&quot;
+
+define &quot;Deontic&quot;:
+  &#x27;permission&#x27;
+
+// The source PERMITS this action; it does not require it.
+// Not taking a permitted option is not a violation.
+define &quot;OptionTaken&quot;:
+  &quot;Applicable&quot; and &quot;Satisfied&quot;
+
+define &quot;OptionNotTaken&quot;:
+  &quot;Applicable&quot; and not &quot;Satisfied&quot;
+
+define &quot;Violated&quot;:
+  false
+</pre></details>
+</div></details>
+<details class="card encode">
+<summary>
+<div class="head">
+<span class="id">PMC13270348:0018</span>
+<span class="badge encode">Encoded</span>
+</div>
+<blockquote>Opioids are not associated with increased adverse outcomes and should not be delayed due to safety concerns to ensure adequate severe pain control.</blockquote>
+</summary>
+<div class="body">
+<div class="label">Encoded as</div>
+<div class="rule">IF Severe pain
+THEN must: Opioids</div>
+<div class="why" style="margin-top:8px"><strong>Action:</strong> recommend opioid analgesia</div>
+
+<details><summary>Show the logic and its bindings</summary>
+<div class="label">&phi; = when &rarr; then</div><div class="rule logic">has_severe_pain = true
+    →  on_opioids = true</div><div class="label">What each name is bound to</div><table><tr><th>Variable</th><th>Type</th><th>Terminology</th></tr><tr><td><span class="id">has_severe_pain</span><br><span style="font-size:12.5px;color:var(--muted)">Severe pain</span></td><td>bool</td><td style="word-break:break-all">http://snomed.info/sct|76948002|20260801 <span class="id">(+2 codes)</span></td></tr><tr><td><span class="id">on_opioids</span><br><span style="font-size:12.5px;color:var(--muted)">Opioids</span></td><td>bool</td><td style="word-break:break-all">http://cts.nlm.nih.gov/fhir/ValueSet|2.16.840.1.113762.1.4.1248.120|20260203 <span class="id">(+288 codes)</span></td></tr></table>
+</details>
+<details><summary>Show the executable CQL (37 lines)</summary>
+<pre>library Demopmc132703480018 version &#x27;1.0.000&#x27;
+
+using FHIR version &#x27;4.0.1&#x27;
+include FHIRHelpers version &#x27;4.0.1&#x27; called FHIRHelpers
+
+codesystem &quot;SNOMED&quot;: &#x27;http://snomed.info/sct&#x27;
+
+valueset &quot;Opioids codes&quot;: &#x27;urn:oid:2.16.840.1.113762.1.4.1248.120&#x27; version &#x27;20260203&#x27;
+
+code &quot;Severe pain codes&quot;: &#x27;76948002&#x27; from &quot;SNOMED&quot; display &#x27;Severe pain&#x27;
+
+context Patient
+
+/* PMC13270348:0018
+   action: recommend opioid analgesia
+   source: Opioids are not associated with increased adverse outcomes and should not be delayed due to safety concerns to ensure adequate severe pain control.
+*/
+
+define &quot;Severe pain&quot;:
+  exists ([Condition: &quot;Severe pain codes&quot;])
+define &quot;Opioids&quot;:
+  exists ([MedicationRequest: &quot;Opioids codes&quot;])
+
+define &quot;Applicable&quot;:
+  &quot;Severe pain&quot;
+
+define &quot;Satisfied&quot;:
+  &quot;Opioids&quot;
+
+define &quot;Compliant&quot;:
+  not &quot;Applicable&quot; or &quot;Satisfied&quot;
+
+define &quot;Deontic&quot;:
+  &#x27;obligation&#x27;
+
+define &quot;Violated&quot;:
+  &quot;Applicable&quot; and not &quot;Satisfied&quot;
+</pre></details>
+</div></details>
+<details class="card encode">
+<summary>
+<div class="head">
+<span class="id">PMC13270348:0020</span>
+<span class="badge encode">Encoded</span>
+</div>
+<blockquote>Patient‐controlled analgesia should be used cautiously and is not routinely recommended in AP</blockquote>
+</summary>
+<div class="body">
+<div class="label">Encoded as</div>
+<div class="rule">IF Acute pancreatitis
+THEN must: NOT Patient controlled analgesia</div>
+<div class="why" style="margin-top:8px"><strong>Action:</strong> avoid patient_controlled_analgesia</div>
+<div class="why" style="margin-top:4px;color:var(--muted)"><strong>Strength, as the guideline states it:</strong> not routinely recommended; use cautiously</div>
+<div class="label">Checks that fired</div>
+<div class="caution"><code>TERMINOLOGY_UNAVAILABLE</code> 4 terminology lookup(s) failed (transport or server error, not an absent concept), so a refusal here may not be a property of the guideline: &#x27;AP&#x27; (condition): HTTPError: HTTP Error 400: ; &#x27;ap&#x27; (condition): HTTPError: HTTP Error 400: ; &#x27;AP&#x27; (procedure): HTTPError: HTTP Error 400: ; &#x27;ap&#x27; (procedure): HTTPError: HTTP Error 400: </div>
+<details><summary>Show the logic and its bindings</summary>
+<div class="label">&phi; = when &rarr; then</div><div class="rule logic">has_ap = true
+    →  patient_controlled_analgesia = false</div><div class="label">What each name is bound to</div><table><tr><th>Variable</th><th>Type</th><th>Terminology</th></tr><tr><td><span class="id">has_ap</span><br><span style="font-size:12.5px;color:var(--muted)">Acute pancreatitis</span></td><td>bool</td><td style="word-break:break-all">http://snomed.info/sct|197456007|20260801 <span class="id">(+18 codes)</span></td></tr><tr><td><span class="id">patient_controlled_analgesia</span><br><span style="font-size:12.5px;color:var(--muted)">Patient controlled analgesia</span></td><td>bool</td><td style="word-break:break-all">http://snomed.info/sct|241716000|20260801 <span class="id">(+4 codes)</span></td></tr></table>
+</details>
+<details><summary>Show the executable CQL (38 lines)</summary>
+<pre>library Demopmc132703480020 version &#x27;1.0.000&#x27;
+
+using FHIR version &#x27;4.0.1&#x27;
+include FHIRHelpers version &#x27;4.0.1&#x27; called FHIRHelpers
+
+codesystem &quot;SNOMED&quot;: &#x27;http://snomed.info/sct&#x27;
+
+code &quot;Acute pancreatitis codes&quot;: &#x27;197456007&#x27; from &quot;SNOMED&quot; display &#x27;Acute pancreatitis&#x27;
+code &quot;Patient Controlled Analgesia codes&quot;: &#x27;241716000&#x27; from &quot;SNOMED&quot;
+code &quot;Patient controlled analgesia codes&quot;: &#x27;241716000&#x27; from &quot;SNOMED&quot; display &#x27;Patient controlled analgesia&#x27;
+
+context Patient
+
+/* PMC13270348:0020
+   action: avoid patient_controlled_analgesia
+   strength: not routinely recommended; use cautiously
+   source: Patient‐controlled analgesia should be used cautiously and is not routinely recommended in AP
+*/
+
+define &quot;Acute pancreatitis&quot;:
+  exists ([Condition: &quot;Acute pancreatitis codes&quot;])
+define &quot;Patient controlled analgesia&quot;:
+  exists ([MedicationRequest: &quot;Patient controlled analgesia codes&quot;])
+
+define &quot;Applicable&quot;:
+  &quot;Acute pancreatitis&quot;
+
+define &quot;Satisfied&quot;:
+  not &quot;Patient controlled analgesia&quot;
+
+define &quot;Compliant&quot;:
+  not &quot;Applicable&quot; or &quot;Satisfied&quot;
+
+define &quot;Deontic&quot;:
+  &#x27;obligation&#x27;
+
+define &quot;Violated&quot;:
+  &quot;Applicable&quot; and not &quot;Satisfied&quot;
+</pre></details>
+</div></details>
+<details class="card encode">
+<summary>
+<div class="head">
+<span class="id">PMC13270348:0040</span>
+<span class="badge encode">Encoded</span>
+</div>
+<blockquote>Multidisciplinary pain management can be extrapolated from postoperative settings and may be considered in paediatric AP</blockquote>
+</summary>
+<div class="body">
+<div class="label">Encoded as</div>
+<div class="rule">IF Acute pancreatitis
+THEN may: Pain management</div>
+<div class="why" style="margin-top:8px"><strong>Action:</strong> recommend multidisciplinary pain management</div>
+<div class="why" style="margin-top:4px;color:var(--muted)"><strong>Strength, as the guideline states it:</strong> extrapolated from postoperative settings; may be considered</div>
+<div class="label">Checks that fired</div>
+<div class="caution"><code>TERMINOLOGY_UNAVAILABLE</code> 4 terminology lookup(s) failed (transport or server error, not an absent concept), so a refusal here may not be a property of the guideline: &#x27;AP&#x27; (condition): HTTPError: HTTP Error 400: ; &#x27;ap&#x27; (condition): HTTPError: HTTP Error 400: ; &#x27;AP&#x27; (procedure): HTTPError: HTTP Error 400: ; &#x27;ap&#x27; (procedure): HTTPError: HTTP Error 400: </div>
+<details><summary>Show the logic and its bindings</summary>
+<div class="label">&phi; = when &rarr; then</div><div class="rule logic">has_ap = true
+    →  multidisciplinary_pain_management = true</div><div class="label">What each name is bound to</div><table><tr><th>Variable</th><th>Type</th><th>Terminology</th></tr><tr><td><span class="id">has_ap</span><br><span style="font-size:12.5px;color:var(--muted)">Acute pancreatitis</span></td><td>bool</td><td style="word-break:break-all">http://snomed.info/sct|197456007|20260801 <span class="id">(+18 codes)</span></td></tr><tr><td><span class="id">multidisciplinary_pain_management</span><br><span style="font-size:12.5px;color:var(--muted)">Pain management</span></td><td>bool</td><td style="word-break:break-all">http://snomed.info/sct|278414003|20260801 <span class="id">(+14 codes)</span></td></tr></table>
+</details>
+<details><summary>Show the executable CQL (46 lines)</summary>
+<pre>library Demopmc132703480040 version &#x27;1.0.000&#x27;
+
+using FHIR version &#x27;4.0.1&#x27;
+include FHIRHelpers version &#x27;4.0.1&#x27; called FHIRHelpers
+
+codesystem &quot;SNOMED&quot;: &#x27;http://snomed.info/sct&#x27;
+
+code &quot;Acute pancreatitis codes&quot;: &#x27;197456007&#x27; from &quot;SNOMED&quot; display &#x27;Acute pancreatitis&#x27;
+code &quot;Pain Management codes&quot;: &#x27;278414003&#x27; from &quot;SNOMED&quot;
+code &quot;Pain management codes&quot;: &#x27;278414003&#x27; from &quot;SNOMED&quot; display &#x27;Pain management&#x27;
+
+context Patient
+
+/* PMC13270348:0040
+   action: recommend multidisciplinary pain management
+   strength: extrapolated from postoperative settings; may be considered
+   source: Multidisciplinary pain management can be extrapolated from postoperative settings and may be considered in paediatric AP
+*/
+
+define &quot;Acute pancreatitis&quot;:
+  exists ([Condition: &quot;Acute pancreatitis codes&quot;])
+define &quot;Pain management&quot;:
+  exists ([MedicationRequest: &quot;Pain management codes&quot;])
+
+define &quot;Applicable&quot;:
+  &quot;Acute pancreatitis&quot;
+
+define &quot;Satisfied&quot;:
+  &quot;Pain management&quot;
+
+define &quot;Compliant&quot;:
+  not &quot;Applicable&quot; or &quot;Satisfied&quot;
+
+define &quot;Deontic&quot;:
+  &#x27;permission&#x27;
+
+// The source PERMITS this action; it does not require it.
+// Not taking a permitted option is not a violation.
+define &quot;OptionTaken&quot;:
+  &quot;Applicable&quot; and &quot;Satisfied&quot;
+
+define &quot;OptionNotTaken&quot;:
+  &quot;Applicable&quot; and not &quot;Satisfied&quot;
+
+define &quot;Violated&quot;:
+  false
+</pre></details>
+</div></details>
+<details class="card encode">
+<summary>
+<div class="head">
+<span class="id">PMC13270348:0043</span>
+<span class="badge encode">Encoded</span>
+</div>
+<blockquote>Routine scheduled imaging is not recommended for patients discharged with pain after acute pancreatitis; however, imaging should be considered in cases of recurrent or escalating pain to exclude complications.</blockquote>
+</summary>
+<div class="body">
+<div class="label">Encoded as</div>
+<div class="rule">IF Acute pancreatitis AND Pain
+THEN must: NOT Imaging</div>
+<div class="why" style="margin-top:8px"><strong>Action:</strong> avoid routine scheduled imaging after discharge following acute pancreatitis</div>
+
+<details><summary>Show the logic and its bindings</summary>
+<div class="label">&phi; = when &rarr; then</div><div class="rule logic">has_acute_pancreatitis = true ∧ has_pain = true
+    →  imaging = false</div><div class="label">What each name is bound to</div><table><tr><th>Variable</th><th>Type</th><th>Terminology</th></tr><tr><td><span class="id">has_acute_pancreatitis</span><br><span style="font-size:12.5px;color:var(--muted)">Acute pancreatitis</span></td><td>bool</td><td style="word-break:break-all">http://snomed.info/sct|197456007|20260801 <span class="id">(+18 codes)</span></td></tr><tr><td><span class="id">has_pain</span><br><span style="font-size:12.5px;color:var(--muted)">Pain</span></td><td>bool</td><td style="word-break:break-all">http://snomed.info/sct|22253000|20260801 <span class="id">(+500 codes)</span></td></tr><tr><td><span class="id">imaging</span><br><span style="font-size:12.5px;color:var(--muted)">Imaging</span></td><td>bool</td><td style="word-break:break-all">http://snomed.info/sct|363679005|20260801 <span class="id">(+500 codes)</span></td></tr></table>
+</details>
+<details><summary>Show the executable CQL (41 lines)</summary>
+<pre>library Demopmc132703480043 version &#x27;1.0.000&#x27;
+
+using FHIR version &#x27;4.0.1&#x27;
+include FHIRHelpers version &#x27;4.0.1&#x27; called FHIRHelpers
+
+codesystem &quot;SNOMED&quot;: &#x27;http://snomed.info/sct&#x27;
+
+code &quot;Acute pancreatitis codes&quot;: &#x27;197456007&#x27; from &quot;SNOMED&quot; display &#x27;Acute pancreatitis&#x27;
+code &quot;Imaging codes&quot;: &#x27;363679005&#x27; from &quot;SNOMED&quot;
+code &quot;Imaging codes&quot;: &#x27;363679005&#x27; from &quot;SNOMED&quot; display &#x27;Imaging&#x27;
+code &quot;Pain codes&quot;: &#x27;22253000&#x27; from &quot;SNOMED&quot; display &#x27;Pain&#x27;
+
+context Patient
+
+/* PMC13270348:0043
+   action: avoid routine scheduled imaging after discharge following acute pancreatitis
+   source: Routine scheduled imaging is not recommended for patients discharged with pain after acute pancreatitis; however, imaging should be considered in cases of recurrent or escalating pain to exclude complications.
+*/
+
+define &quot;Acute pancreatitis&quot;:
+  exists ([Condition: &quot;Acute pancreatitis codes&quot;])
+define &quot;Pain&quot;:
+  exists ([Condition: &quot;Pain codes&quot;])
+define &quot;Imaging&quot;:
+  exists ([MedicationRequest: &quot;Imaging codes&quot;])
+
+define &quot;Applicable&quot;:
+  (&quot;Acute pancreatitis&quot;
+  and &quot;Pain&quot;)
+
+define &quot;Satisfied&quot;:
+  not &quot;Imaging&quot;
+
+define &quot;Compliant&quot;:
+  not &quot;Applicable&quot; or &quot;Satisfied&quot;
+
+define &quot;Deontic&quot;:
+  &#x27;obligation&#x27;
+
+define &quot;Violated&quot;:
+  &quot;Applicable&quot; and not &quot;Satisfied&quot;
+</pre></details>
+</div></details>
+<details class="card encode">
+<summary>
+<div class="head">
+<span class="id">PMC13270348:0046</span>
+<span class="badge encode">Encoded</span>
+</div>
+<blockquote>MRCP may be useful to assess the cause of pancreatitis related to ductal anomalies and routine follow‐up MRCP is not recommended.</blockquote>
+</summary>
+<div class="body">
+<div class="label">Encoded as</div>
+<div class="rule">IF Pancreatitis AND Pancreatic duct anomaly
+THEN may: Magnetic resonance cholangiopancreatography</div>
+<div class="why" style="margin-top:8px"><strong>Action:</strong> recommend MRCP</div>
+
+<details><summary>Show the logic and its bindings</summary>
+<div class="label">&phi; = when &rarr; then</div><div class="rule logic">has_pancreatitis = true ∧ has_ductal_anomalies = true
+    →  mrcp = true</div><div class="label">What each name is bound to</div><table><tr><th>Variable</th><th>Type</th><th>Terminology</th></tr><tr><td><span class="id">has_ductal_anomalies</span><br><span style="font-size:12.5px;color:var(--muted)">Pancreatic duct anomaly</span></td><td>bool</td><td style="word-break:break-all">http://snomed.info/sct|253815007|20260801 <span class="id">(+5 codes)</span></td></tr><tr><td><span class="id">has_pancreatitis</span><br><span style="font-size:12.5px;color:var(--muted)">Pancreatitis</span></td><td>bool</td><td style="word-break:break-all">http://snomed.info/sct|75694006|20260801 <span class="id">(+57 codes)</span></td></tr><tr><td><span class="id">mrcp</span><br><span style="font-size:12.5px;color:var(--muted)">Magnetic resonance cholangiopancreatography</span></td><td>bool</td><td style="word-break:break-all">http://snomed.info/sct|314635004|20260801 <span class="id">(+3 codes)</span></td></tr></table>
+</details>
+<details><summary>Show the executable CQL (49 lines)</summary>
+<pre>library Demopmc132703480046 version &#x27;1.0.000&#x27;
+
+using FHIR version &#x27;4.0.1&#x27;
+include FHIRHelpers version &#x27;4.0.1&#x27; called FHIRHelpers
+
+codesystem &quot;SNOMED&quot;: &#x27;http://snomed.info/sct&#x27;
+
+code &quot;Magnetic Resonance Cholangiopancreatography codes&quot;: &#x27;314635004&#x27; from &quot;SNOMED&quot;
+code &quot;Magnetic resonance cholangiopancreatography codes&quot;: &#x27;314635004&#x27; from &quot;SNOMED&quot; display &#x27;Magnetic resonance cholangiopancreatography&#x27;
+code &quot;Pancreatic duct anomaly codes&quot;: &#x27;253815007&#x27; from &quot;SNOMED&quot; display &#x27;Pancreatic duct anomaly&#x27;
+code &quot;Pancreatitis codes&quot;: &#x27;75694006&#x27; from &quot;SNOMED&quot; display &#x27;Pancreatitis&#x27;
+
+context Patient
+
+/* PMC13270348:0046
+   action: recommend MRCP
+   source: MRCP may be useful to assess the cause of pancreatitis related to ductal anomalies and routine follow‐up MRCP is not recommended.
+*/
+
+define &quot;Pancreatic duct anomaly&quot;:
+  exists ([Condition: &quot;Pancreatic duct anomaly codes&quot;])
+define &quot;Pancreatitis&quot;:
+  exists ([Condition: &quot;Pancreatitis codes&quot;])
+define &quot;Magnetic resonance cholangiopancreatography&quot;:
+  exists ([MedicationRequest: &quot;Magnetic resonance cholangiopancreatography codes&quot;])
+
+define &quot;Applicable&quot;:
+  (&quot;Pancreatitis&quot;
+  and &quot;Pancreatic duct anomaly&quot;)
+
+define &quot;Satisfied&quot;:
+  &quot;Magnetic resonance cholangiopancreatography&quot;
+
+define &quot;Compliant&quot;:
+  not &quot;Applicable&quot; or &quot;Satisfied&quot;
+
+define &quot;Deontic&quot;:
+  &#x27;permission&#x27;
+
+// The source PERMITS this action; it does not require it.
+// Not taking a permitted option is not a violation.
+define &quot;OptionTaken&quot;:
+  &quot;Applicable&quot; and &quot;Satisfied&quot;
+
+define &quot;OptionNotTaken&quot;:
+  &quot;Applicable&quot; and not &quot;Satisfied&quot;
+
+define &quot;Violated&quot;:
+  false
+</pre></details>
+</div></details>
+<details class="card encode">
+<summary>
+<div class="head">
+<span class="id">PMC13270348:0061</span>
+<span class="badge encode">Encoded</span>
+</div>
+<blockquote>acute pain services or similar consultations by pain specialists are recommended for acute postoperative pain as well</blockquote>
+</summary>
+<div class="body">
+<div class="label">Encoded as</div>
+<div class="rule">IF Acute postoperative pain
+THEN must: Referral to acute pain service OR Seen by pain management specialist</div>
+<div class="why" style="margin-top:8px"><strong>Action:</strong> refer acute pain services or consultation by pain specialists</div>
+
+<details><summary>Show the logic and its bindings</summary>
+<div class="label">&phi; = when &rarr; then</div><div class="rule logic">has_acute_postoperative_pain = true
+    →  acute_pain_services = true ∨ consultations_by_pain_specialists = true</div><div class="label">What each name is bound to</div><table><tr><th>Variable</th><th>Type</th><th>Terminology</th></tr><tr><td><span class="id">acute_pain_services</span><br><span style="font-size:12.5px;color:var(--muted)">Referral to acute pain service</span></td><td>bool</td><td style="word-break:break-all">http://snomed.info/sct|307373005|20260801</td></tr><tr><td><span class="id">consultations_by_pain_specialists</span><br><span style="font-size:12.5px;color:var(--muted)">Seen by pain management specialist</span></td><td>bool</td><td style="word-break:break-all">http://snomed.info/sct|305652004|20260801</td></tr><tr><td><span class="id">has_acute_postoperative_pain</span><br><span style="font-size:12.5px;color:var(--muted)">Acute postoperative pain</span></td><td>bool</td><td style="word-break:break-all">http://snomed.info/sct|107401000119105|20260801 <span class="id">(+2 codes)</span></td></tr></table>
+</details>
+<details><summary>Show the executable CQL (42 lines)</summary>
+<pre>library Demopmc132703480061 version &#x27;1.0.000&#x27;
+
+using FHIR version &#x27;4.0.1&#x27;
+include FHIRHelpers version &#x27;4.0.1&#x27; called FHIRHelpers
+
+codesystem &quot;SNOMED&quot;: &#x27;http://snomed.info/sct&#x27;
+
+code &quot;Acute postoperative pain codes&quot;: &#x27;107401000119105&#x27; from &quot;SNOMED&quot; display &#x27;Acute postoperative pain&#x27;
+code &quot;Referral To Acute Pain Service codes&quot;: &#x27;307373005&#x27; from &quot;SNOMED&quot;
+code &quot;Referral to acute pain service codes&quot;: &#x27;307373005&#x27; from &quot;SNOMED&quot; display &#x27;Referral to acute pain service&#x27;
+code &quot;Seen By Pain Management Specialist codes&quot;: &#x27;305652004&#x27; from &quot;SNOMED&quot;
+code &quot;Seen by pain management specialist codes&quot;: &#x27;305652004&#x27; from &quot;SNOMED&quot; display &#x27;Seen by pain management specialist&#x27;
+
+context Patient
+
+/* PMC13270348:0061
+   action: refer acute pain services or consultation by pain specialists
+   source: acute pain services or similar consultations by pain specialists are recommended for acute postoperative pain as well
+*/
+
+define &quot;Referral to acute pain service&quot;:
+  exists ([MedicationRequest: &quot;Referral to acute pain service codes&quot;])
+define &quot;Seen by pain management specialist&quot;:
+  exists ([MedicationRequest: &quot;Seen by pain management specialist codes&quot;])
+define &quot;Acute postoperative pain&quot;:
+  exists ([Condition: &quot;Acute postoperative pain codes&quot;])
+
+define &quot;Applicable&quot;:
+  &quot;Acute postoperative pain&quot;
+
+define &quot;Satisfied&quot;:
+  (&quot;Referral to acute pain service&quot;
+  or &quot;Seen by pain management specialist&quot;)
+
+define &quot;Compliant&quot;:
+  not &quot;Applicable&quot; or &quot;Satisfied&quot;
+
+define &quot;Deontic&quot;:
+  &#x27;obligation&#x27;
+
+define &quot;Violated&quot;:
+  &quot;Applicable&quot; and not &quot;Satisfied&quot;
+</pre></details>
+</div></details>
+<details class="card encode">
+<summary>
+<div class="head">
+<span class="id">PMC13270348:0088</span>
+<span class="badge encode">Encoded</span>
+</div>
+<blockquote>For patients with severe pain, however, this approach may be insufficient. As such, more potent analgesics such as opioids may be warranted upon presentation.</blockquote>
+</summary>
+<div class="body">
+<div class="label">Encoded as</div>
+<div class="rule">IF Severe pain
+THEN may: Opioids</div>
+<div class="why" style="margin-top:8px"><strong>Action:</strong> recommend opioid analgesia upon presentation</div>
+<div class="why" style="margin-top:4px;color:var(--muted)"><strong>Strength, as the guideline states it:</strong> may be warranted</div>
+<div class="label">Checks that fired</div>
+<div class="caution"><code>UNUSED_BOUND_CONCEPT</code> bound but not used in the rule: on_analgesics -- an outcome may legitimately be unused, a dropped population restriction may not</div>
+<details><summary>Show the logic and its bindings</summary>
+<div class="label">&phi; = when &rarr; then</div><div class="rule logic">has_severe_pain = true
+    →  on_opioids = true</div><div class="label">What each name is bound to</div><table><tr><th>Variable</th><th>Type</th><th>Terminology</th></tr><tr><td><span class="id">has_severe_pain</span><br><span style="font-size:12.5px;color:var(--muted)">Severe pain</span></td><td>bool</td><td style="word-break:break-all">http://snomed.info/sct|76948002|20260801 <span class="id">(+2 codes)</span></td></tr><tr><td><span class="id">on_opioids</span><br><span style="font-size:12.5px;color:var(--muted)">Opioids</span></td><td>bool</td><td style="word-break:break-all">http://cts.nlm.nih.gov/fhir/ValueSet|2.16.840.1.113762.1.4.1248.120|20260203 <span class="id">(+288 codes)</span></td></tr></table>
+</details>
+<details><summary>Show the executable CQL (50 lines)</summary>
+<pre>library Demopmc132703480088 version &#x27;1.0.000&#x27;
+
+using FHIR version &#x27;4.0.1&#x27;
+include FHIRHelpers version &#x27;4.0.1&#x27; called FHIRHelpers
+
+codesystem &quot;SNOMED&quot;: &#x27;http://snomed.info/sct&#x27;
+
+valueset &quot;Opioids codes&quot;: &#x27;urn:oid:2.16.840.1.113762.1.4.1248.120&#x27; version &#x27;20260203&#x27;
+
+code &quot;Analgesic codes&quot;: &#x27;373265006&#x27; from &quot;SNOMED&quot;
+code &quot;Analgesic codes&quot;: &#x27;373265006&#x27; from &quot;SNOMED&quot; display &#x27;Analgesic&#x27;
+code &quot;Severe pain codes&quot;: &#x27;76948002&#x27; from &quot;SNOMED&quot; display &#x27;Severe pain&#x27;
+
+context Patient
+
+/* PMC13270348:0088
+   action: recommend opioid analgesia upon presentation
+   strength: may be warranted
+   source: For patients with severe pain, however, this approach may be insufficient. As such, more potent analgesics such as opioids may be warranted upon presentation.
+*/
+
+define &quot;Severe pain&quot;:
+  exists ([Condition: &quot;Severe pain codes&quot;])
+define &quot;Analgesic&quot;:
+  exists ([MedicationRequest: &quot;Analgesic codes&quot;])
+define &quot;Opioids&quot;:
+  exists ([MedicationRequest: &quot;Opioids codes&quot;])
+
+define &quot;Applicable&quot;:
+  &quot;Severe pain&quot;
+
+define &quot;Satisfied&quot;:
+  &quot;Opioids&quot;
+
+define &quot;Compliant&quot;:
+  not &quot;Applicable&quot; or &quot;Satisfied&quot;
+
+define &quot;Deontic&quot;:
+  &#x27;permission&#x27;
+
+// The source PERMITS this action; it does not require it.
+// Not taking a permitted option is not a violation.
+define &quot;OptionTaken&quot;:
+  &quot;Applicable&quot; and &quot;Satisfied&quot;
+
+define &quot;OptionNotTaken&quot;:
+  &quot;Applicable&quot; and not &quot;Satisfied&quot;
+
+define &quot;Violated&quot;:
+  false
+</pre></details>
+</div></details>
+<details class="card encode">
+<summary>
+<div class="head">
+<span class="id">PMC13270348:0089</span>
+<span class="badge encode">Encoded</span>
+</div>
+<blockquote>As such, more potent analgesics such as opioids may be warranted upon presentation.</blockquote>
+</summary>
+<div class="body">
+<div class="label">Encoded as</div>
+<div class="rule">IF Analgesic
+THEN may: Opioids</div>
+<div class="why" style="margin-top:8px"><strong>Action:</strong> recommend opioid analgesia</div>
+
+<details><summary>Show the logic and its bindings</summary>
+<div class="label">&phi; = when &rarr; then</div><div class="rule logic">on_analgesics = true
+    →  on_opioids = true</div><div class="label">What each name is bound to</div><table><tr><th>Variable</th><th>Type</th><th>Terminology</th></tr><tr><td><span class="id">on_analgesics</span><br><span style="font-size:12.5px;color:var(--muted)">Analgesic</span></td><td>bool</td><td style="word-break:break-all">http://snomed.info/sct|373265006|20260801 <span class="id">(+297 codes)</span></td></tr><tr><td><span class="id">on_opioids</span><br><span style="font-size:12.5px;color:var(--muted)">Opioids</span></td><td>bool</td><td style="word-break:break-all">http://cts.nlm.nih.gov/fhir/ValueSet|2.16.840.1.113762.1.4.1248.120|20260203 <span class="id">(+288 codes)</span></td></tr></table>
+</details>
+<details><summary>Show the executable CQL (46 lines)</summary>
+<pre>library Demopmc132703480089 version &#x27;1.0.000&#x27;
+
+using FHIR version &#x27;4.0.1&#x27;
+include FHIRHelpers version &#x27;4.0.1&#x27; called FHIRHelpers
+
+codesystem &quot;SNOMED&quot;: &#x27;http://snomed.info/sct&#x27;
+
+valueset &quot;Opioids codes&quot;: &#x27;urn:oid:2.16.840.1.113762.1.4.1248.120&#x27; version &#x27;20260203&#x27;
+
+code &quot;Analgesic codes&quot;: &#x27;373265006&#x27; from &quot;SNOMED&quot;
+code &quot;Analgesic codes&quot;: &#x27;373265006&#x27; from &quot;SNOMED&quot; display &#x27;Analgesic&#x27;
+
+context Patient
+
+/* PMC13270348:0089
+   action: recommend opioid analgesia
+   source: As such, more potent analgesics such as opioids may be warranted upon presentation.
+*/
+
+define &quot;Analgesic&quot;:
+  exists ([MedicationRequest: &quot;Analgesic codes&quot;])
+define &quot;Opioids&quot;:
+  exists ([MedicationRequest: &quot;Opioids codes&quot;])
+
+define &quot;Applicable&quot;:
+  &quot;Analgesic&quot;
+
+define &quot;Satisfied&quot;:
+  &quot;Opioids&quot;
+
+define &quot;Compliant&quot;:
+  not &quot;Applicable&quot; or &quot;Satisfied&quot;
+
+define &quot;Deontic&quot;:
+  &#x27;permission&#x27;
+
+// The source PERMITS this action; it does not require it.
+// Not taking a permitted option is not a violation.
+define &quot;OptionTaken&quot;:
+  &quot;Applicable&quot; and &quot;Satisfied&quot;
+
+define &quot;OptionNotTaken&quot;:
+  &quot;Applicable&quot; and not &quot;Satisfied&quot;
+
+define &quot;Violated&quot;:
+  false
+</pre></details>
+</div></details>
+<details class="card encode">
+<summary>
+<div class="head">
+<span class="id">PMC13270348:0099</span>
+<span class="badge encode">Encoded</span>
+</div>
+<blockquote>In patients with AP and severe pain, we suggest that safety concerns should not delay the timely use of opioids to ensure adequate pain management.</blockquote>
+</summary>
+<div class="body">
+<div class="label">Encoded as</div>
+<div class="rule">IF Acute pancreatitis AND Pain
+THEN should (weak recommendation): Opioids</div>
+<div class="why" style="margin-top:8px"><strong>Action:</strong> recommend opioid analgesia</div>
+<div class="why" style="margin-top:4px;color:var(--muted)"><strong>Strength, as the guideline states it:</strong> conditional (GRADE suggest)</div>
+<div class="label">Checks that fired</div>
+<div class="caution"><code>TERMINOLOGY_UNAVAILABLE</code> 4 terminology lookup(s) failed (transport or server error, not an absent concept), so a refusal here may not be a property of the guideline: &#x27;AP&#x27; (condition): HTTPError: HTTP Error 400: ; &#x27;ap&#x27; (condition): HTTPError: HTTP Error 400: ; &#x27;AP&#x27; (procedure): HTTPError: HTTP Error 400: ; &#x27;ap&#x27; (procedure): HTTPError: HTTP Error 400: </div>
+<div class="caution"><code>UNUSED_BOUND_CONCEPT</code> bound but not used in the rule: pain_management -- an outcome may legitimately be unused, a dropped population restriction may not</div>
+<details><summary>Show the logic and its bindings</summary>
+<div class="label">&phi; = when &rarr; then</div><div class="rule logic">has_ap = true ∧ has_pain = true
+    →  on_opioids = true</div><div class="label">What each name is bound to</div><table><tr><th>Variable</th><th>Type</th><th>Terminology</th></tr><tr><td><span class="id">has_ap</span><br><span style="font-size:12.5px;color:var(--muted)">Acute pancreatitis</span></td><td>bool</td><td style="word-break:break-all">http://snomed.info/sct|197456007|20260801 <span class="id">(+18 codes)</span></td></tr><tr><td><span class="id">has_pain</span><br><span style="font-size:12.5px;color:var(--muted)">Pain</span></td><td>bool</td><td style="word-break:break-all">http://snomed.info/sct|22253000|20260801 <span class="id">(+500 codes)</span></td></tr><tr><td><span class="id">on_opioids</span><br><span style="font-size:12.5px;color:var(--muted)">Opioids</span></td><td>bool</td><td style="word-break:break-all">http://cts.nlm.nih.gov/fhir/ValueSet|2.16.840.1.113762.1.4.1248.120|20260203 <span class="id">(+288 codes)</span></td></tr></table>
+</details>
+<details><summary>Show the executable CQL (46 lines)</summary>
+<pre>library Demopmc132703480099 version &#x27;1.0.000&#x27;
+
+using FHIR version &#x27;4.0.1&#x27;
+include FHIRHelpers version &#x27;4.0.1&#x27; called FHIRHelpers
+
+codesystem &quot;SNOMED&quot;: &#x27;http://snomed.info/sct&#x27;
+
+valueset &quot;Opioids codes&quot;: &#x27;urn:oid:2.16.840.1.113762.1.4.1248.120&#x27; version &#x27;20260203&#x27;
+
+code &quot;Acute pancreatitis codes&quot;: &#x27;197456007&#x27; from &quot;SNOMED&quot; display &#x27;Acute pancreatitis&#x27;
+code &quot;Pain Management codes&quot;: &#x27;278414003&#x27; from &quot;SNOMED&quot;
+code &quot;Pain codes&quot;: &#x27;22253000&#x27; from &quot;SNOMED&quot; display &#x27;Pain&#x27;
+code &quot;Pain management codes&quot;: &#x27;278414003&#x27; from &quot;SNOMED&quot; display &#x27;Pain management&#x27;
+
+context Patient
+
+/* PMC13270348:0099
+   action: recommend opioid analgesia
+   strength: conditional (GRADE suggest)
+   source: In patients with AP and severe pain, we suggest that safety concerns should not delay the timely use of opioids to ensure adequate pain management.
+*/
+
+define &quot;Acute pancreatitis&quot;:
+  exists ([Condition: &quot;Acute pancreatitis codes&quot;])
+define &quot;Pain&quot;:
+  exists ([Condition: &quot;Pain codes&quot;])
+define &quot;Opioids&quot;:
+  exists ([MedicationRequest: &quot;Opioids codes&quot;])
+define &quot;Pain management&quot;:
+  exists ([MedicationRequest: &quot;Pain management codes&quot;])
+
+define &quot;Applicable&quot;:
+  (&quot;Acute pancreatitis&quot;
+  and &quot;Pain&quot;)
+
+define &quot;Satisfied&quot;:
+  &quot;Opioids&quot;
+
+define &quot;Compliant&quot;:
+  not &quot;Applicable&quot; or &quot;Satisfied&quot;
+
+define &quot;Deontic&quot;:
+  &#x27;obligation&#x27;
+
+define &quot;Violated&quot;:
+  &quot;Applicable&quot; and not &quot;Satisfied&quot;
+</pre></details>
 </div></details>
 <details class="card encode">
 <summary>
@@ -156,12 +798,1686 @@ THEN may: Pain control</div>
 <div class="rule">IF Acute pancreatitis
 THEN may: Acupuncture</div>
 <div class="why" style="margin-top:8px"><strong>Action:</strong> recommend acupuncture with appropriate acupoints</div>
-<div class="why" style="margin-top:4px;color:var(--muted)"><strong>Strength, as the guideline states it:</strong> conditional/weak (GRADE); permissive wording</div>
+<div class="why" style="margin-top:4px;color:var(--muted)"><strong>Strength, as the guideline states it:</strong> weak (GRADE conditional); permissive wording</div>
+<div class="label">Checks that fired</div>
+<div class="caution"><code>TERMINOLOGY_UNAVAILABLE</code> 4 terminology lookup(s) failed (transport or server error, not an absent concept), so a refusal here may not be a property of the guideline: &#x27;AP&#x27; (condition): HTTPError: HTTP Error 400: ; &#x27;ap&#x27; (condition): HTTPError: HTTP Error 400: ; &#x27;AP&#x27; (procedure): HTTPError: HTTP Error 400: ; &#x27;ap&#x27; (procedure): HTTPError: HTTP Error 400: </div>
+<div class="caution"><code>UNUSED_BOUND_CONCEPT</code> bound but not used in the rule: has_abdominal_pain, oral_intake -- an outcome may legitimately be unused, a dropped population restriction may not</div>
+<details><summary>Show the logic and its bindings</summary>
+<div class="label">&phi; = when &rarr; then</div><div class="rule logic">has_ap = true
+    →  acupuncture = true</div><div class="label">What each name is bound to</div><table><tr><th>Variable</th><th>Type</th><th>Terminology</th></tr><tr><td><span class="id">acupuncture</span><br><span style="font-size:12.5px;color:var(--muted)">Acupuncture</span></td><td>bool</td><td style="word-break:break-all">http://snomed.info/sct|44868003|20260801 <span class="id">(+12 codes)</span></td></tr><tr><td><span class="id">has_ap</span><br><span style="font-size:12.5px;color:var(--muted)">Acute pancreatitis</span></td><td>bool</td><td style="word-break:break-all">http://snomed.info/sct|197456007|20260801 <span class="id">(+18 codes)</span></td></tr></table>
+</details>
+<details><summary>Show the executable CQL (53 lines)</summary>
+<pre>library Demopmc132703480159 version &#x27;1.0.000&#x27;
+
+using FHIR version &#x27;4.0.1&#x27;
+include FHIRHelpers version &#x27;4.0.1&#x27; called FHIRHelpers
+
+codesystem &quot;SNOMED&quot;: &#x27;http://snomed.info/sct&#x27;
+
+code &quot;Abdominal pain codes&quot;: &#x27;21522001&#x27; from &quot;SNOMED&quot; display &#x27;Abdominal pain&#x27;
+code &quot;Acupuncture codes&quot;: &#x27;44868003&#x27; from &quot;SNOMED&quot;
+code &quot;Acupuncture codes&quot;: &#x27;44868003&#x27; from &quot;SNOMED&quot; display &#x27;Acupuncture&#x27;
+code &quot;Acute pancreatitis codes&quot;: &#x27;197456007&#x27; from &quot;SNOMED&quot; display &#x27;Acute pancreatitis&#x27;
+code &quot;Oral Intake codes&quot;: &#x27;870690008&#x27; from &quot;SNOMED&quot;
+code &quot;Oral intake codes&quot;: &#x27;870690008&#x27; from &quot;SNOMED&quot; display &#x27;Oral intake&#x27;
+
+context Patient
+
+/* PMC13270348:0159
+   action: recommend acupuncture with appropriate acupoints
+   strength: weak (GRADE conditional); permissive wording
+   source: We suggest that acupuncture with appropriate acupoints may be effective in relieving abdominal pain and reducing the time to oral intake without significant side effects in patients with AP and may be considered.
+*/
+
+define &quot;Acupuncture&quot;:
+  exists ([MedicationRequest: &quot;Acupuncture codes&quot;])
+define &quot;Abdominal pain&quot;:
+  exists ([Condition: &quot;Abdominal pain codes&quot;])
+define &quot;Acute pancreatitis&quot;:
+  exists ([Condition: &quot;Acute pancreatitis codes&quot;])
+define &quot;Oral intake&quot;:
+  exists ([MedicationRequest: &quot;Oral intake codes&quot;])
+
+define &quot;Applicable&quot;:
+  &quot;Acute pancreatitis&quot;
+
+define &quot;Satisfied&quot;:
+  &quot;Acupuncture&quot;
+
+define &quot;Compliant&quot;:
+  not &quot;Applicable&quot; or &quot;Satisfied&quot;
+
+define &quot;Deontic&quot;:
+  &#x27;permission&#x27;
+
+// The source PERMITS this action; it does not require it.
+// Not taking a permitted option is not a violation.
+define &quot;OptionTaken&quot;:
+  &quot;Applicable&quot; and &quot;Satisfied&quot;
+
+define &quot;OptionNotTaken&quot;:
+  &quot;Applicable&quot; and not &quot;Satisfied&quot;
+
+define &quot;Violated&quot;:
+  false
+</pre></details>
+</div></details>
+<details class="card encode">
+<summary>
+<div class="head">
+<span class="id">PMC13270348:0210</span>
+<span class="badge encode">Encoded</span>
+</div>
+<blockquote>The utilization of a multidisciplinary approach to pain management can be extrapolated from the postoperative setting, which has been shown to decrease postoperative opioid use and may be considered.</blockquote>
+</summary>
+<div class="body">
+<div class="label">Encoded as</div>
+<div class="rule">IF Opioids
+THEN may: Pain management</div>
+<div class="why" style="margin-top:8px"><strong>Action:</strong> recommend multidisciplinary approach to pain management</div>
+<div class="why" style="margin-top:4px;color:var(--muted)"><strong>Strength, as the guideline states it:</strong> extrapolated from postoperative setting; may be considered</div>
 
 <details><summary>Show the logic and its bindings</summary>
-<div class="label">&phi; = when &rarr; then</div><div class="rule logic">has_acute_pancreatitis = true
-    →  acupuncture = true</div><div class="label">What each name is bound to</div><table><tr><th>Variable</th><th>Type</th><th>Terminology</th></tr><tr><td><span class="id">acupuncture</span><br><span style="font-size:12.5px;color:var(--muted)">Acupuncture</span></td><td>bool</td><td style="word-break:break-all">http://snomed.info/sct|44868003|20260801 <span class="id">(+12 codes)</span></td></tr><tr><td><span class="id">has_acute_pancreatitis</span><br><span style="font-size:12.5px;color:var(--muted)">Acute pancreatitis</span></td><td>bool</td><td style="word-break:break-all">http://snomed.info/sct|197456007|20260801 <span class="id">(+18 codes)</span></td></tr></table>
+<div class="label">&phi; = when &rarr; then</div><div class="rule logic">on_opioid = true
+    →  multidisciplinary_approach_to_pain = true</div><div class="label">What each name is bound to</div><table><tr><th>Variable</th><th>Type</th><th>Terminology</th></tr><tr><td><span class="id">multidisciplinary_approach_to_pain</span><br><span style="font-size:12.5px;color:var(--muted)">Pain management</span></td><td>bool</td><td style="word-break:break-all">http://snomed.info/sct|278414003|20260801 <span class="id">(+14 codes)</span></td></tr><tr><td><span class="id">on_opioid</span><br><span style="font-size:12.5px;color:var(--muted)">Opioids</span></td><td>bool</td><td style="word-break:break-all">http://cts.nlm.nih.gov/fhir/ValueSet|2.16.840.1.113762.1.4.1248.120|20260203 <span class="id">(+288 codes)</span></td></tr></table>
 </details>
+<details><summary>Show the executable CQL (47 lines)</summary>
+<pre>library Demopmc132703480210 version &#x27;1.0.000&#x27;
+
+using FHIR version &#x27;4.0.1&#x27;
+include FHIRHelpers version &#x27;4.0.1&#x27; called FHIRHelpers
+
+codesystem &quot;SNOMED&quot;: &#x27;http://snomed.info/sct&#x27;
+
+valueset &quot;Opioids codes&quot;: &#x27;urn:oid:2.16.840.1.113762.1.4.1248.120&#x27; version &#x27;20260203&#x27;
+
+code &quot;Pain Management codes&quot;: &#x27;278414003&#x27; from &quot;SNOMED&quot;
+code &quot;Pain management codes&quot;: &#x27;278414003&#x27; from &quot;SNOMED&quot; display &#x27;Pain management&#x27;
+
+context Patient
+
+/* PMC13270348:0210
+   action: recommend multidisciplinary approach to pain management
+   strength: extrapolated from postoperative setting; may be considered
+   source: The utilization of a multidisciplinary approach to pain management can be extrapolated from the postoperative setting, which has been shown to decrease postoperative opioid use and may be considered.
+*/
+
+define &quot;Pain management&quot;:
+  exists ([MedicationRequest: &quot;Pain management codes&quot;])
+define &quot;Opioids&quot;:
+  exists ([MedicationRequest: &quot;Opioids codes&quot;])
+
+define &quot;Applicable&quot;:
+  &quot;Opioids&quot;
+
+define &quot;Satisfied&quot;:
+  &quot;Pain management&quot;
+
+define &quot;Compliant&quot;:
+  not &quot;Applicable&quot; or &quot;Satisfied&quot;
+
+define &quot;Deontic&quot;:
+  &#x27;permission&#x27;
+
+// The source PERMITS this action; it does not require it.
+// Not taking a permitted option is not a violation.
+define &quot;OptionTaken&quot;:
+  &quot;Applicable&quot; and &quot;Satisfied&quot;
+
+define &quot;OptionNotTaken&quot;:
+  &quot;Applicable&quot; and not &quot;Satisfied&quot;
+
+define &quot;Violated&quot;:
+  false
+</pre></details>
+</div></details>
+<details class="card encode">
+<summary>
+<div class="head">
+<span class="id">PMC13270348:0219</span>
+<span class="badge encode">Encoded</span>
+</div>
+<blockquote>The use of NSAIDs is contraindicated in the third trimester of pregnancy.</blockquote>
+</summary>
+<div class="body">
+<div class="label">Encoded as</div>
+<div class="rule">IF Third trimester pregnancy
+THEN must: NOT NSAIDs</div>
+<div class="why" style="margin-top:8px"><strong>Action:</strong> avoid NSAIDs</div>
+<div class="why" style="margin-top:4px;color:var(--muted)"><strong>Strength, as the guideline states it:</strong> contraindicated</div>
+
+<details><summary>Show the logic and its bindings</summary>
+<div class="label">&phi; = when &rarr; then</div><div class="rule logic">has_third_trimester_pregnancy = true
+    →  on_nsaids = false</div><div class="label">What each name is bound to</div><table><tr><th>Variable</th><th>Type</th><th>Terminology</th></tr><tr><td><span class="id">has_third_trimester_pregnancy</span><br><span style="font-size:12.5px;color:var(--muted)">Third trimester pregnancy</span></td><td>bool</td><td style="word-break:break-all">http://snomed.info/sct|41587001|20260801 <span class="id">(+19 codes)</span></td></tr><tr><td><span class="id">on_nsaids</span><br><span style="font-size:12.5px;color:var(--muted)">NSAIDs</span></td><td>bool</td><td style="word-break:break-all">http://cts.nlm.nih.gov/fhir/ValueSet|2.16.840.1.113762.1.4.1213.9|20190917 <span class="id">(+183 codes)</span></td></tr></table>
+</details>
+<details><summary>Show the executable CQL (39 lines)</summary>
+<pre>library Demopmc132703480219 version &#x27;1.0.000&#x27;
+
+using FHIR version &#x27;4.0.1&#x27;
+include FHIRHelpers version &#x27;4.0.1&#x27; called FHIRHelpers
+
+codesystem &quot;SNOMED&quot;: &#x27;http://snomed.info/sct&#x27;
+
+valueset &quot;NSAIDs codes&quot;: &#x27;urn:oid:2.16.840.1.113762.1.4.1213.9&#x27; version &#x27;20190917&#x27;
+valueset &quot;Nsaids codes&quot;: &#x27;urn:oid:2.16.840.1.113762.1.4.1213.9&#x27; version &#x27;20190917&#x27;
+
+code &quot;Third trimester pregnancy codes&quot;: &#x27;41587001&#x27; from &quot;SNOMED&quot; display &#x27;Third trimester pregnancy&#x27;
+
+context Patient
+
+/* PMC13270348:0219
+   action: avoid NSAIDs
+   strength: contraindicated
+   source: The use of NSAIDs is contraindicated in the third trimester of pregnancy.
+*/
+
+define &quot;Third trimester pregnancy&quot;:
+  exists ([Condition: &quot;Third trimester pregnancy codes&quot;])
+define &quot;NSAIDs&quot;:
+  exists ([MedicationRequest: &quot;NSAIDs codes&quot;])
+
+define &quot;Applicable&quot;:
+  &quot;Third trimester pregnancy&quot;
+
+define &quot;Satisfied&quot;:
+  not &quot;NSAIDs&quot;
+
+define &quot;Compliant&quot;:
+  not &quot;Applicable&quot; or &quot;Satisfied&quot;
+
+define &quot;Deontic&quot;:
+  &#x27;obligation&#x27;
+
+define &quot;Violated&quot;:
+  &quot;Applicable&quot; and not &quot;Satisfied&quot;
+</pre></details>
+</div></details>
+<details class="card encode">
+<summary>
+<div class="head">
+<span class="id">PMC13270348:0230</span>
+<span class="badge encode">Encoded</span>
+</div>
+<blockquote>In recurrent or escalating pain after AP, there might be a clinical indication for imaging to rule out complications although there are no specific studies reporting on its usefulness in this cohort.</blockquote>
+</summary>
+<div class="body">
+<div class="label">Encoded as</div>
+<div class="rule">IF Acute pancreatitis AND Pain
+THEN may: Imaging</div>
+<div class="why" style="margin-top:8px"><strong>Action:</strong> recommend imaging to rule out complications</div>
+<div class="why" style="margin-top:4px;color:var(--muted)"><strong>Strength, as the guideline states it:</strong> no specific studies reporting on its usefulness in this cohort</div>
+<div class="label">Checks that fired</div>
+<div class="caution"><code>TERMINOLOGY_UNAVAILABLE</code> 4 terminology lookup(s) failed (transport or server error, not an absent concept), so a refusal here may not be a property of the guideline: &#x27;AP&#x27; (condition): HTTPError: HTTP Error 400: ; &#x27;ap&#x27; (condition): HTTPError: HTTP Error 400: ; &#x27;AP&#x27; (procedure): HTTPError: HTTP Error 400: ; &#x27;ap&#x27; (procedure): HTTPError: HTTP Error 400: </div>
+<details><summary>Show the logic and its bindings</summary>
+<div class="label">&phi; = when &rarr; then</div><div class="rule logic">has_ap = true ∧ has_pain = true
+    →  imaging = true</div><div class="label">What each name is bound to</div><table><tr><th>Variable</th><th>Type</th><th>Terminology</th></tr><tr><td><span class="id">has_ap</span><br><span style="font-size:12.5px;color:var(--muted)">Acute pancreatitis</span></td><td>bool</td><td style="word-break:break-all">http://snomed.info/sct|197456007|20260801 <span class="id">(+18 codes)</span></td></tr><tr><td><span class="id">has_pain</span><br><span style="font-size:12.5px;color:var(--muted)">Pain</span></td><td>bool</td><td style="word-break:break-all">http://snomed.info/sct|22253000|20260801 <span class="id">(+500 codes)</span></td></tr><tr><td><span class="id">imaging</span><br><span style="font-size:12.5px;color:var(--muted)">Imaging</span></td><td>bool</td><td style="word-break:break-all">http://snomed.info/sct|363679005|20260801 <span class="id">(+500 codes)</span></td></tr></table>
+</details>
+<details><summary>Show the executable CQL (50 lines)</summary>
+<pre>library Demopmc132703480230 version &#x27;1.0.000&#x27;
+
+using FHIR version &#x27;4.0.1&#x27;
+include FHIRHelpers version &#x27;4.0.1&#x27; called FHIRHelpers
+
+codesystem &quot;SNOMED&quot;: &#x27;http://snomed.info/sct&#x27;
+
+code &quot;Acute pancreatitis codes&quot;: &#x27;197456007&#x27; from &quot;SNOMED&quot; display &#x27;Acute pancreatitis&#x27;
+code &quot;Imaging codes&quot;: &#x27;363679005&#x27; from &quot;SNOMED&quot;
+code &quot;Imaging codes&quot;: &#x27;363679005&#x27; from &quot;SNOMED&quot; display &#x27;Imaging&#x27;
+code &quot;Pain codes&quot;: &#x27;22253000&#x27; from &quot;SNOMED&quot; display &#x27;Pain&#x27;
+
+context Patient
+
+/* PMC13270348:0230
+   action: recommend imaging to rule out complications
+   strength: no specific studies reporting on its usefulness in this cohort
+   source: In recurrent or escalating pain after AP, there might be a clinical indication for imaging to rule out complications although there are no specific studies reporting on its usefulness in this cohort.
+*/
+
+define &quot;Acute pancreatitis&quot;:
+  exists ([Condition: &quot;Acute pancreatitis codes&quot;])
+define &quot;Pain&quot;:
+  exists ([Condition: &quot;Pain codes&quot;])
+define &quot;Imaging&quot;:
+  exists ([MedicationRequest: &quot;Imaging codes&quot;])
+
+define &quot;Applicable&quot;:
+  (&quot;Acute pancreatitis&quot;
+  and &quot;Pain&quot;)
+
+define &quot;Satisfied&quot;:
+  &quot;Imaging&quot;
+
+define &quot;Compliant&quot;:
+  not &quot;Applicable&quot; or &quot;Satisfied&quot;
+
+define &quot;Deontic&quot;:
+  &#x27;permission&#x27;
+
+// The source PERMITS this action; it does not require it.
+// Not taking a permitted option is not a violation.
+define &quot;OptionTaken&quot;:
+  &quot;Applicable&quot; and &quot;Satisfied&quot;
+
+define &quot;OptionNotTaken&quot;:
+  &quot;Applicable&quot; and not &quot;Satisfied&quot;
+
+define &quot;Violated&quot;:
+  false
+</pre></details>
+</div></details>
+<details class="card encode">
+<summary>
+<div class="head">
+<span class="id">PMC13270348:0262</span>
+<span class="badge encode">Encoded</span>
+</div>
+<blockquote>Hence, opioids may be considered to ensure adequate pain relief for both alcohol and biliary etiology AP at discharge.</blockquote>
+</summary>
+<div class="body">
+<div class="label">Encoded as</div>
+<div class="rule">IF Alcohol-induced acute pancreatitis OR Gallstone acute pancreatitis
+THEN may: Opioids</div>
+<div class="why" style="margin-top:8px"><strong>Action:</strong> recommend opioid analgesia at discharge</div>
+<div class="label">Checks that fired</div>
+<div class="caution"><code>UNUSED_BOUND_CONCEPT</code> bound but not used in the rule: has_pain -- an outcome may legitimately be unused, a dropped population restriction may not</div>
+<details><summary>Show the logic and its bindings</summary>
+<div class="label">&phi; = when &rarr; then</div><div class="rule logic">has_alcohol = true ∨ has_biliary_etiology_ap = true
+    →  on_opioids = true</div><div class="label">What each name is bound to</div><table><tr><th>Variable</th><th>Type</th><th>Terminology</th></tr><tr><td><span class="id">has_alcohol</span><br><span style="font-size:12.5px;color:var(--muted)">Alcohol-induced acute pancreatitis</span></td><td>bool</td><td style="word-break:break-all">http://snomed.info/sct|235942001|20260801</td></tr><tr><td><span class="id">has_biliary_etiology_ap</span><br><span style="font-size:12.5px;color:var(--muted)">Gallstone acute pancreatitis</span></td><td>bool</td><td style="word-break:break-all">http://snomed.info/sct|235941008|20260801</td></tr><tr><td><span class="id">on_opioids</span><br><span style="font-size:12.5px;color:var(--muted)">Opioids</span></td><td>bool</td><td style="word-break:break-all">http://cts.nlm.nih.gov/fhir/ValueSet|2.16.840.1.113762.1.4.1248.120|20260203 <span class="id">(+288 codes)</span></td></tr></table>
+</details>
+<details><summary>Show the executable CQL (52 lines)</summary>
+<pre>library Demopmc132703480262 version &#x27;1.0.000&#x27;
+
+using FHIR version &#x27;4.0.1&#x27;
+include FHIRHelpers version &#x27;4.0.1&#x27; called FHIRHelpers
+
+codesystem &quot;SNOMED&quot;: &#x27;http://snomed.info/sct&#x27;
+
+valueset &quot;Opioids codes&quot;: &#x27;urn:oid:2.16.840.1.113762.1.4.1248.120&#x27; version &#x27;20260203&#x27;
+
+code &quot;Alcohol-induced acute pancreatitis codes&quot;: &#x27;235942001&#x27; from &quot;SNOMED&quot; display &#x27;Alcohol-induced acute pancreatitis&#x27;
+code &quot;Gallstone acute pancreatitis codes&quot;: &#x27;235941008&#x27; from &quot;SNOMED&quot; display &#x27;Gallstone acute pancreatitis&#x27;
+code &quot;Pain codes&quot;: &#x27;22253000&#x27; from &quot;SNOMED&quot; display &#x27;Pain&#x27;
+
+context Patient
+
+/* PMC13270348:0262
+   action: recommend opioid analgesia at discharge
+   source: Hence, opioids may be considered to ensure adequate pain relief for both alcohol and biliary etiology AP at discharge.
+*/
+
+define &quot;Alcohol-induced acute pancreatitis&quot;:
+  exists ([Condition: &quot;Alcohol-induced acute pancreatitis codes&quot;])
+define &quot;Gallstone acute pancreatitis&quot;:
+  exists ([Condition: &quot;Gallstone acute pancreatitis codes&quot;])
+define &quot;Pain&quot;:
+  exists ([Condition: &quot;Pain codes&quot;])
+define &quot;Opioids&quot;:
+  exists ([MedicationRequest: &quot;Opioids codes&quot;])
+
+define &quot;Applicable&quot;:
+  (&quot;Alcohol-induced acute pancreatitis&quot;
+  or &quot;Gallstone acute pancreatitis&quot;)
+
+define &quot;Satisfied&quot;:
+  &quot;Opioids&quot;
+
+define &quot;Compliant&quot;:
+  not &quot;Applicable&quot; or &quot;Satisfied&quot;
+
+define &quot;Deontic&quot;:
+  &#x27;permission&#x27;
+
+// The source PERMITS this action; it does not require it.
+// Not taking a permitted option is not a violation.
+define &quot;OptionTaken&quot;:
+  &quot;Applicable&quot; and &quot;Satisfied&quot;
+
+define &quot;OptionNotTaken&quot;:
+  &quot;Applicable&quot; and not &quot;Satisfied&quot;
+
+define &quot;Violated&quot;:
+  false
+</pre></details>
+</div></details>
+<details class="card partial">
+<summary>
+<div class="head">
+<span class="id">PMC13270348:0026</span>
+<span class="badge partial">Partial</span>
+</div>
+<blockquote>Epidural analgesia is a safe option with appropriate monitoring and aseptic technique and may be considered for AP pain management where local expertise is available.</blockquote>
+</summary>
+<div class="body">
+<div class="label">Encoded as</div>
+<div class="rule">IF Acute pancreatitis
+THEN may: Epidural analgesia AND Implements aseptic technique</div>
+<div class="why" style="margin-top:8px"><strong>Action:</strong> recommend epidural analgesia for AP pain management</div>
+<div class="label">Left undefined, on purpose</div>
+<div><span class="hole">has_epidural_analgesia</span></div>
+<div class="why" style="margin-top:6px;color:var(--muted)">These are free variables. Until a value is supplied the verdict for this rule is <em>cannot tell</em>, not <em>compliant</em>.</div>
+<div class="label">Checks that fired</div>
+<div class="caution"><code>TERMINOLOGY_UNAVAILABLE</code> 4 terminology lookup(s) failed (transport or server error, not an absent concept), so a refusal here may not be a property of the guideline: &#x27;AP&#x27; (condition): HTTPError: HTTP Error 400: ; &#x27;ap&#x27; (condition): HTTPError: HTTP Error 400: ; &#x27;AP&#x27; (procedure): HTTPError: HTTP Error 400: ; &#x27;ap&#x27; (procedure): HTTPError: HTTP Error 400: </div>
+<div class="caution"><code>ACTION_TARGET_MISMATCH</code> `then` acts on [&#x27;aseptic_technique&#x27;], but the rule is about &#x27;epidural_analgesia_for_ap_pain_management&#x27;</div>
+<div class="caution"><code>DROPPED_CONCEPT_RISK</code> 1 concept(s) did not bind, so a strict encoding may have silently omitted them; retrying with them declared as holes</div>
+<div class="caution"><code>UNUSED_BOUND_CONCEPT</code> bound but not used in the rule: pain_management -- an outcome may legitimately be unused, a dropped population restriction may not</div>
+<div class="caution"><code>ACTION_TARGET_MISMATCH</code> `then` acts on [&#x27;aseptic_technique&#x27;], but the rule is about &#x27;epidural analgesia for AP pain management&#x27;</div>
+<div class="caution"><code>UNUSED_BOUND_CONCEPT</code> bound but not used in the rule: pain_management -- an outcome may legitimately be unused, a dropped clause or population restriction may not</div>
+<div class="caution"><code>PARTIAL_ENCODING</code> encoded with 1 free variable(s): has_epidural_analgesia</div>
+<details><summary>Show the logic and its bindings</summary>
+<div class="label">&phi; = when &rarr; then</div><div class="rule logic">has_ap = true
+    →  has_epidural_analgesia = true ∧ aseptic_technique = true</div><div class="label">What each name is bound to</div><table><tr><th>Variable</th><th>Type</th><th>Terminology</th></tr><tr><td><span class="id">aseptic_technique</span><br><span style="font-size:12.5px;color:var(--muted)">Implements aseptic technique</span></td><td>bool</td><td style="word-break:break-all">http://snomed.info/sct|370822003|20260801</td></tr><tr><td><span class="id">has_ap</span><br><span style="font-size:12.5px;color:var(--muted)">Acute pancreatitis</span></td><td>bool</td><td style="word-break:break-all">http://snomed.info/sct|197456007|20260801 <span class="id">(+18 codes)</span></td></tr><tr><td><span class="id">has_epidural_analgesia</span><br><span style="font-size:12.5px;color:var(--muted)">Epidural analgesia</span></td><td>bool</td><td style="word-break:break-all"><em style="color:var(--part)">left free &mdash; no code</em></td></tr></table>
+</details>
+<details><summary>Show the executable CQL (55 lines)</summary>
+<pre>library Demopmc132703480026 version &#x27;1.0.000&#x27;
+
+using FHIR version &#x27;4.0.1&#x27;
+include FHIRHelpers version &#x27;4.0.1&#x27; called FHIRHelpers
+
+codesystem &quot;SNOMED&quot;: &#x27;http://snomed.info/sct&#x27;
+
+code &quot;Acute pancreatitis codes&quot;: &#x27;197456007&#x27; from &quot;SNOMED&quot; display &#x27;Acute pancreatitis&#x27;
+code &quot;Implements Aseptic Technique codes&quot;: &#x27;370822003&#x27; from &quot;SNOMED&quot;
+code &quot;Implements aseptic technique codes&quot;: &#x27;370822003&#x27; from &quot;SNOMED&quot; display &#x27;Implements aseptic technique&#x27;
+code &quot;Pain Management codes&quot;: &#x27;278414003&#x27; from &quot;SNOMED&quot;
+code &quot;Pain management codes&quot;: &#x27;278414003&#x27; from &quot;SNOMED&quot; display &#x27;Pain management&#x27;
+
+context Patient
+
+/* PMC13270348:0026
+   action: recommend epidural analgesia for AP pain management
+   source: Epidural analgesia is a safe option with appropriate monitoring and aseptic technique and may be considered for AP pain management where local expertise is available.
+   PARTIAL: 1 unbound predicate(s) left null: has_epidural_analgesia
+*/
+
+define &quot;Implements aseptic technique&quot;:
+  exists ([MedicationRequest: &quot;Implements aseptic technique codes&quot;])
+define &quot;Acute pancreatitis&quot;:
+  exists ([Condition: &quot;Acute pancreatitis codes&quot;])
+// UNBOUND: the source states this predicate but does not define it.
+// Left null so CQL&#x27;s three-valued logic propagates the uncertainty.
+define &quot;Epidural analgesia&quot;:
+  null as Boolean
+define &quot;Pain management&quot;:
+  exists ([MedicationRequest: &quot;Pain management codes&quot;])
+
+define &quot;Applicable&quot;:
+  &quot;Acute pancreatitis&quot;
+
+define &quot;Satisfied&quot;:
+  (&quot;Epidural analgesia&quot;
+  and &quot;Implements aseptic technique&quot;)
+
+define &quot;Compliant&quot;:
+  not &quot;Applicable&quot; or &quot;Satisfied&quot;
+
+define &quot;Deontic&quot;:
+  &#x27;permission&#x27;
+
+// The source PERMITS this action; it does not require it.
+// Not taking a permitted option is not a violation.
+define &quot;OptionTaken&quot;:
+  &quot;Applicable&quot; and &quot;Satisfied&quot;
+
+define &quot;OptionNotTaken&quot;:
+  &quot;Applicable&quot; and not &quot;Satisfied&quot;
+
+define &quot;Violated&quot;:
+  false
+</pre></details>
+</div></details>
+<details class="card partial">
+<summary>
+<div class="head">
+<span class="id">PMC13270348:0044</span>
+<span class="badge partial">Partial</span>
+</div>
+<blockquote>EUS may be considered when aetiology remains unclear.</blockquote>
+</summary>
+<div class="body">
+<div class="label">Encoded as</div>
+<div class="rule">IF aetiology remains unclear
+THEN may: Endoscopic ultrasonography</div>
+<div class="why" style="margin-top:8px"><strong>Action:</strong> recommend endoscopic ultrasound (EUS)</div>
+<div class="label">Left undefined, on purpose</div>
+<div><span class="hole">has_aetiology_remains_unclear</span></div>
+<div class="why" style="margin-top:6px;color:var(--muted)">These are free variables. Until a value is supplied the verdict for this rule is <em>cannot tell</em>, not <em>compliant</em>.</div>
+<div class="label">Checks that fired</div>
+<div class="caution"><code>PARTIAL_ENCODING</code> encoded with 1 free variable(s): has_aetiology_remains_unclear</div>
+<details><summary>Show the logic and its bindings</summary>
+<div class="label">&phi; = when &rarr; then</div><div class="rule logic">has_aetiology_remains_unclear = true
+    →  eus = true</div><div class="label">What each name is bound to</div><table><tr><th>Variable</th><th>Type</th><th>Terminology</th></tr><tr><td><span class="id">eus</span><br><span style="font-size:12.5px;color:var(--muted)">Endoscopic ultrasonography</span></td><td>bool</td><td style="word-break:break-all">http://snomed.info/sct|450556004|20260801 <span class="id">(+52 codes)</span></td></tr><tr><td><span class="id">has_aetiology_remains_unclear</span><br><span style="font-size:12.5px;color:var(--muted)">aetiology remains unclear</span></td><td>bool</td><td style="word-break:break-all"><em style="color:var(--part)">left free &mdash; no code</em></td></tr></table>
+</details>
+<details><summary>Show the executable CQL (47 lines)</summary>
+<pre>library Demopmc132703480044 version &#x27;1.0.000&#x27;
+
+using FHIR version &#x27;4.0.1&#x27;
+include FHIRHelpers version &#x27;4.0.1&#x27; called FHIRHelpers
+
+codesystem &quot;SNOMED&quot;: &#x27;http://snomed.info/sct&#x27;
+
+code &quot;Endoscopic Ultrasonography codes&quot;: &#x27;450556004&#x27; from &quot;SNOMED&quot;
+code &quot;Endoscopic ultrasonography codes&quot;: &#x27;450556004&#x27; from &quot;SNOMED&quot; display &#x27;Endoscopic ultrasonography&#x27;
+
+context Patient
+
+/* PMC13270348:0044
+   action: recommend endoscopic ultrasound (EUS)
+   source: EUS may be considered when aetiology remains unclear.
+   PARTIAL: 1 unbound predicate(s) left null: has_aetiology_remains_unclear
+*/
+
+define &quot;Endoscopic ultrasonography&quot;:
+  exists ([MedicationRequest: &quot;Endoscopic ultrasonography codes&quot;])
+// UNBOUND: the source states this predicate but does not define it.
+// Left null so CQL&#x27;s three-valued logic propagates the uncertainty.
+define &quot;aetiology remains unclear&quot;:
+  null as Boolean
+
+define &quot;Applicable&quot;:
+  &quot;aetiology remains unclear&quot;
+
+define &quot;Satisfied&quot;:
+  &quot;Endoscopic ultrasonography&quot;
+
+define &quot;Compliant&quot;:
+  not &quot;Applicable&quot; or &quot;Satisfied&quot;
+
+define &quot;Deontic&quot;:
+  &#x27;permission&#x27;
+
+// The source PERMITS this action; it does not require it.
+// Not taking a permitted option is not a violation.
+define &quot;OptionTaken&quot;:
+  &quot;Applicable&quot; and &quot;Satisfied&quot;
+
+define &quot;OptionNotTaken&quot;:
+  &quot;Applicable&quot; and not &quot;Satisfied&quot;
+
+define &quot;Violated&quot;:
+  false
+</pre></details>
+</div></details>
+<details class="card partial">
+<summary>
+<div class="head">
+<span class="id">PMC13270348:0047</span>
+<span class="badge partial">Partial</span>
+</div>
+<blockquote>No strong evidence linking alcoholic aetiology to increased opioid use at discharge; opioids may be considered to ensure adequate pain relief at discharge in both alcohol and biliary AP</blockquote>
+</summary>
+<div class="body">
+<div class="label">Encoded as</div>
+<div class="rule">IF alcohol and biliary AP
+THEN may: Opioids</div>
+<div class="why" style="margin-top:8px"><strong>Action:</strong> recommend opioid analgesia at discharge</div>
+<div class="why" style="margin-top:4px;color:var(--muted)"><strong>Strength, as the guideline states it:</strong> no strong evidence; option</div>
+<div class="label">Left undefined, on purpose</div>
+<div><span class="hole">has_alcohol_biliary_ap</span></div>
+<div class="why" style="margin-top:6px;color:var(--muted)">These are free variables. Until a value is supplied the verdict for this rule is <em>cannot tell</em>, not <em>compliant</em>.</div>
+<div class="label">Checks that fired</div>
+<div class="caution"><code>DROPPED_CONCEPT_RISK</code> 1 concept(s) did not bind, so a strict encoding may have silently omitted them; retrying with them declared as holes</div>
+<div class="caution"><code>UNUSED_BOUND_CONCEPT</code> bound but not used in the rule: on_opioids, pain_relief -- an outcome may legitimately be unused, a dropped population restriction may not</div>
+<div class="caution"><code>UNUSED_BOUND_CONCEPT</code> bound but not used in the rule: has_alcoholic_aetiology, on_opioids, pain_relief -- an outcome may legitimately be unused, a dropped clause or population restriction may not</div>
+<div class="caution"><code>PARTIAL_ENCODING</code> encoded with 1 free variable(s): has_alcohol_biliary_ap</div>
+<details><summary>Show the logic and its bindings</summary>
+<div class="label">&phi; = when &rarr; then</div><div class="rule logic">has_alcohol_biliary_ap = true
+    →  on_opioid = true</div><div class="label">What each name is bound to</div><table><tr><th>Variable</th><th>Type</th><th>Terminology</th></tr><tr><td><span class="id">has_alcohol_biliary_ap</span><br><span style="font-size:12.5px;color:var(--muted)">alcohol and biliary AP</span></td><td>bool</td><td style="word-break:break-all"><em style="color:var(--part)">left free &mdash; no code</em></td></tr><tr><td><span class="id">on_opioid</span><br><span style="font-size:12.5px;color:var(--muted)">Opioids</span></td><td>bool</td><td style="word-break:break-all">http://cts.nlm.nih.gov/fhir/ValueSet|2.16.840.1.113762.1.4.1248.120|20260203 <span class="id">(+288 codes)</span></td></tr></table>
+</details>
+<details><summary>Show the executable CQL (57 lines)</summary>
+<pre>library Demopmc132703480047 version &#x27;1.0.000&#x27;
+
+using FHIR version &#x27;4.0.1&#x27;
+include FHIRHelpers version &#x27;4.0.1&#x27; called FHIRHelpers
+
+codesystem &quot;SNOMED&quot;: &#x27;http://snomed.info/sct&#x27;
+
+valueset &quot;Opioids codes&quot;: &#x27;urn:oid:2.16.840.1.113762.1.4.1248.120&#x27; version &#x27;20260203&#x27;
+
+code &quot;Alcohol-induced acute pancreatitis codes&quot;: &#x27;235942001&#x27; from &quot;SNOMED&quot; display &#x27;Alcohol-induced acute pancreatitis&#x27;
+code &quot;Pain Relief codes&quot;: &#x27;182970005&#x27; from &quot;SNOMED&quot;
+code &quot;Pain relief codes&quot;: &#x27;182970005&#x27; from &quot;SNOMED&quot; display &#x27;Pain relief&#x27;
+
+context Patient
+
+/* PMC13270348:0047
+   action: recommend opioid analgesia at discharge
+   strength: no strong evidence; option
+   source: No strong evidence linking alcoholic aetiology to increased opioid use at discharge; opioids may be considered to ensure adequate pain relief at discharge in both alcohol and biliary AP
+   PARTIAL: 1 unbound predicate(s) left null: has_alcohol_biliary_ap
+*/
+
+// UNBOUND: the source states this predicate but does not define it.
+// Left null so CQL&#x27;s three-valued logic propagates the uncertainty.
+define &quot;alcohol and biliary AP&quot;:
+  null as Boolean
+define &quot;Alcohol-induced acute pancreatitis&quot;:
+  exists ([Condition: &quot;Alcohol-induced acute pancreatitis codes&quot;])
+define &quot;Opioids&quot;:
+  exists ([MedicationRequest: &quot;Opioids codes&quot;])
+define &quot;Opioids&quot;:
+  exists ([MedicationRequest: &quot;Opioids codes&quot;])
+define &quot;Pain relief&quot;:
+  exists ([MedicationRequest: &quot;Pain relief codes&quot;])
+
+define &quot;Applicable&quot;:
+  &quot;alcohol and biliary AP&quot;
+
+define &quot;Satisfied&quot;:
+  &quot;Opioids&quot;
+
+define &quot;Compliant&quot;:
+  not &quot;Applicable&quot; or &quot;Satisfied&quot;
+
+define &quot;Deontic&quot;:
+  &#x27;permission&#x27;
+
+// The source PERMITS this action; it does not require it.
+// Not taking a permitted option is not a violation.
+define &quot;OptionTaken&quot;:
+  &quot;Applicable&quot; and &quot;Satisfied&quot;
+
+define &quot;OptionNotTaken&quot;:
+  &quot;Applicable&quot; and not &quot;Satisfied&quot;
+
+define &quot;Violated&quot;:
+  false
+</pre></details>
+</div></details>
+<details class="card partial">
+<summary>
+<div class="head">
+<span class="id">PMC13270348:0077</span>
+<span class="badge partial">Partial</span>
+</div>
+<blockquote>Both unidimensional scales are equally suited for acute pain assessment in general and can be used for AP pain. The NRS scale may be preferred due to better compliance in most studies.</blockquote>
+</summary>
+<div class="body">
+<div class="label">Encoded as</div>
+<div class="rule">IF AP pain
+THEN may: unidimensional scales OR Assessment using Numeric Pain Rating Scale</div>
+<div class="why" style="margin-top:8px"><strong>Action:</strong> recommend unidimensional pain scale (VAS or NRS) for acute pancreatitis pain assessment, NRS preferred</div>
+<div class="why" style="margin-top:4px;color:var(--muted)"><strong>Strength, as the guideline states it:</strong> NRS may be preferred due to better compliance in most studies</div>
+<div class="label">Left undefined, on purpose</div>
+<div><span class="hole">has_ap_pain</span><span class="hole">has_unidimensional_scales</span></div>
+<div class="why" style="margin-top:6px;color:var(--muted)">These are free variables. Until a value is supplied the verdict for this rule is <em>cannot tell</em>, not <em>compliant</em>.</div>
+<div class="label">Checks that fired</div>
+<div class="caution"><code>DROPPED_CONCEPT_RISK</code> 2 concept(s) did not bind, so a strict encoding may have silently omitted them; retrying with them declared as holes</div>
+<div class="caution"><code>UNUSED_BOUND_CONCEPT</code> bound but not used in the rule: acute_pain_assessment -- an outcome may legitimately be unused, a dropped clause or population restriction may not</div>
+<div class="caution"><code>PARTIAL_ENCODING</code> encoded with 2 free variable(s): has_ap_pain, has_unidimensional_scales</div>
+<details><summary>Show the logic and its bindings</summary>
+<div class="label">&phi; = when &rarr; then</div><div class="rule logic">has_ap_pain = true
+    →  has_unidimensional_scales = true ∨ nrs_scale = true</div><div class="label">What each name is bound to</div><table><tr><th>Variable</th><th>Type</th><th>Terminology</th></tr><tr><td><span class="id">has_ap_pain</span><br><span style="font-size:12.5px;color:var(--muted)">AP pain</span></td><td>bool</td><td style="word-break:break-all"><em style="color:var(--part)">left free &mdash; no code</em></td></tr><tr><td><span class="id">has_unidimensional_scales</span><br><span style="font-size:12.5px;color:var(--muted)">unidimensional scales</span></td><td>bool</td><td style="word-break:break-all"><em style="color:var(--part)">left free &mdash; no code</em></td></tr><tr><td><span class="id">nrs_scale</span><br><span style="font-size:12.5px;color:var(--muted)">Assessment using Numeric Pain Rating Scale</span></td><td>bool</td><td style="word-break:break-all">http://snomed.info/sct|1284856004|20260801</td></tr></table>
+</details>
+<details><summary>Show the executable CQL (57 lines)</summary>
+<pre>library Demopmc132703480077 version &#x27;1.0.000&#x27;
+
+using FHIR version &#x27;4.0.1&#x27;
+include FHIRHelpers version &#x27;4.0.1&#x27; called FHIRHelpers
+
+codesystem &quot;SNOMED&quot;: &#x27;http://snomed.info/sct&#x27;
+
+code &quot;Assessment Using Numeric Pain Rating Scale codes&quot;: &#x27;1284856004&#x27; from &quot;SNOMED&quot;
+code &quot;Assessment using Numeric Pain Rating Scale codes&quot;: &#x27;1284856004&#x27; from &quot;SNOMED&quot; display &#x27;Assessment using Numeric Pain Rating Scale&#x27;
+code &quot;Pain Assessment codes&quot;: &#x27;225399009&#x27; from &quot;SNOMED&quot;
+code &quot;Pain assessment codes&quot;: &#x27;225399009&#x27; from &quot;SNOMED&quot; display &#x27;Pain assessment&#x27;
+
+context Patient
+
+/* PMC13270348:0077
+   action: recommend unidimensional pain scale (VAS or NRS) for acute pancreatitis pain assessment, NRS preferred
+   strength: NRS may be preferred due to better compliance in most studies
+   source: Both unidimensional scales are equally suited for acute pain assessment in general and can be used for AP pain. The NRS scale may be preferred due to better compliance in most studies.
+   PARTIAL: 2 unbound predicate(s) left null: has_ap_pain, has_unidimensional_scales
+*/
+
+define &quot;Pain assessment&quot;:
+  exists ([MedicationRequest: &quot;Pain assessment codes&quot;])
+// UNBOUND: the source states this predicate but does not define it.
+// Left null so CQL&#x27;s three-valued logic propagates the uncertainty.
+define &quot;AP pain&quot;:
+  null as Boolean
+// UNBOUND: the source states this predicate but does not define it.
+// Left null so CQL&#x27;s three-valued logic propagates the uncertainty.
+define &quot;unidimensional scales&quot;:
+  null as Boolean
+define &quot;Assessment using Numeric Pain Rating Scale&quot;:
+  exists ([MedicationRequest: &quot;Assessment using Numeric Pain Rating Scale codes&quot;])
+
+define &quot;Applicable&quot;:
+  &quot;AP pain&quot;
+
+define &quot;Satisfied&quot;:
+  (&quot;unidimensional scales&quot;
+  or &quot;Assessment using Numeric Pain Rating Scale&quot;)
+
+define &quot;Compliant&quot;:
+  not &quot;Applicable&quot; or &quot;Satisfied&quot;
+
+define &quot;Deontic&quot;:
+  &#x27;permission&#x27;
+
+// The source PERMITS this action; it does not require it.
+// Not taking a permitted option is not a violation.
+define &quot;OptionTaken&quot;:
+  &quot;Applicable&quot; and &quot;Satisfied&quot;
+
+define &quot;OptionNotTaken&quot;:
+  &quot;Applicable&quot; and not &quot;Satisfied&quot;
+
+define &quot;Violated&quot;:
+  false
+</pre></details>
+</div></details>
+<details class="card partial">
+<summary>
+<div class="head">
+<span class="id">PMC13270348:0078</span>
+<span class="badge partial">Partial</span>
+</div>
+<blockquote>The NRS scale may be preferred due to better compliance in most studies.</blockquote>
+</summary>
+<div class="body">
+<div class="label">Encoded as</div>
+<div class="rule">IF better compliance in most studies
+THEN may: Assessment using Numeric Pain Rating Scale</div>
+<div class="why" style="margin-top:8px"><strong>Action:</strong> recommend NRS scale for pain assessment</div>
+<div class="label">Left undefined, on purpose</div>
+<div><span class="hole">has_better_compliance_most_studies</span></div>
+<div class="why" style="margin-top:6px;color:var(--muted)">These are free variables. Until a value is supplied the verdict for this rule is <em>cannot tell</em>, not <em>compliant</em>.</div>
+<div class="label">Checks that fired</div>
+<div class="caution"><code>PARTIAL_ENCODING</code> encoded with 1 free variable(s): has_better_compliance_most_studies</div>
+<details><summary>Show the logic and its bindings</summary>
+<div class="label">&phi; = when &rarr; then</div><div class="rule logic">has_better_compliance_most_studies = true
+    →  nrs_scale = true</div><div class="label">What each name is bound to</div><table><tr><th>Variable</th><th>Type</th><th>Terminology</th></tr><tr><td><span class="id">has_better_compliance_most_studies</span><br><span style="font-size:12.5px;color:var(--muted)">better compliance in most studies</span></td><td>bool</td><td style="word-break:break-all"><em style="color:var(--part)">left free &mdash; no code</em></td></tr><tr><td><span class="id">nrs_scale</span><br><span style="font-size:12.5px;color:var(--muted)">Assessment using Numeric Pain Rating Scale</span></td><td>bool</td><td style="word-break:break-all">http://snomed.info/sct|1284856004|20260801</td></tr></table>
+</details>
+<details><summary>Show the executable CQL (47 lines)</summary>
+<pre>library Demopmc132703480078 version &#x27;1.0.000&#x27;
+
+using FHIR version &#x27;4.0.1&#x27;
+include FHIRHelpers version &#x27;4.0.1&#x27; called FHIRHelpers
+
+codesystem &quot;SNOMED&quot;: &#x27;http://snomed.info/sct&#x27;
+
+code &quot;Assessment Using Numeric Pain Rating Scale codes&quot;: &#x27;1284856004&#x27; from &quot;SNOMED&quot;
+code &quot;Assessment using Numeric Pain Rating Scale codes&quot;: &#x27;1284856004&#x27; from &quot;SNOMED&quot; display &#x27;Assessment using Numeric Pain Rating Scale&#x27;
+
+context Patient
+
+/* PMC13270348:0078
+   action: recommend NRS scale for pain assessment
+   source: The NRS scale may be preferred due to better compliance in most studies.
+   PARTIAL: 1 unbound predicate(s) left null: has_better_compliance_most_studies
+*/
+
+// UNBOUND: the source states this predicate but does not define it.
+// Left null so CQL&#x27;s three-valued logic propagates the uncertainty.
+define &quot;better compliance in most studies&quot;:
+  null as Boolean
+define &quot;Assessment using Numeric Pain Rating Scale&quot;:
+  exists ([MedicationRequest: &quot;Assessment using Numeric Pain Rating Scale codes&quot;])
+
+define &quot;Applicable&quot;:
+  &quot;better compliance in most studies&quot;
+
+define &quot;Satisfied&quot;:
+  &quot;Assessment using Numeric Pain Rating Scale&quot;
+
+define &quot;Compliant&quot;:
+  not &quot;Applicable&quot; or &quot;Satisfied&quot;
+
+define &quot;Deontic&quot;:
+  &#x27;permission&#x27;
+
+// The source PERMITS this action; it does not require it.
+// Not taking a permitted option is not a violation.
+define &quot;OptionTaken&quot;:
+  &quot;Applicable&quot; and &quot;Satisfied&quot;
+
+define &quot;OptionNotTaken&quot;:
+  &quot;Applicable&quot; and not &quot;Satisfied&quot;
+
+define &quot;Violated&quot;:
+  false
+</pre></details>
+</div></details>
+<details class="card partial">
+<summary>
+<div class="head">
+<span class="id">PMC13270348:0140</span>
+<span class="badge partial">Partial</span>
+</div>
+<blockquote>We suggest that epidural analgesia may be considered when expertise is available, and strict aseptic techniques and close monitoring are essential.</blockquote>
+</summary>
+<div class="body">
+<div class="label">Encoded as</div>
+<div class="rule">IF Epidural analgesia AND when expertise is available
+THEN should (weak recommendation): Implements aseptic technique AND Monitoring of patient</div>
+<div class="why" style="margin-top:8px"><strong>Action:</strong> monitor strict aseptic technique and close monitoring during epidural analgesia</div>
+<div class="why" style="margin-top:4px;color:var(--muted)"><strong>Strength, as the guideline states it:</strong> conditional</div>
+<div class="label">Left undefined, on purpose</div>
+<div><span class="hole">has_epidural_analgesia</span><span class="hole">has_expertise_available</span></div>
+<div class="why" style="margin-top:6px;color:var(--muted)">These are free variables. Until a value is supplied the verdict for this rule is <em>cannot tell</em>, not <em>compliant</em>.</div>
+<div class="label">Checks that fired</div>
+<div class="caution"><code>PARTIAL_ENCODING</code> encoded with 2 free variable(s): has_epidural_analgesia, has_expertise_available</div>
+<details><summary>Show the logic and its bindings</summary>
+<div class="label">&phi; = when &rarr; then</div><div class="rule logic">has_epidural_analgesia = true ∧ has_expertise_available = true
+    →  strict_aseptic_techniques = true ∧ close_monitoring = true</div><div class="label">What each name is bound to</div><table><tr><th>Variable</th><th>Type</th><th>Terminology</th></tr><tr><td><span class="id">close_monitoring</span><br><span style="font-size:12.5px;color:var(--muted)">Monitoring of patient</span></td><td>bool</td><td style="word-break:break-all">http://snomed.info/sct|182777000|20260801 <span class="id">(+374 codes)</span></td></tr><tr><td><span class="id">has_epidural_analgesia</span><br><span style="font-size:12.5px;color:var(--muted)">Epidural analgesia</span></td><td>bool</td><td style="word-break:break-all"><em style="color:var(--part)">left free &mdash; no code</em></td></tr><tr><td><span class="id">has_expertise_available</span><br><span style="font-size:12.5px;color:var(--muted)">when expertise is available</span></td><td>bool</td><td style="word-break:break-all"><em style="color:var(--part)">left free &mdash; no code</em></td></tr><tr><td><span class="id">strict_aseptic_techniques</span><br><span style="font-size:12.5px;color:var(--muted)">Implements aseptic technique</span></td><td>bool</td><td style="word-break:break-all">http://snomed.info/sct|370822003|20260801</td></tr></table>
+</details>
+<details><summary>Show the executable CQL (58 lines)</summary>
+<pre>library Demopmc132703480140 version &#x27;1.0.000&#x27;
+
+using FHIR version &#x27;4.0.1&#x27;
+include FHIRHelpers version &#x27;4.0.1&#x27; called FHIRHelpers
+
+codesystem &quot;SNOMED&quot;: &#x27;http://snomed.info/sct&#x27;
+
+code &quot;Implements Aseptic Technique codes&quot;: &#x27;370822003&#x27; from &quot;SNOMED&quot;
+code &quot;Implements aseptic technique codes&quot;: &#x27;370822003&#x27; from &quot;SNOMED&quot; display &#x27;Implements aseptic technique&#x27;
+code &quot;Monitoring Of Patient codes&quot;: &#x27;182777000&#x27; from &quot;SNOMED&quot;
+code &quot;Monitoring of patient codes&quot;: &#x27;182777000&#x27; from &quot;SNOMED&quot; display &#x27;Monitoring of patient&#x27;
+
+context Patient
+
+/* PMC13270348:0140
+   action: monitor strict aseptic technique and close monitoring during epidural analgesia
+   strength: conditional
+   source: We suggest that epidural analgesia may be considered when expertise is available, and strict aseptic techniques and close monitoring are essential.
+   PARTIAL: 2 unbound predicate(s) left null: has_epidural_analgesia, has_expertise_available
+*/
+
+define &quot;Monitoring of patient&quot;:
+  exists ([MedicationRequest: &quot;Monitoring of patient codes&quot;])
+// UNBOUND: the source states this predicate but does not define it.
+// Left null so CQL&#x27;s three-valued logic propagates the uncertainty.
+define &quot;epidural analgesia&quot;:
+  null as Boolean
+// UNBOUND: the source states this predicate but does not define it.
+// Left null so CQL&#x27;s three-valued logic propagates the uncertainty.
+define &quot;when expertise is available&quot;:
+  null as Boolean
+define &quot;Implements aseptic technique&quot;:
+  exists ([MedicationRequest: &quot;Implements aseptic technique codes&quot;])
+
+define &quot;Applicable&quot;:
+  (&quot;epidural analgesia&quot;
+  and &quot;when expertise is available&quot;)
+
+define &quot;Satisfied&quot;:
+  (&quot;Implements aseptic technique&quot;
+  and &quot;Monitoring of patient&quot;)
+
+define &quot;Compliant&quot;:
+  not &quot;Applicable&quot; or &quot;Satisfied&quot;
+
+define &quot;Deontic&quot;:
+  &#x27;permission&#x27;
+
+// The source PERMITS this action; it does not require it.
+// Not taking a permitted option is not a violation.
+define &quot;OptionTaken&quot;:
+  &quot;Applicable&quot; and &quot;Satisfied&quot;
+
+define &quot;OptionNotTaken&quot;:
+  &quot;Applicable&quot; and not &quot;Satisfied&quot;
+
+define &quot;Violated&quot;:
+  false
+</pre></details>
+</div></details>
+<details class="card partial">
+<summary>
+<div class="head">
+<span class="id">PMC13270348:0279</span>
+<span class="badge partial">Partial</span>
+</div>
+<blockquote>Acupuncture appears to be effective in relieving abdominal pain and reducing the time to oral intake without significant side effects in patients with AP and should be considered where expertise is available.</blockquote>
+</summary>
+<div class="body">
+<div class="label">Encoded as</div>
+<div class="rule">IF Acute pancreatitis AND where expertise is available
+THEN may: Acupuncture</div>
+<div class="why" style="margin-top:8px"><strong>Action:</strong> recommend acupuncture</div>
+<div class="why" style="margin-top:4px;color:var(--muted)"><strong>Strength, as the guideline states it:</strong> should be considered where expertise is available</div>
+<div class="label">Left undefined, on purpose</div>
+<div><span class="hole">has_where_expertise_available</span></div>
+<div class="why" style="margin-top:6px;color:var(--muted)">These are free variables. Until a value is supplied the verdict for this rule is <em>cannot tell</em>, not <em>compliant</em>.</div>
+<div class="label">Checks that fired</div>
+<div class="caution"><code>TERMINOLOGY_UNAVAILABLE</code> 4 terminology lookup(s) failed (transport or server error, not an absent concept), so a refusal here may not be a property of the guideline: &#x27;AP&#x27; (condition): HTTPError: HTTP Error 400: ; &#x27;ap&#x27; (condition): HTTPError: HTTP Error 400: ; &#x27;AP&#x27; (procedure): HTTPError: HTTP Error 400: ; &#x27;ap&#x27; (procedure): HTTPError: HTTP Error 400: </div>
+<div class="caution"><code>UNUSED_BOUND_CONCEPT</code> bound but not used in the rule: has_abdominal_pain, oral_intake -- an outcome may legitimately be unused, a dropped clause or population restriction may not</div>
+<div class="caution"><code>PARTIAL_ENCODING</code> encoded with 1 free variable(s): has_where_expertise_available</div>
+<details><summary>Show the logic and its bindings</summary>
+<div class="label">&phi; = when &rarr; then</div><div class="rule logic">has_ap = true ∧ has_where_expertise_available = true
+    →  acupuncture = true</div><div class="label">What each name is bound to</div><table><tr><th>Variable</th><th>Type</th><th>Terminology</th></tr><tr><td><span class="id">acupuncture</span><br><span style="font-size:12.5px;color:var(--muted)">Acupuncture</span></td><td>bool</td><td style="word-break:break-all">http://snomed.info/sct|44868003|20260801 <span class="id">(+12 codes)</span></td></tr><tr><td><span class="id">has_ap</span><br><span style="font-size:12.5px;color:var(--muted)">Acute pancreatitis</span></td><td>bool</td><td style="word-break:break-all">http://snomed.info/sct|197456007|20260801 <span class="id">(+18 codes)</span></td></tr><tr><td><span class="id">has_where_expertise_available</span><br><span style="font-size:12.5px;color:var(--muted)">where expertise is available</span></td><td>bool</td><td style="word-break:break-all"><em style="color:var(--part)">left free &mdash; no code</em></td></tr></table>
+</details>
+<details><summary>Show the executable CQL (59 lines)</summary>
+<pre>library Demopmc132703480279 version &#x27;1.0.000&#x27;
+
+using FHIR version &#x27;4.0.1&#x27;
+include FHIRHelpers version &#x27;4.0.1&#x27; called FHIRHelpers
+
+codesystem &quot;SNOMED&quot;: &#x27;http://snomed.info/sct&#x27;
+
+code &quot;Abdominal pain codes&quot;: &#x27;21522001&#x27; from &quot;SNOMED&quot; display &#x27;Abdominal pain&#x27;
+code &quot;Acupuncture codes&quot;: &#x27;44868003&#x27; from &quot;SNOMED&quot;
+code &quot;Acupuncture codes&quot;: &#x27;44868003&#x27; from &quot;SNOMED&quot; display &#x27;Acupuncture&#x27;
+code &quot;Acute pancreatitis codes&quot;: &#x27;197456007&#x27; from &quot;SNOMED&quot; display &#x27;Acute pancreatitis&#x27;
+code &quot;Oral Intake codes&quot;: &#x27;870690008&#x27; from &quot;SNOMED&quot;
+code &quot;Oral intake codes&quot;: &#x27;870690008&#x27; from &quot;SNOMED&quot; display &#x27;Oral intake&#x27;
+
+context Patient
+
+/* PMC13270348:0279
+   action: recommend acupuncture
+   strength: should be considered where expertise is available
+   source: Acupuncture appears to be effective in relieving abdominal pain and reducing the time to oral intake without significant side effects in patients with AP and should be considered where expertise is available.
+   PARTIAL: 1 unbound predicate(s) left null: has_where_expertise_available
+*/
+
+define &quot;Acupuncture&quot;:
+  exists ([MedicationRequest: &quot;Acupuncture codes&quot;])
+define &quot;Abdominal pain&quot;:
+  exists ([Condition: &quot;Abdominal pain codes&quot;])
+define &quot;Acute pancreatitis&quot;:
+  exists ([Condition: &quot;Acute pancreatitis codes&quot;])
+// UNBOUND: the source states this predicate but does not define it.
+// Left null so CQL&#x27;s three-valued logic propagates the uncertainty.
+define &quot;where expertise is available&quot;:
+  null as Boolean
+define &quot;Oral intake&quot;:
+  exists ([MedicationRequest: &quot;Oral intake codes&quot;])
+
+define &quot;Applicable&quot;:
+  (&quot;Acute pancreatitis&quot;
+  and &quot;where expertise is available&quot;)
+
+define &quot;Satisfied&quot;:
+  &quot;Acupuncture&quot;
+
+define &quot;Compliant&quot;:
+  not &quot;Applicable&quot; or &quot;Satisfied&quot;
+
+define &quot;Deontic&quot;:
+  &#x27;permission&#x27;
+
+// The source PERMITS this action; it does not require it.
+// Not taking a permitted option is not a violation.
+define &quot;OptionTaken&quot;:
+  &quot;Applicable&quot; and &quot;Satisfied&quot;
+
+define &quot;OptionNotTaken&quot;:
+  &quot;Applicable&quot; and not &quot;Satisfied&quot;
+
+define &quot;Violated&quot;:
+  false
+</pre></details>
+</div></details>
+<details class="card partial">
+<summary>
+<div class="head">
+<span class="id">PMC13270348:0280</span>
+<span class="badge partial">Partial</span>
+</div>
+<blockquote>In children, a multidisciplinary approach to pain management, including the use of simple analgesics, opioids, interventional procedures, and behavioural pain management interventions should be considered.</blockquote>
+</summary>
+<div class="body">
+<div class="label">Encoded as</div>
+<div class="rule">IF In children
+THEN may: a multidisciplinary approach AND Non Opioid Analgesics AND Opioids AND interventional procedures AND behavioural pain management interventions</div>
+<div class="why" style="margin-top:8px"><strong>Action:</strong> recommend multidisciplinary pain management including simple analgesics, opioids, interventional procedures, and behavioural pain management interventions</div>
+<div class="label">Left undefined, on purpose</div>
+<div><span class="hole">has_behavioural_pain_management_interventions</span><span class="hole">has_children</span><span class="hole">has_interventional_procedures</span><span class="hole">has_multidisciplinary_approach</span></div>
+<div class="why" style="margin-top:6px;color:var(--muted)">These are free variables. Until a value is supplied the verdict for this rule is <em>cannot tell</em>, not <em>compliant</em>.</div>
+<div class="label">Checks that fired</div>
+<div class="caution"><code>UNUSED_BOUND_CONCEPT</code> bound but not used in the rule: pain_management -- an outcome may legitimately be unused, a dropped clause or population restriction may not</div>
+<div class="caution"><code>PARTIAL_ENCODING</code> encoded with 4 free variable(s): has_behavioural_pain_management_interventions, has_children, has_interventional_procedures, has_multidisciplinary_approach</div>
+<details><summary>Show the logic and its bindings</summary>
+<div class="label">&phi; = when &rarr; then</div><div class="rule logic">has_children = true
+    →  has_multidisciplinary_approach = true ∧ on_simple_analgesics = true ∧ on_opioids = true ∧ has_interventional_procedures = true ∧ has_behavioural_pain_management_interventions = true</div><div class="label">What each name is bound to</div><table><tr><th>Variable</th><th>Type</th><th>Terminology</th></tr><tr><td><span class="id">has_behavioural_pain_management_interventions</span><br><span style="font-size:12.5px;color:var(--muted)">behavioural pain management interventions</span></td><td>bool</td><td style="word-break:break-all"><em style="color:var(--part)">left free &mdash; no code</em></td></tr><tr><td><span class="id">has_children</span><br><span style="font-size:12.5px;color:var(--muted)">In children</span></td><td>bool</td><td style="word-break:break-all"><em style="color:var(--part)">left free &mdash; no code</em></td></tr><tr><td><span class="id">has_interventional_procedures</span><br><span style="font-size:12.5px;color:var(--muted)">interventional procedures</span></td><td>bool</td><td style="word-break:break-all"><em style="color:var(--part)">left free &mdash; no code</em></td></tr><tr><td><span class="id">has_multidisciplinary_approach</span><br><span style="font-size:12.5px;color:var(--muted)">a multidisciplinary approach</span></td><td>bool</td><td style="word-break:break-all"><em style="color:var(--part)">left free &mdash; no code</em></td></tr><tr><td><span class="id">on_opioids</span><br><span style="font-size:12.5px;color:var(--muted)">Opioids</span></td><td>bool</td><td style="word-break:break-all">http://cts.nlm.nih.gov/fhir/ValueSet|2.16.840.1.113762.1.4.1248.120|20260203 <span class="id">(+288 codes)</span></td></tr><tr><td><span class="id">on_simple_analgesics</span><br><span style="font-size:12.5px;color:var(--muted)">Non Opioid Analgesics</span></td><td>bool</td><td style="word-break:break-all">http://cts.nlm.nih.gov/fhir/ValueSet|2.16.840.1.113762.1.4.1260.173|20240313 <span class="id">(+500 codes)</span></td></tr></table>
+</details>
+<details><summary>Show the executable CQL (70 lines)</summary>
+<pre>library Demopmc132703480280 version &#x27;1.0.000&#x27;
+
+using FHIR version &#x27;4.0.1&#x27;
+include FHIRHelpers version &#x27;4.0.1&#x27; called FHIRHelpers
+
+codesystem &quot;SNOMED&quot;: &#x27;http://snomed.info/sct&#x27;
+
+valueset &quot;Non Opioid Analgesics codes&quot;: &#x27;urn:oid:2.16.840.1.113762.1.4.1260.173&#x27; version &#x27;20240313&#x27;
+valueset &quot;Opioids codes&quot;: &#x27;urn:oid:2.16.840.1.113762.1.4.1248.120&#x27; version &#x27;20260203&#x27;
+
+code &quot;Pain Management codes&quot;: &#x27;278414003&#x27; from &quot;SNOMED&quot;
+code &quot;Pain management codes&quot;: &#x27;278414003&#x27; from &quot;SNOMED&quot; display &#x27;Pain management&#x27;
+
+context Patient
+
+/* PMC13270348:0280
+   action: recommend multidisciplinary pain management including simple analgesics, opioids, interventional procedures, and behavioural pain management interventions
+   source: In children, a multidisciplinary approach to pain management, including the use of simple analgesics, opioids, interventional procedures, and behavioural pain management interventions should be considered.
+   PARTIAL: 4 unbound predicate(s) left null: has_behavioural_pain_management_interventions, has_children, has_interventional_procedures, has_multidisciplinary_approach
+*/
+
+// UNBOUND: the source states this predicate but does not define it.
+// Left null so CQL&#x27;s three-valued logic propagates the uncertainty.
+define &quot;behavioural pain management interventions&quot;:
+  null as Boolean
+// UNBOUND: the source states this predicate but does not define it.
+// Left null so CQL&#x27;s three-valued logic propagates the uncertainty.
+define &quot;In children&quot;:
+  null as Boolean
+// UNBOUND: the source states this predicate but does not define it.
+// Left null so CQL&#x27;s three-valued logic propagates the uncertainty.
+define &quot;interventional procedures&quot;:
+  null as Boolean
+// UNBOUND: the source states this predicate but does not define it.
+// Left null so CQL&#x27;s three-valued logic propagates the uncertainty.
+define &quot;a multidisciplinary approach&quot;:
+  null as Boolean
+define &quot;Opioids&quot;:
+  exists ([MedicationRequest: &quot;Opioids codes&quot;])
+define &quot;Non Opioid Analgesics&quot;:
+  exists ([MedicationRequest: &quot;Non Opioid Analgesics codes&quot;])
+define &quot;Pain management&quot;:
+  exists ([MedicationRequest: &quot;Pain management codes&quot;])
+
+define &quot;Applicable&quot;:
+  &quot;In children&quot;
+
+define &quot;Satisfied&quot;:
+  (&quot;a multidisciplinary approach&quot;
+  and &quot;Non Opioid Analgesics&quot;
+  and &quot;Opioids&quot;
+  and &quot;interventional procedures&quot;
+  and &quot;behavioural pain management interventions&quot;)
+
+define &quot;Compliant&quot;:
+  not &quot;Applicable&quot; or &quot;Satisfied&quot;
+
+define &quot;Deontic&quot;:
+  &#x27;permission&#x27;
+
+// The source PERMITS this action; it does not require it.
+// Not taking a permitted option is not a violation.
+define &quot;OptionTaken&quot;:
+  &quot;Applicable&quot; and &quot;Satisfied&quot;
+
+define &quot;OptionNotTaken&quot;:
+  &quot;Applicable&quot; and not &quot;Satisfied&quot;
+
+define &quot;Violated&quot;:
+  false
+</pre></details>
+</div></details>
+<details class="card refuse">
+<summary>
+<div class="head">
+<span class="id">PMC13270348:0009</span>
+<span class="badge refuse">Refused</span>
+</div>
+<blockquote>Recommendations from non‐specific acute pain guidelines may be applied to AP as disease‐specific guidelines for AP are lacking.</blockquote>
+</summary>
+<div class="body">
+<div class="label">Left undefined, on purpose</div>
+<div><span class="hole">has_recommendations_non_specific_acute_pain</span><span class="hole">has_disease_specific_guidelines_ap_lacking</span></div>
+<div class="why" style="margin-top:6px;color:var(--muted)">These are free variables. Until a value is supplied the verdict for this rule is <em>cannot tell</em>, not <em>compliant</em>.</div>
+<div class="label">Not encoded because</div>
+<div class="why">the sentence is about a service or a system, not a patient <span class="id">(not_patient_level)</span></div>
+<div class="why" style="margin-top:8px;color:var(--muted)">This is meta-guidance about which body of guidelines to consult in the absence of AP-specific ones, not a statement about any individual patient&#x27;s care plan; it names no patient condition or action.</div>
+<div class="label">Checks that fired</div>
+<div class="caution"><code>TERMINOLOGY_UNAVAILABLE</code> 4 terminology lookup(s) failed (transport or server error, not an absent concept), so a refusal here may not be a property of the guideline: &#x27;AP&#x27; (condition): HTTPError: HTTP Error 400: ; &#x27;ap&#x27; (condition): HTTPError: HTTP Error 400: ; &#x27;AP&#x27; (procedure): HTTPError: HTTP Error 400: ; &#x27;ap&#x27; (procedure): HTTPError: HTTP Error 400: </div>
+</div></details>
+<details class="card refuse">
+<summary>
+<div class="head">
+<span class="id">PMC13270348:0010</span>
+<span class="badge refuse">Refused</span>
+</div>
+<blockquote>Escalation of analgesic therapy in AP can follow principles used in other acute pain conditions.</blockquote>
+</summary>
+<div class="body">
+<div class="label">Left undefined, on purpose</div>
+<div><span class="hole">has_escalation_analgesic_therapy</span></div>
+<div class="why" style="margin-top:6px;color:var(--muted)">These are free variables. Until a value is supplied the verdict for this rule is <em>cannot tell</em>, not <em>compliant</em>.</div>
+<div class="label">Not encoded because</div>
+<div class="why">the sentence turns on a judgement it does not define <span class="id">(vague_predicate)</span></div>
+<div class="why" style="margin-top:8px;color:var(--muted)">The statement offers no specific, checkable action: it says escalation of analgesia in AP &#x27;can follow principles used in other acute pain conditions&#x27;, but those principles are never defined as a threshold, drug, or step that could be evaluated for an individual patient&#x27;s care plan.</div>
+<div class="label">Checks that fired</div>
+<div class="caution"><code>TERMINOLOGY_UNAVAILABLE</code> 4 terminology lookup(s) failed (transport or server error, not an absent concept), so a refusal here may not be a property of the guideline: &#x27;AP&#x27; (condition): HTTPError: HTTP Error 400: ; &#x27;ap&#x27; (condition): HTTPError: HTTP Error 400: ; &#x27;AP&#x27; (procedure): HTTPError: HTTP Error 400: ; &#x27;ap&#x27; (procedure): HTTPError: HTTP Error 400: </div>
+</div></details>
+<details class="card refuse">
+<summary>
+<div class="head">
+<span class="id">PMC13270348:0013</span>
+<span class="badge refuse">Refused</span>
+</div>
+<blockquote>General acute pain practices can be used with respect to assessment frequencies (every 5–60 min depending on intensity).</blockquote>
+</summary>
+<div class="body">
+<div class="label">Left undefined, on purpose</div>
+<div><span class="hole">has_every_5_60_min_depending</span><span class="hole">has_general_acute_pain_practices</span></div>
+<div class="why" style="margin-top:6px;color:var(--muted)">These are free variables. Until a value is supplied the verdict for this rule is <em>cannot tell</em>, not <em>compliant</em>.</div>
+<div class="label">Not encoded because</div>
+<div class="why">the timing the sentence describes cannot be expressed <span class="id">(unsupported_temporal)</span></div>
+<div class="why" style="margin-top:8px;color:var(--muted)">The recommendation specifies a recurring assessment cadence (every 5-60 minutes) that varies with pain intensity. The DSL can only express a single &#x27;N days since event&#x27; window, so a variable-interval, intensity-dependent repeating schedule cannot be represented; the mapping from intensity to interval is also left undefined.</div>
+
+</div></details>
+<details class="card refuse">
+<summary>
+<div class="head">
+<span class="id">PMC13270348:0014</span>
+<span class="badge refuse">Refused</span>
+</div>
+<blockquote>Numeric rating scale (NRS) may be preferred over VAS due to better patient compliance however, both scales are equally suited for acute pain management in general.</blockquote>
+</summary>
+<div class="body">
+<div class="label">Not encoded because</div>
+<div class="why">the guideline hedged: the action is discretionary, not required <span class="id">(defeasible)</span></div>
+<div class="why" style="margin-top:8px;color:var(--muted)">The statement offers NRS as a possibly preferred instrument while explicitly stating both scales are equally suited, so no obligatory or even determinate action follows; the preference is overridable by design and amounts to comparative commentary rather than a when-&gt;then care-plan requirement.</div>
+
+</div></details>
+<details class="card refuse">
+<summary>
+<div class="head">
+<span class="id">PMC13270348:0016</span>
+<span class="badge refuse">Refused</span>
+</div>
+<blockquote>WHO analgesic ladder may be sufficient for mild–moderate pain; opioids may be required early in severe AP, and a step‐down may be warranted upon presentation.</blockquote>
+</summary>
+<div class="body">
+<div class="label">Left undefined, on purpose</div>
+<div><span class="hole">has_mild_moderate_pain</span><span class="hole">has_analgesic_ladder</span><span class="hole">has_severe_ap</span></div>
+<div class="why" style="margin-top:6px;color:var(--muted)">These are free variables. Until a value is supplied the verdict for this rule is <em>cannot tell</em>, not <em>compliant</em>.</div>
+<div class="label">Not encoded because</div>
+<div class="why">the guideline hedged: the action is discretionary, not required <span class="id">(defeasible)</span></div>
+<div class="why" style="margin-top:8px;color:var(--muted)">Every clause is permissive/hedged rather than directive (&#x27;may be sufficient&#x27;, &#x27;may be required&#x27;, &#x27;may be warranted&#x27;), so no obligation can be stated; additionally the severity strata are not operationally defined by threshold in the text.</div>
+
+</div></details>
+<details class="card refuse">
+<summary>
+<div class="head">
+<span class="id">PMC13270348:0017</span>
+<span class="badge refuse">Refused</span>
+</div>
+<blockquote>Strong opioids such as buprenorphine and pentazocine provide better pain relief and reduce the need for rescue analgesia compared to non‐opioid medications like NSAIDs in patients hospitalized with AP.</blockquote>
+</summary>
+<div class="body">
+<div class="label">Left undefined, on purpose</div>
+<div><span class="hole">has_provide_better_pain_relief</span><span class="hole">has_reduce_need_rescue_analgesia</span></div>
+<div class="why" style="margin-top:6px;color:var(--muted)">These are free variables. Until a value is supplied the verdict for this rule is <em>cannot tell</em>, not <em>compliant</em>.</div>
+<div class="label">Not encoded because</div>
+<div class="why">the sentence needs a construct this logic does not have <span class="id">(beyond_dsl)</span></div>
+<div class="why" style="margin-top:8px;color:var(--muted)">The statement is a comparative-effectiveness finding about outcomes (better pain relief, less rescue analgesia with strong opioids vs NSAIDs), not a directive about what a given patient&#x27;s care plan must contain. It has no deontic force and no applicability-to-action structure that fits when -&gt; then; encoding it as &#x27;recommend strong opioids&#x27; would invent an obligation the text does not state.</div>
+<div class="label">Checks that fired</div>
+<div class="caution"><code>TERMINOLOGY_UNAVAILABLE</code> 4 terminology lookup(s) failed (transport or server error, not an absent concept), so a refusal here may not be a property of the guideline: &#x27;AP&#x27; (condition): HTTPError: HTTP Error 400: ; &#x27;ap&#x27; (condition): HTTPError: HTTP Error 400: ; &#x27;AP&#x27; (procedure): HTTPError: HTTP Error 400: ; &#x27;ap&#x27; (procedure): HTTPError: HTTP Error 400: </div>
+<div class="caution"><code>UNUSED_BOUND_CONCEPT</code> bound but not used in the rule: on_buprenorphine, on_pentazocine, on_rescue_analgesia -- an outcome may legitimately be unused, a dropped clause or population restriction may not</div>
+</div></details>
+<details class="card refuse">
+<summary>
+<div class="head">
+<span class="id">PMC13270348:0021</span>
+<span class="badge refuse">Refused</span>
+</div>
+<blockquote>We suggest against the use of unconventional analgesics in standard clinical practice, as their role in analgesic efficacy and improvement in patient‐reported outcomes is only experimental.</blockquote>
+</summary>
+<div class="body">
+<div class="label">Not encoded because</div>
+<div class="why">a clinical concept in the sentence could not be resolved to a terminology code <span class="id">(unbound_concept)</span></div>
+
+</div></details>
+<details class="card refuse">
+<summary>
+<div class="head">
+<span class="id">PMC13270348:0022</span>
+<span class="badge refuse">Refused</span>
+</div>
+<blockquote>Safety profile of unconventional analgesics remains unclear; we suggest against their use in standard clinical practice.</blockquote>
+</summary>
+<div class="body">
+<div class="label">Left undefined, on purpose</div>
+<div><span class="hole">has_unconventional_analgesics</span></div>
+<div class="why" style="margin-top:6px;color:var(--muted)">These are free variables. Until a value is supplied the verdict for this rule is <em>cannot tell</em>, not <em>compliant</em>.</div>
+<div class="label">Not encoded because</div>
+<div class="why">a clinical concept in the sentence could not be resolved to a terminology code <span class="id">(unbound_concept)</span></div>
+
+</div></details>
+<details class="card refuse">
+<summary>
+<div class="head">
+<span class="id">PMC13270348:0023</span>
+<span class="badge refuse">Refused</span>
+</div>
+<blockquote>Local complications may contribute to pain in AP, and these should be actively identified and managed.</blockquote>
+</summary>
+<div class="body">
+<div class="label">Left undefined, on purpose</div>
+<div><span class="hole">has_local_complications</span></div>
+<div class="why" style="margin-top:6px;color:var(--muted)">These are free variables. Until a value is supplied the verdict for this rule is <em>cannot tell</em>, not <em>compliant</em>.</div>
+<div class="label">Not encoded because</div>
+<div class="why">a clinical concept in the sentence could not be resolved to a terminology code <span class="id">(unbound_concept)</span></div>
+<div class="why" style="margin-top:8px;color:var(--muted)">The recommendation turns on identifying and managing &#x27;local complications&#x27; of acute pancreatitis, but no variable or terminology binding exists for that concept (only has_ap and has_pain are available), so neither the applicability condition nor the care-plan obligation can be expressed faithfully.</div>
+<div class="label">Checks that fired</div>
+<div class="caution"><code>TERMINOLOGY_UNAVAILABLE</code> 4 terminology lookup(s) failed (transport or server error, not an absent concept), so a refusal here may not be a property of the guideline: &#x27;AP&#x27; (condition): HTTPError: HTTP Error 400: ; &#x27;ap&#x27; (condition): HTTPError: HTTP Error 400: ; &#x27;AP&#x27; (procedure): HTTPError: HTTP Error 400: ; &#x27;ap&#x27; (procedure): HTTPError: HTTP Error 400: </div>
+</div></details>
+<details class="card refuse">
+<summary>
+<div class="head">
+<span class="id">PMC13270348:0024</span>
+<span class="badge refuse">Refused</span>
+</div>
+<blockquote>We recommend epidural analgesia combined with standard care over standard care alone, as it improves patient‐reported outcomes and quality of life, particularly in severe acute pancreatitis, provided local expertise is available.</blockquote>
+</summary>
+<div class="body">
+<div class="label">Left undefined, on purpose</div>
+<div><span class="hole">has_epidural_analgesia</span><span class="hole">has_severe_acute_pancreatitis</span></div>
+<div class="why" style="margin-top:6px;color:var(--muted)">These are free variables. Until a value is supplied the verdict for this rule is <em>cannot tell</em>, not <em>compliant</em>.</div>
+<div class="label">Not encoded because</div>
+<div class="why">the sentence turns on a judgement it does not define <span class="id">(vague_predicate)</span></div>
+
+</div></details>
+<details class="card refuse">
+<summary>
+<div class="head">
+<span class="id">PMC13270348:0025</span>
+<span class="badge refuse">Refused</span>
+</div>
+<blockquote>Epidural analgesia may improve respiratory outcomes and survival; however, we suggest against its routine use due to inconsistent evidence.</blockquote>
+</summary>
+<div class="body">
+<div class="label">Left undefined, on purpose</div>
+<div><span class="hole">has_epidural_analgesia</span></div>
+<div class="why" style="margin-top:6px;color:var(--muted)">These are free variables. Until a value is supplied the verdict for this rule is <em>cannot tell</em>, not <em>compliant</em>.</div>
+<div class="label">Not encoded because</div>
+<div class="why">a clinical concept in the sentence could not be resolved to a terminology code <span class="id">(unbound_concept)</span></div>
+
+</div></details>
+<details class="card refuse">
+<summary>
+<div class="head">
+<span class="id">PMC13270348:0028</span>
+<span class="badge refuse">Refused</span>
+</div>
+<blockquote>CHM formula chaiqin chengqi decoction may improve symptoms but has limited evidence and potential risks</blockquote>
+</summary>
+<div class="body">
+<div class="label">Left undefined, on purpose</div>
+<div><span class="hole">has_chm_formula_chaiqin_chengqi_decoction</span></div>
+<div class="why" style="margin-top:6px;color:var(--muted)">These are free variables. Until a value is supplied the verdict for this rule is <em>cannot tell</em>, not <em>compliant</em>.</div>
+<div class="label">Not encoded because</div>
+<div class="why">a clinical concept in the sentence could not be resolved to a terminology code <span class="id">(unbound_concept)</span></div>
+
+</div></details>
+<details class="card refuse">
+<summary>
+<div class="head">
+<span class="id">PMC13270348:0029</span>
+<span class="badge refuse">Refused</span>
+</div>
+<blockquote>Acupuncture may reduce abdominal pain and time to oral intake without significant side effects</blockquote>
+</summary>
+<div class="body">
+<div class="label">Left undefined, on purpose</div>
+<div><span class="hole">has_without_significant_side_effects</span></div>
+<div class="why" style="margin-top:6px;color:var(--muted)">These are free variables. Until a value is supplied the verdict for this rule is <em>cannot tell</em>, not <em>compliant</em>.</div>
+<div class="label">Not encoded because</div>
+<div class="why">the sentence needs a construct this logic does not have <span class="id">(beyond_dsl)</span></div>
+<div class="why" style="margin-top:8px;color:var(--muted)">The statement is a descriptive claim about the effect of acupuncture on outcomes (abdominal pain, time to oral intake, side effects) rather than an applicability condition paired with a required or offered action. There is no patient population condition to place in `when`, and the outcomes named are effects to be expected, not care-plan obligations, so the content does not fit a `when -&gt; then` structure.</div>
+
+</div></details>
+<details class="card refuse">
+<summary>
+<div class="head">
+<span class="id">PMC13270348:0030</span>
+<span class="badge refuse">Refused</span>
+</div>
+<blockquote>Adequate pain control may improve tolerance to enteral feeding and reduce time to oral intake; non‐opioid analgesics may be preferable due to opioid‐related gastrointestinal side effects.</blockquote>
+</summary>
+<div class="body">
+<div class="label">Left undefined, on purpose</div>
+<div><span class="hole">has_adequate_pain_control</span><span class="hole">has_gastrointestinal_side_effects</span></div>
+<div class="why" style="margin-top:6px;color:var(--muted)">These are free variables. Until a value is supplied the verdict for this rule is <em>cannot tell</em>, not <em>compliant</em>.</div>
+<div class="label">Not encoded because</div>
+<div class="why">the sentence turns on a judgement it does not define <span class="id">(vague_predicate)</span></div>
+<div class="why" style="margin-top:8px;color:var(--muted)">The statement hinges on &#x27;Adequate pain control&#x27;, which is named but never defined by any threshold (e.g., NRS/VAS cutoff), and it is phrased as a descriptive/observational claim (&#x27;may improve&#x27;, &#x27;may be preferable&#x27;) rather than an actionable applicability-obligation pair. &#x27;preferable&#x27; is likewise undefined.</div>
+
+</div></details>
+<details class="card refuse">
+<summary>
+<div class="head">
+<span class="id">PMC13270348:0033</span>
+<span class="badge refuse">Refused</span>
+</div>
+<blockquote>Adequate pain control may reduce risk of complications associated with central nervous system sensitisation such as chronic pain and opioid dependence.</blockquote>
+</summary>
+<div class="body">
+<div class="label">Left undefined, on purpose</div>
+<div><span class="hole">has_adequate_pain_control</span></div>
+<div class="why" style="margin-top:6px;color:var(--muted)">These are free variables. Until a value is supplied the verdict for this rule is <em>cannot tell</em>, not <em>compliant</em>.</div>
+<div class="label">Not encoded because</div>
+<div class="why">the sentence turns on a judgement it does not define <span class="id">(vague_predicate)</span></div>
+<div class="why" style="margin-top:8px;color:var(--muted)">The statement is a mechanistic/prognostic assertion rather than an actionable when-&gt;then rule, and its key predicate &#x27;Adequate pain control&#x27; has no stated definition or threshold (no NRS/VAS cutoff given).</div>
+
+</div></details>
+<details class="card refuse">
+<summary>
+<div class="head">
+<span class="id">PMC13270348:0034</span>
+<span class="badge refuse">Refused</span>
+</div>
+<blockquote>Effective pain management may improve compliance with enhanced recovery pathways especially in mild AP</blockquote>
+</summary>
+<div class="body">
+<div class="label">Left undefined, on purpose</div>
+<div><span class="hole">has_effective_pain_management</span><span class="hole">has_compliance_enhanced_recovery_pathways</span><span class="hole">has_enhanced_recovery_pathways</span></div>
+<div class="why" style="margin-top:6px;color:var(--muted)">These are free variables. Until a value is supplied the verdict for this rule is <em>cannot tell</em>, not <em>compliant</em>.</div>
+<div class="label">Not encoded because</div>
+<div class="why">the sentence needs a construct this logic does not have <span class="id">(beyond_dsl)</span></div>
+<div class="why" style="margin-top:8px;color:var(--muted)">This is a descriptive statement about an expected benefit (pain control improving adherence to enhanced recovery pathways), not a directive with an applicability condition and a required care-plan action. It has no when -&gt; then structure: no action is prescribed, only an outcome association is asserted. Additionally, the qualifiers naming the concepts are undefined.</div>
+<div class="label">Checks that fired</div>
+<div class="caution"><code>TERMINOLOGY_UNAVAILABLE</code> 4 terminology lookup(s) failed (transport or server error, not an absent concept), so a refusal here may not be a property of the guideline: &#x27;AP&#x27; (condition): HTTPError: HTTP Error 400: ; &#x27;ap&#x27; (condition): HTTPError: HTTP Error 400: ; &#x27;AP&#x27; (procedure): HTTPError: HTTP Error 400: ; &#x27;ap&#x27; (procedure): HTTPError: HTTP Error 400: </div>
+</div></details>
+<details class="card refuse">
+<summary>
+<div class="head">
+<span class="id">PMC13270348:0035</span>
+<span class="badge refuse">Refused</span>
+</div>
+<blockquote>Adequate pain control may shorten recovery time and improve return to daily activities and return to work periods.</blockquote>
+</summary>
+<div class="body">
+<div class="label">Left undefined, on purpose</div>
+<div><span class="hole">has_adequate_pain_control</span></div>
+<div class="why" style="margin-top:6px;color:var(--muted)">These are free variables. Until a value is supplied the verdict for this rule is <em>cannot tell</em>, not <em>compliant</em>.</div>
+<div class="label">Not encoded because</div>
+<div class="why">the sentence turns on a judgement it does not define <span class="id">(vague_predicate)</span></div>
+<div class="why" style="margin-top:8px;color:var(--muted)">The statement is an outcome assertion about &#x27;adequate&#x27; pain control, a threshold that is named but never defined (no NRS/VAS cutoff given), and it describes an expected benefit rather than prescribing an action under an applicability condition.</div>
+
+</div></details>
+<details class="card refuse">
+<summary>
+<div class="head">
+<span class="id">PMC13270348:0036</span>
+<span class="badge refuse">Refused</span>
+</div>
+<blockquote>Adequate pain control improves quality of life and reduces psychological stress.</blockquote>
+</summary>
+<div class="body">
+<div class="label">Left undefined, on purpose</div>
+<div><span class="hole">has_adequate_pain_control</span></div>
+<div class="why" style="margin-top:6px;color:var(--muted)">These are free variables. Until a value is supplied the verdict for this rule is <em>cannot tell</em>, not <em>compliant</em>.</div>
+<div class="label">Not encoded because</div>
+<div class="why">the sentence needs a construct this logic does not have <span class="id">(beyond_dsl)</span></div>
+<div class="why" style="margin-top:8px;color:var(--muted)">This is a declarative statement about outcomes of adequate pain control, not an actionable when -&gt; then recommendation; it prescribes no action for an identifiable patient population. It also relies on the undefined predicate &#x27;adequate&#x27; pain control.</div>
+
+</div></details>
+<details class="card refuse">
+<summary>
+<div class="head">
+<span class="id">PMC13270348:0038</span>
+<span class="badge refuse">Refused</span>
+</div>
+<blockquote>In children, we suggest the type of analgesics (opioid vs. non‐opioid) used does not affect outcomes such as length of stay or intensive care admission.</blockquote>
+</summary>
+<div class="body">
+<div class="label">Not encoded because</div>
+<div class="why">the sentence needs a construct this logic does not have <span class="id">(beyond_dsl)</span></div>
+<div class="why" style="margin-top:8px;color:var(--muted)">The statement is an empirical claim that analgesic class does not affect outcomes (LOS, ICU admission); it recommends no action and has no when -&gt; then care-plan structure. It neither obliges nor permits any intervention, so it cannot be encoded as an actionable rule.</div>
+
+</div></details>
+<details class="card refuse">
+<summary>
+<div class="head">
+<span class="id">PMC13270348:0039</span>
+<span class="badge refuse">Refused</span>
+</div>
+<blockquote>We suggest considering early oral feeding in children, as it does not worsen pain or length of stay.</blockquote>
+</summary>
+<div class="body">
+<div class="label">Left undefined, on purpose</div>
+<div><span class="hole">has_early_oral_feeding</span><span class="hole">has_children</span></div>
+<div class="why" style="margin-top:6px;color:var(--muted)">These are free variables. Until a value is supplied the verdict for this rule is <em>cannot tell</em>, not <em>compliant</em>.</div>
+<div class="label">Not encoded because</div>
+<div class="why">a clinical concept in the sentence could not be resolved to a terminology code <span class="id">(unbound_concept)</span></div>
+<div class="why" style="margin-top:8px;color:var(--muted)">The recommendation&#x27;s applicability condition is the pediatric population and its action is early oral feeding; neither &#x27;children&#x27; nor &#x27;early oral feeding&#x27; has any corresponding variable or coded concept in the available schema (the only variable is has_pain, which here is an outcome rationale, not an applicability condition). The rule therefore cannot be bound. Note also that the wording &#x27;we suggest considering&#x27; is permissive rather than obligatory.</div>
+
+</div></details>
+<details class="card refuse">
+<summary>
+<div class="head">
+<span class="id">PMC13270348:0041</span>
+<span class="badge refuse">Refused</span>
+</div>
+<blockquote>Epidural analgesia may be more effective than opioids in pregnancy in relieving AP pain, though evidence is limited.</blockquote>
+</summary>
+<div class="body">
+<div class="label">Left undefined, on purpose</div>
+<div><span class="hole">has_evidence_limited</span><span class="hole">has_epidural_analgesia</span><span class="hole">has_ap_pain</span></div>
+<div class="why" style="margin-top:6px;color:var(--muted)">These are free variables. Until a value is supplied the verdict for this rule is <em>cannot tell</em>, not <em>compliant</em>.</div>
+<div class="label">Not encoded because</div>
+<div class="why">the sentence needs a construct this logic does not have <span class="id">(beyond_dsl)</span></div>
+<div class="why" style="margin-top:8px;color:var(--muted)">The statement is a comparative-effectiveness claim (&#x27;may be more effective than opioids&#x27;), not an actionable when -&gt; then directive; it states relative efficacy with acknowledged limited evidence rather than prescribing or permitting a specific action for a patient&#x27;s care plan.</div>
+
+</div></details>
+<details class="card refuse">
+<summary>
+<div class="head">
+<span class="id">PMC13270348:0045</span>
+<span class="badge refuse">Refused</span>
+</div>
+<blockquote>Routine CT follow‐up is not recommended unless clinically indicated or in unexplained aetiology.</blockquote>
+</summary>
+<div class="body">
+<div class="label">Left undefined, on purpose</div>
+<div><span class="hole">has_clinically_indicated</span><span class="hole">has_unexplained_aetiology</span><span class="hole">has_routine_ct_follow_up</span></div>
+<div class="why" style="margin-top:6px;color:var(--muted)">These are free variables. Until a value is supplied the verdict for this rule is <em>cannot tell</em>, not <em>compliant</em>.</div>
+<div class="label">Not encoded because</div>
+<div class="why">the sentence turns on a judgement it does not define <span class="id">(vague_predicate)</span></div>
+<div class="why" style="margin-top:8px;color:var(--muted)">The recommendation against routine follow-up CT is conditioned on exceptions that are inherently undefined: whether imaging is &#x27;clinically indicated&#x27; and whether the aetiology is &#x27;unexplained&#x27; have no operational threshold or definition in the text, so the applicability condition cannot be faithfully encoded.</div>
+<div class="label">Checks that fired</div>
+<div class="caution"><code>TERMINOLOGY_UNAVAILABLE</code> 4 terminology lookup(s) failed (transport or server error, not an absent concept), so a refusal here may not be a property of the guideline: &#x27;CT&#x27; (procedure): HTTPError: HTTP Error 400: ; &#x27;ct&#x27; (procedure): HTTPError: HTTP Error 400: ; &#x27;CT&#x27; (condition): HTTPError: HTTP Error 400: ; &#x27;ct&#x27; (condition): HTTPError: HTTP Error 400: </div>
+</div></details>
+<details class="card refuse">
+<summary>
+<div class="head">
+<span class="id">PMC13270348:0051</span>
+<span class="badge refuse">Refused</span>
+</div>
+<blockquote>Recommendations from non‐specific (non‐AP) guidelines related to acute pain, for example, acute postoperative pain, may be applicable for treating acute pain from AP, as AP guidelines are unavailable.</blockquote>
+</summary>
+<div class="body">
+<div class="label">Not encoded because</div>
+<div class="why">the sentence is about a service or a system, not a patient <span class="id">(not_patient_level)</span></div>
+<div class="why" style="margin-top:8px;color:var(--muted)">This is meta-guidance about which external guideline documents may be borrowed to inform care in the absence of AP-specific guidance; it prescribes no specific action for an individual patient&#x27;s care plan.</div>
+<div class="label">Checks that fired</div>
+<div class="caution"><code>TERMINOLOGY_UNAVAILABLE</code> 4 terminology lookup(s) failed (transport or server error, not an absent concept), so a refusal here may not be a property of the guideline: &#x27;AP&#x27; (condition): HTTPError: HTTP Error 400: ; &#x27;ap&#x27; (condition): HTTPError: HTTP Error 400: ; &#x27;AP&#x27; (procedure): HTTPError: HTTP Error 400: ; &#x27;ap&#x27; (procedure): HTTPError: HTTP Error 400: </div>
+</div></details>
+<details class="card refuse">
+<summary>
+<div class="head">
+<span class="id">PMC13270348:0056</span>
+<span class="badge refuse">Refused</span>
+</div>
+<blockquote>Escalation of treatment intensity for AP‐related pain may be performed similarly to that used in other acute pain situations, for example, acute postoperative pain, if no contraindications are applicable.</blockquote>
+</summary>
+<div class="body">
+<div class="label">Not encoded because</div>
+<div class="why">the sentence needs a construct this logic does not have <span class="id">(beyond_dsl)</span></div>
+<div class="label">Checks that fired</div>
+<div class="caution"><code>UNUSED_BOUND_CONCEPT</code> bound but not used in the rule: has_acute_pain -- an outcome may legitimately be unused, a dropped population restriction may not</div>
+</div></details>
+<details class="card refuse">
+<summary>
+<div class="head">
+<span class="id">PMC13270348:0063</span>
+<span class="badge refuse">Refused</span>
+</div>
+<blockquote>In clinical practice, treatment escalation in AP should be discussed with acute pain services and pain specialists when available.</blockquote>
+</summary>
+<div class="body">
+<div class="label">Not encoded because</div>
+<div class="why">the sentence needs a construct this logic does not have <span class="id">(beyond_dsl)</span></div>
+<div class="label">Checks that fired</div>
+<div class="caution"><code>TERMINOLOGY_UNAVAILABLE</code> 4 terminology lookup(s) failed (transport or server error, not an absent concept), so a refusal here may not be a property of the guideline: &#x27;AP&#x27; (condition): HTTPError: HTTP Error 400: ; &#x27;ap&#x27; (condition): HTTPError: HTTP Error 400: ; &#x27;AP&#x27; (procedure): HTTPError: HTTP Error 400: ; &#x27;ap&#x27; (procedure): HTTPError: HTTP Error 400: </div>
+<div class="caution"><code>VACUOUS_RULE</code> NOT(when -&gt; then) is unsatisfiable: the rule forbids nothing</div>
+</div></details>
+<details class="card refuse">
+<summary>
+<div class="head">
+<span class="id">PMC13270348:0069</span>
+<span class="badge refuse">Refused</span>
+</div>
+<blockquote>A multidimensional approach to pain assessment may be considered given its use in other disease processes such as chronic pancreatitis with established benefit.</blockquote>
+</summary>
+<div class="body">
+<div class="label">Left undefined, on purpose</div>
+<div><span class="hole">has_multidimensional_approach_pain_assessment</span><span class="hole">has_established_benefit</span></div>
+<div class="why" style="margin-top:6px;color:var(--muted)">These are free variables. Until a value is supplied the verdict for this rule is <em>cannot tell</em>, not <em>compliant</em>.</div>
+<div class="label">Not encoded because</div>
+<div class="why">the sentence turns on a judgement it does not define <span class="id">(vague_predicate)</span></div>
+<div class="why" style="margin-top:8px;color:var(--muted)">The recommendation offers a &#x27;multidimensional approach&#x27; to pain assessment without defining which dimensions, instruments, or thresholds constitute it, and states no patient-level applicability condition expressible with the available variables. The concept named is inherently undefined rather than merely uncoded.</div>
+
+</div></details>
+<details class="card refuse">
+<summary>
+<div class="head">
+<span class="id">PMC13270348:0073</span>
+<span class="badge refuse">Refused</span>
+</div>
+<blockquote>Evidence from acute pain in general can be used as a reference, indicating assessment frequency between every 5th to 60th minute, depending on pain intensity.</blockquote>
+</summary>
+<div class="body">
+<div class="label">Left undefined, on purpose</div>
+<div><span class="hole">has_between_every_5th_60th_minute</span><span class="hole">has_depending_pain_intensity</span></div>
+<div class="why" style="margin-top:6px;color:var(--muted)">These are free variables. Until a value is supplied the verdict for this rule is <em>cannot tell</em>, not <em>compliant</em>.</div>
+<div class="label">Not encoded because</div>
+<div class="why">the timing the sentence describes cannot be expressed <span class="id">(unsupported_temporal)</span></div>
+<div class="why" style="margin-top:8px;color:var(--muted)">The statement describes a variable assessment cadence (every 5 to 60 minutes) that changes with pain intensity, which cannot be expressed as a single &#x27;N days since event&#x27; window; it also gives no defined mapping from intensity to interval.</div>
+
+</div></details>
+<details class="card refuse">
+<summary>
+<div class="head">
+<span class="id">PMC13270348:0083</span>
+<span class="badge refuse">Refused</span>
+</div>
+<blockquote>A multidimensional approach to pain assessment may be preferable but not so extensive that feasibility is compromised.</blockquote>
+</summary>
+<div class="body">
+<div class="label">Left undefined, on purpose</div>
+<div><span class="hole">has_multidimensional_approach_pain_assessment</span></div>
+<div class="why" style="margin-top:6px;color:var(--muted)">These are free variables. Until a value is supplied the verdict for this rule is <em>cannot tell</em>, not <em>compliant</em>.</div>
+<div class="label">Not encoded because</div>
+<div class="why">the sentence turns on a judgement it does not define <span class="id">(vague_predicate)</span></div>
+<div class="why" style="margin-top:8px;color:var(--muted)">The recommendation names no operationalizable threshold: &#x27;multidimensional approach&#x27; and the limit &#x27;not so extensive that feasibility is compromised&#x27; are inherently undefined, and the wording (&#x27;may be preferable&#x27;) offers rather than requires an action.</div>
+
+</div></details>
+<details class="card refuse">
+<summary>
+<div class="head">
+<span class="id">PMC13270348:0087</span>
+<span class="badge refuse">Refused</span>
+</div>
+<blockquote>We suggest that for mild to moderate pain, using the WHO ladder may be sufficient for achieving pain control in patients hospitalized with acute pancreatitis.</blockquote>
+</summary>
+<div class="body">
+<div class="label">Left undefined, on purpose</div>
+<div><span class="hole">has_mild_moderate_pain</span><span class="hole">has_ladder</span></div>
+<div class="why" style="margin-top:6px;color:var(--muted)">These are free variables. Until a value is supplied the verdict for this rule is <em>cannot tell</em>, not <em>compliant</em>.</div>
+<div class="label">Not encoded because</div>
+<div class="why">the sentence turns on a judgement it does not define <span class="id">(vague_predicate)</span></div>
+<div class="why" style="margin-top:8px;color:var(--muted)">The applicability condition rests on an unquantified pain severity band (&quot;mild to moderate pain&quot;) with no stated NRS/VAS cutoff, and the obligation is expressed as an undefined sufficiency claim (&quot;may be sufficient for achieving pain control&quot;). The available variables (has_pain, pain_control) cannot express a graded severity threshold that the source never defines; additionally the WHO ladder intervention has no bound variable in the schema.</div>
+
+</div></details>
+<details class="card refuse">
+<summary>
+<div class="head">
+<span class="id">PMC13270348:0090</span>
+<span class="badge refuse">Refused</span>
+</div>
+<blockquote>A step‐down approach may be more appropriate for severe pain in acute pancreatitis</blockquote>
+</summary>
+<div class="body">
+<div class="label">Left undefined, on purpose</div>
+<div><span class="hole">has_severe_pain</span><span class="hole">has_step_down_approach</span></div>
+<div class="why" style="margin-top:6px;color:var(--muted)">These are free variables. Until a value is supplied the verdict for this rule is <em>cannot tell</em>, not <em>compliant</em>.</div>
+<div class="label">Not encoded because</div>
+<div class="why">the sentence turns on a judgement it does not define <span class="id">(vague_predicate)</span></div>
+<div class="why" style="margin-top:8px;color:var(--muted)">The applicability condition rests on &#x27;severe pain&#x27;, which is named but has no defined threshold (no NRS/VAS cutoff given), and the recommended action &#x27;step-down approach&#x27; is likewise an undefined analgesic strategy rather than a codeable intervention. No faithful when-&gt;then encoding is possible with the available variables.</div>
+
+</div></details>
+<details class="card refuse">
+<summary>
+<div class="head">
+<span class="id">PMC13270348:0094</span>
+<span class="badge refuse">Refused</span>
+</div>
+<blockquote>We suggest using strong opioids, especially buprenorphine and pentazocine, in patients hospitalized with acute pancreatitis, as current evidence shows that they provide superior pain relief over non‐opioid medications in terms of pain control and decreased need for rescue analgesia.</blockquote>
+</summary>
+<div class="body">
+<div class="label">Left undefined, on purpose</div>
+<div><span class="hole">has_rescue_analgesia</span></div>
+<div class="why" style="margin-top:6px;color:var(--muted)">These are free variables. Until a value is supplied the verdict for this rule is <em>cannot tell</em>, not <em>compliant</em>.</div>
+<div class="label">Not encoded because</div>
+<div class="why">a clinical concept in the sentence could not be resolved to a terminology code <span class="id">(unbound_concept)</span></div>
+<div class="label">Checks that fired</div>
+<div class="caution"><code>DROPPED_CONCEPT_RISK</code> 1 concept(s) did not bind, so a strict encoding may have silently omitted them; retrying with them declared as holes</div>
+<div class="caution"><code>UNUSED_BOUND_CONCEPT</code> bound but not used in the rule: on_buprenorphine, on_non_opioid_medications, on_pentazocine -- an outcome may legitimately be unused, a dropped population restriction may not</div>
+<div class="caution"><code>UNUSED_BOUND_CONCEPT</code> bound but not used in the rule: on_buprenorphine, on_non_opioid_medications, on_pentazocine -- an outcome may legitimately be unused, a dropped clause or population restriction may not</div>
+</div></details>
+<details class="card refuse">
+<summary>
+<div class="head">
+<span class="id">PMC13270348:0110</span>
+<span class="badge refuse">Refused</span>
+</div>
+<blockquote>Patient‐controlled (intravenous) analgesia is widely used in acute pain management, but we suggest that PCA should be used with caution in the context of AP.</blockquote>
+</summary>
+<div class="body">
+<div class="label">Left undefined, on purpose</div>
+<div><span class="hole">has_used_caution</span></div>
+<div class="why" style="margin-top:6px;color:var(--muted)">These are free variables. Until a value is supplied the verdict for this rule is <em>cannot tell</em>, not <em>compliant</em>.</div>
+<div class="label">Not encoded because</div>
+<div class="why">the sentence turns on a judgement it does not define <span class="id">(vague_predicate)</span></div>
+<div class="why" style="margin-top:8px;color:var(--muted)">The recommendation says PCA should be used &#x27;with caution&#x27; in acute pancreatitis, but &#x27;with caution&#x27; has no operational definition — it specifies neither an avoidance, a dose limit, nor a defined monitoring action, so no faithful then-clause can be constructed.</div>
+<div class="label">Checks that fired</div>
+<div class="caution"><code>TERMINOLOGY_UNAVAILABLE</code> 4 terminology lookup(s) failed (transport or server error, not an absent concept), so a refusal here may not be a property of the guideline: &#x27;AP&#x27; (condition): HTTPError: HTTP Error 400: ; &#x27;ap&#x27; (condition): HTTPError: HTTP Error 400: ; &#x27;AP&#x27; (procedure): HTTPError: HTTP Error 400: ; &#x27;ap&#x27; (procedure): HTTPError: HTTP Error 400: </div>
+</div></details>
+<details class="card refuse">
+<summary>
+<div class="head">
+<span class="id">PMC13270348:0114</span>
+<span class="badge refuse">Refused</span>
+</div>
+<blockquote>The role of unconventional analgesics in the pain management in AP in terms of analgesia efficacy and improvement in patient‐reported outcomes is only experimental, and we suggest against their use for standard clinical practice.</blockquote>
+</summary>
+<div class="body">
+<div class="label">Left undefined, on purpose</div>
+<div><span class="hole">has_unconventional_analgesics</span></div>
+<div class="why" style="margin-top:6px;color:var(--muted)">These are free variables. Until a value is supplied the verdict for this rule is <em>cannot tell</em>, not <em>compliant</em>.</div>
+<div class="label">Not encoded because</div>
+<div class="why">a clinical concept in the sentence could not be resolved to a terminology code <span class="id">(unbound_concept)</span></div>
+<div class="why" style="margin-top:8px;color:var(--muted)">The recommendation targets &#x27;unconventional analgesics&#x27;, a category with no corresponding coded concept or variable in the available schema (only generic `analgesia` and `pain_management` exist). There is no way to distinguish unconventional from conventional analgesic agents, so the avoidance rule cannot be faithfully encoded.</div>
+<div class="label">Checks that fired</div>
+<div class="caution"><code>TERMINOLOGY_UNAVAILABLE</code> 4 terminology lookup(s) failed (transport or server error, not an absent concept), so a refusal here may not be a property of the guideline: &#x27;AP&#x27; (condition): HTTPError: HTTP Error 400: ; &#x27;ap&#x27; (condition): HTTPError: HTTP Error 400: ; &#x27;AP&#x27; (procedure): HTTPError: HTTP Error 400: ; &#x27;ap&#x27; (procedure): HTTPError: HTTP Error 400: </div>
+</div></details>
+<details class="card refuse">
+<summary>
+<div class="head">
+<span class="id">PMC13270348:0118</span>
+<span class="badge refuse">Refused</span>
+</div>
+<blockquote>We suggest against their use in routine clinical practice.</blockquote>
+</summary>
+<div class="body">
+<div class="label">Not encoded because</div>
+<div class="why">a clinical concept in the sentence could not be resolved to a terminology code <span class="id">(unbound_concept)</span></div>
+
+</div></details>
+<details class="card refuse">
+<summary>
+<div class="head">
+<span class="id">PMC13270348:0125</span>
+<span class="badge refuse">Refused</span>
+</div>
+<blockquote>For disease management, including pain control, it remains important that these complications are identified and treated appropriately.</blockquote>
+</summary>
+<div class="body">
+<div class="label">Left undefined, on purpose</div>
+<div><span class="hole">has_these_complications</span><span class="hole">has_treated_appropriately</span><span class="hole">has_identified</span></div>
+<div class="why" style="margin-top:6px;color:var(--muted)">These are free variables. Until a value is supplied the verdict for this rule is <em>cannot tell</em>, not <em>compliant</em>.</div>
+<div class="label">Not encoded because</div>
+<div class="why">the sentence turns on a judgement it does not define <span class="id">(vague_predicate)</span></div>
+<div class="why" style="margin-top:8px;color:var(--muted)">The statement asserts that complications should be &#x27;identified and treated appropriately&#x27; for disease management including pain control, but &#x27;these complications&#x27; is unspecified and &#x27;treated appropriately&#x27; has no defined content or threshold. There is no encodable applicability condition or concrete action beyond the single available pain_control variable.</div>
+
+</div></details>
+<details class="card refuse">
+<summary>
+<div class="head">
+<span class="id">PMC13270348:0131</span>
+<span class="badge refuse">Refused</span>
+</div>
+<blockquote>We recommend its use when local expertise is available.</blockquote>
+</summary>
+<div class="body">
+<div class="label">Not encoded because</div>
+<div class="why">a clinical concept in the sentence could not be resolved to a terminology code <span class="id">(unbound_concept)</span></div>
+
+</div></details>
+<details class="card refuse">
+<summary>
+<div class="head">
+<span class="id">PMC13270348:0136</span>
+<span class="badge refuse">Refused</span>
+</div>
+<blockquote>we suggest against its use until further high‐quality research is conducted</blockquote>
+</summary>
+<div class="body">
+<div class="label">Not encoded because</div>
+<div class="why">a clinical concept in the sentence could not be resolved to a terminology code <span class="id">(unbound_concept)</span></div>
+
+</div></details>
+<details class="card refuse">
+<summary>
+<div class="head">
+<span class="id">PMC13270348:0154</span>
+<span class="badge refuse">Refused</span>
+</div>
+<blockquote>CHM formula Chaiqin Chengqi Decoction may have positive effects on pain control and intestinal symptoms in patients with severe AP and we suggest its use.</blockquote>
+</summary>
+<div class="body">
+<div class="label">Left undefined, on purpose</div>
+<div><span class="hole">has_chm_formula_chaiqin_chengqi_decoction</span><span class="hole">has_severe_ap</span><span class="hole">has_intestinal_symptoms</span><span class="hole">has_chm</span><span class="hole">has_chaiqin_chengqi_decoction</span></div>
+<div class="why" style="margin-top:6px;color:var(--muted)">These are free variables. Until a value is supplied the verdict for this rule is <em>cannot tell</em>, not <em>compliant</em>.</div>
+<div class="label">Not encoded because</div>
+<div class="why">a clinical concept in the sentence could not be resolved to a terminology code <span class="id">(unbound_concept)</span></div>
+<div class="why" style="margin-top:8px;color:var(--muted)">The recommendation requires representing the herbal intervention Chaiqin Chengqi Decoction and the population qualifier &#x27;severe AP&#x27;, neither of which has a bindable variable or terminology code in the available schema (only has_pain exists). The applicability condition and the recommended therapy therefore cannot be faithfully expressed.</div>
+
+</div></details>
+<details class="card refuse">
+<summary>
+<div class="head">
+<span class="id">PMC13270348:0164</span>
+<span class="badge refuse">Refused</span>
+</div>
+<blockquote>Non‐opioid analgesics may be preferable due to opioid side effects on the gastrointestinal system, including slow transit, nausea, and indigestion.</blockquote>
+</summary>
+<div class="body">
+<div class="label">Not encoded because</div>
+<div class="why">the sentence needs a construct this logic does not have <span class="id">(beyond_dsl)</span></div>
+<div class="label">Checks that fired</div>
+<div class="caution"><code>UNUSED_BOUND_CONCEPT</code> bound but not used in the rule: has_indigestion, has_nausea, has_slow_transit -- an outcome may legitimately be unused, a dropped population restriction may not</div>
+</div></details>
+<details class="card refuse">
+<summary>
+<div class="head">
+<span class="id">PMC13270348:0182</span>
+<span class="badge refuse">Refused</span>
+</div>
+<blockquote>We suggest taking into consideration that sufficient pain management may increase compliance with an enhanced recovery program in patients with acute pancreatitis, especially in mild disease.</blockquote>
+</summary>
+<div class="body">
+<div class="label">Left undefined, on purpose</div>
+<div><span class="hole">has_sufficient_pain_management</span><span class="hole">has_especially_mild_disease</span><span class="hole">has_enhanced_recovery_program</span></div>
+<div class="why" style="margin-top:6px;color:var(--muted)">These are free variables. Until a value is supplied the verdict for this rule is <em>cannot tell</em>, not <em>compliant</em>.</div>
+<div class="label">Not encoded because</div>
+<div class="why">the sentence turns on a judgement it does not define <span class="id">(vague_predicate)</span></div>
+<div class="why" style="margin-top:8px;color:var(--muted)">The recommendation is an informational consideration (&#x27;taking into consideration that sufficient pain management may increase compliance&#x27;) rather than a directive action, and &#x27;sufficient pain management&#x27; has no stated definition or threshold (no analgesic target, NRS/VAS cutoff). &#x27;Especially in mild disease&#x27; also gives no encodable severity criterion.</div>
+
+</div></details>
+<details class="card refuse">
+<summary>
+<div class="head">
+<span class="id">PMC13270348:0196</span>
+<span class="badge refuse">Refused</span>
+</div>
+<blockquote>We suggest taking into account that sufficient pain relief may improve patients’ comfort, possibility to undertake physical activity, and may further reduce complications in acute pancreatitis.</blockquote>
+</summary>
+<div class="body">
+<div class="label">Left undefined, on purpose</div>
+<div><span class="hole">has_sufficient_pain_relief</span><span class="hole">has_improve_patients_comfort</span><span class="hole">has_possibility_undertake_physical_activity</span></div>
+<div class="why" style="margin-top:6px;color:var(--muted)">These are free variables. Until a value is supplied the verdict for this rule is <em>cannot tell</em>, not <em>compliant</em>.</div>
+<div class="label">Not encoded because</div>
+<div class="why">the sentence turns on a judgement it does not define <span class="id">(vague_predicate)</span></div>
+<div class="why" style="margin-top:8px;color:var(--muted)">The statement asserts a rationale (&#x27;taking into account that ... may improve ...&#x27;) rather than a concrete action, and its key predicate &#x27;sufficient pain relief&#x27; has no stated threshold (no NRS/VAS cutoff, no analgesic regimen), as do the outcome terms &#x27;improve patients&#x27; comfort&#x27; and &#x27;possibility to undertake physical activity&#x27;. Without a definition of sufficiency there is no way to determine applicability or compliance.</div>
+
 </div></details>
 <details class="card refuse">
 <summary>
@@ -172,38 +2488,43 @@ THEN may: Acupuncture</div>
 <blockquote>In children with AP, oral feeding does not significantly increase pain, and we suggest that oral feeding may be considered.</blockquote>
 </summary>
 <div class="body">
+<div class="label">Left undefined, on purpose</div>
+<div><span class="hole">has_oral_feeding</span></div>
+<div class="why" style="margin-top:6px;color:var(--muted)">These are free variables. Until a value is supplied the verdict for this rule is <em>cannot tell</em>, not <em>compliant</em>.</div>
 <div class="label">Not encoded because</div>
 <div class="why">a clinical concept in the sentence could not be resolved to a terminology code <span class="id">(unbound_concept)</span></div>
-<div class="why" style="margin-top:8px;color:var(--muted)">4 terminology lookup(s) failed to reach the server; any refusal below may be a transport failure rather than a property of the guideline: &#x27;AP&#x27; (condition): HTTPError: HTTP Error 400: ; &#x27;ap&#x27; (condition): HTTPError: HTTP Error 400: ; &#x27;AP&#x27; (procedure): HTTPError: HTTP Error 400: ; &#x27;ap&#x27; (procedure): HTTPError: HTTP Error 400: ; no terminology binding for &#x27;oral feeding&#x27; (procedure): The phrase means feeding by mouth (as opposed to enteral tube or parenteral nutrition). No candidate is &#x27;oral feeding&#x27; per se: [2]/[3] are oral tube feeding/oral feeding tube (a different, tube-based concept), [5]-[7] a</div>
+<div class="label">Checks that fired</div>
+<div class="caution"><code>TERMINOLOGY_UNAVAILABLE</code> 4 terminology lookup(s) failed (transport or server error, not an absent concept), so a refusal here may not be a property of the guideline: &#x27;AP&#x27; (condition): HTTPError: HTTP Error 400: ; &#x27;ap&#x27; (condition): HTTPError: HTTP Error 400: ; &#x27;AP&#x27; (procedure): HTTPError: HTTP Error 400: ; &#x27;ap&#x27; (procedure): HTTPError: HTTP Error 400: </div>
+</div></details>
+<details class="card refuse">
+<summary>
+<div class="head">
+<span class="id">PMC13270348:0238</span>
+<span class="badge refuse">Refused</span>
+</div>
+<blockquote>EUS can be considered to investigate the etiology of pancreatitis in patients with inconclusive imaging examinations.</blockquote>
+</summary>
+<div class="body">
+<div class="label">Not encoded because</div>
+<div class="why">the sentence needs a construct this logic does not have <span class="id">(beyond_dsl)</span></div>
 
 </div></details>
 <details class="card refuse">
 <summary>
 <div class="head">
-<span class="id">epidural-analgesia-ap</span>
+<span class="id">PMC13270348:0281</span>
 <span class="badge refuse">Refused</span>
 </div>
-<blockquote>We suggest that epidural analgesia may be considered when expertise is available, and strict aseptic techniques and close monitoring are essential.</blockquote>
+<blockquote>When opioid therapy is required, a clear follow‐up plan should be in place to minimize the risk of prolonged and harmful use.</blockquote>
 </summary>
 <div class="body">
+<div class="label">Left undefined, on purpose</div>
+<div><span class="hole">has_follow_up_plan</span><span class="hole">has_prolonged_harmful_use</span></div>
+<div class="why" style="margin-top:6px;color:var(--muted)">These are free variables. Until a value is supplied the verdict for this rule is <em>cannot tell</em>, not <em>compliant</em>.</div>
 <div class="label">Not encoded because</div>
-<div class="why">the sentence is about a service or a system, not a patient <span class="id">(not_patient_level)</span></div>
-<div class="why" style="margin-top:8px;color:var(--muted)">The applicability condition is institutional/service capability (&#x27;when expertise is available&#x27;) rather than a patient-level attribute, and it is not bound to any variable in the schema. The remaining requirements (&#x27;strict aseptic techniques&#x27;, &#x27;close monitoring are essential&#x27;) are procedural qualifiers on the intervention without stated thresholds, and the offer itself is permissive (&#x27;may be considered&#x27;), so no faithful when-&gt;then encoding is possible with the available variables.</div>
-
-</div></details>
-<details class="card refuse">
-<summary>
-<div class="head">
-<span class="id">pca-caution-ap</span>
-<span class="badge refuse">Refused</span>
-</div>
-<blockquote>we suggest that PCA should be used with caution in the context of AP</blockquote>
-</summary>
-<div class="body">
-<div class="label">Not encoded because</div>
-<div class="why">the sentence turns on a judgement it does not define <span class="id">(vague_predicate)</span></div>
-<div class="why" style="margin-top:8px;color:var(--muted)">The recommendation neither requires nor prohibits PCA in acute pancreatitis; it advises unspecified &#x27;caution&#x27;, which states no encodable threshold, dose limit, or monitoring action that could be checked against a care plan.</div>
-
+<div class="why">the sentence needs a construct this logic does not have <span class="id">(beyond_dsl)</span></div>
+<div class="label">Checks that fired</div>
+<div class="caution"><code>VACUOUS_RULE</code> NOT(when -&gt; then) is unsatisfiable: the rule forbids nothing</div>
 </div></details>
 <footer>
 <strong>What this report does not claim.</strong> A refusal is a statement this tool declined to encode &mdash; it is not a judgement about the guideline. A rule shown here typechecked and compiled; that is not the same as being clinically correct, which is what the sentence beside it is for. Statements marked <em>partial</em> carry named free variables and answer <em>cannot tell</em> until those are supplied.

@@ -244,7 +244,7 @@
     actual pipeline. Each card has sample patients you can run against it, and
     links to the full formalization report.
   </p>
-  <a class="toy-link" href="/demo/toy">Toy example: one rule, three verdicts &rarr;</a>
+  <a class="toy-link" href="/demo/toy">Toy example: one drug, three verdicts &rarr;</a>
 </header>
 
 <main id="docs">
@@ -296,39 +296,48 @@ const DOCS = [
   {
     id: "pmc12355350",
     source: "PMC12355350 \u00b7 PubMed Central open access",
-    note: "A living guideline on type 2 diabetes therapeutics. Three rules " +
-          "encoded; the refusals below are what the prose would not carry.",
-    ruleNote: "Rule PMC12355350:0049 -- a patient at higher risk (established " +
-              "CVD) should be on an SGLT-2 inhibitor or a GLP-1 receptor agonist.",
+    note: "A living guideline on type 2 diabetes therapeutics. Eleven rules " +
+          "encoded from 24 recommendations; the refusals below are what the " +
+          "prose would not carry.",
+    ruleNote: "Rule PMC12355350:0048 -- a patient at higher risk (established " +
+              "CVD and/or CKD, or heart failure) should be on an SGLT-2 " +
+              "inhibitor or a GLP-1 receptor agonist.",
     scenarios: [
       {
-        label: "CVD, on neither drug",
+        label: "Higher risk, on neither drug",
         expect: "MUST-violate",
-        body: { rule_id: "PMC12355350:0049",
-                patient: { has_cardiovascular_disease_cvd: true },
+        body: { rule_id: "PMC12355350:0048",
+                patient: { has_higher_risk: true },
                 plan: { on_sglt_2_inhibitors: false, on_glp_1_receptor_agonists: false } },
       },
       {
-        label: "CVD, on an SGLT-2 inhibitor",
+        label: "Higher risk, on an SGLT-2 inhibitor",
         expect: "CERTIFIED-compliant",
-        body: { rule_id: "PMC12355350:0049",
-                patient: { has_cardiovascular_disease_cvd: true },
+        body: { rule_id: "PMC12355350:0048",
+                patient: { has_higher_risk: true },
                 plan: { on_sglt_2_inhibitors: true } },
       },
       {
-        label: "CVD, plan says nothing about either drug",
+        label: "Higher risk, plan says nothing about either drug",
         expect: "MAY-violate",
-        body: { rule_id: "PMC12355350:0049",
-                patient: { has_cardiovascular_disease_cvd: true }, plan: {} },
+        body: { rule_id: "PMC12355350:0048",
+                patient: { has_higher_risk: true }, plan: {} },
+      },
+      {
+        label: "Not at higher risk",
+        expect: "CERTIFIED-compliant",
+        body: { rule_id: "PMC12355350:0048",
+                patient: { has_higher_risk: false }, plan: {} },
       },
     ],
   },
   {
     id: "pmc13270348",
     source: "PMC13270348 \u00b7 PubMed Central open access",
-    note: "Pain management in acute pancreatitis. Both encoded rules are " +
-          "PERMISSIONS -- the guideline offers the option rather than " +
-          "requiring it, so no patient can violate them.",
+    note: "Pain management in acute pancreatitis. 23 rules encoded from 67 " +
+          "recommendations, 17 of them PERMISSIONS -- the guideline offers " +
+          "the option rather than requiring it, so no patient can violate " +
+          "those.",
     ruleNote: "Rule PMC13270348:0159 -- acupuncture MAY be considered in acute " +
               "pancreatitis. Declining an option is not a deviation, so neither " +
               "run below can return a violation.",
@@ -346,6 +355,19 @@ const DOCS = [
         body: { rule_id: "PMC13270348:0159",
                 patient: { has_acute_pancreatitis: true },
                 plan: { acupuncture: true } },
+      },
+      {
+        label: "Acute pancreatitis, plan not yet decided",
+        expect: "OPTION-available",
+        body: { rule_id: "PMC13270348:0159",
+                patient: { has_acute_pancreatitis: true }, plan: {} },
+      },
+      {
+        label: "No acute pancreatitis -- the option does not apply",
+        expect: "OPTION-not-applicable",
+        body: { rule_id: "PMC13270348:0159",
+                patient: { has_acute_pancreatitis: false },
+                plan: { acupuncture: false } },
       },
     ],
   },
@@ -375,9 +397,12 @@ function loadDocCard(doc, meta, rules, residue) {
   const pills =
     `<span class="pill rules">${rules.length} rule${rules.length === 1 ? "" : "s"}</span>` +
     (refused ? `<span class="pill refused">${refused} refused</span>` : "");
-  // The fixture set is built in rather than stored, so there is nothing on
-  // disk to rename or delete -- it gets no tools rather than tools that fail.
-  const tools = meta.builtin ? "" : `
+  // The fixture set is built in rather than stored, and the seeded demo
+  // guidelines are permanent deployment content -- both get no tools rather
+  // than tools that would fail. A visitor should never be able to empty the
+  // demo page for everyone else, and should never need to upload anything
+  // to see it populated.
+  const tools = (meta.builtin || meta.demo) ? "" : `
       <div class="g-tools">
         <button class="g-tool" type="button" data-rename-id="${encodeURIComponent(doc.id)}"
                 data-rename-title="${esc(meta.title || doc.id)}">Rename</button>

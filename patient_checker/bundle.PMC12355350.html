@@ -112,13 +112,16 @@ details:not(.card){display:none}}
 </svg></button>
 
 <h1>PMC12355350 — formalization report</h1>
-<p class="sub">5 recommendation statement(s) &middot; generated 2026-09-04 &middot; 11 bound variable(s)</p>
-<div class="bar"><span style="width:60.0%;background:var(--ok)"></span><span style="width:0.0%;background:var(--part)"></span><span style="width:40.0%;background:var(--no)"></span></div>
-<div class="legend"><span><i class="dot" style="background:var(--ok)"></i>3 encoded</span><span><i class="dot" style="background:var(--part)"></i>0 partial &mdash; encoded with a named gap</span><span><i class="dot" style="background:var(--no)"></i>2 refused</span></div>
+<p class="sub">24 recommendation statement(s) &middot; generated 2026-09-05 &middot; 17 bound variable(s)</p>
+<div class="bar"><span style="width:29.2%;background:var(--ok)"></span><span style="width:16.7%;background:var(--part)"></span><span style="width:54.2%;background:var(--no)"></span></div>
+<div class="legend"><span><i class="dot" style="background:var(--ok)"></i>7 encoded</span><span><i class="dot" style="background:var(--part)"></i>4 partial &mdash; encoded with a named gap</span><span><i class="dot" style="background:var(--no)"></i>13 refused</span></div>
 <h2>Why statements were refused</h2>
 <table><tr><th>Reason</th><th>Meaning</th><th class="n">n</th></tr>
-<tr><td><span class="id">not_patient_level</span></td><td>the sentence is about a service or a system, not a patient</td><td class="n">1</td></tr>
-<tr><td><span class="id">unbound_concept</span></td><td>a clinical concept in the sentence could not be resolved to a terminology code</td><td class="n">1</td></tr>
+<tr><td><span class="id">unbound_concept</span></td><td>a clinical concept in the sentence could not be resolved to a terminology code</td><td class="n">4</td></tr>
+<tr><td><span class="id">defeasible</span></td><td>the guideline hedged: the action is discretionary, not required</td><td class="n">3</td></tr>
+<tr><td><span class="id">not_patient_level</span></td><td>the sentence is about a service or a system, not a patient</td><td class="n">2</td></tr>
+<tr><td><span class="id">beyond_dsl</span></td><td>the sentence needs a construct this logic does not have</td><td class="n">2</td></tr>
+<tr><td><span class="id">vague_predicate</span></td><td>the sentence turns on a judgement it does not define</td><td class="n">2</td></tr>
 </table>
 <h2>Statement by statement</h2>
 <div class="controls"><button type="button" onclick="setAll(true)">Expand all</button><button type="button" onclick="setAll(false)">Collapse all</button><span class="hint">or click any statement</span></div>
@@ -128,86 +131,1008 @@ details:not(.card){display:none}}
 <span class="id">PMC12355350:0047</span>
 <span class="badge encode">Encoded</span>
 </div>
+<blockquote>and a weak recommendation against finerenone in adults with CKD.</blockquote>
+</summary>
+<div class="body">
+<div class="label">Encoded as</div>
+<div class="rule">IF Chronic kidney disease
+THEN should (weak recommendation): NOT finerenone</div>
+<div class="why" style="margin-top:8px"><strong>Action:</strong> avoid finerenone</div>
+<div class="why" style="margin-top:4px;color:var(--muted)"><strong>Strength, as the guideline states it:</strong> weak</div>
+
+<details><summary>Show the logic and its bindings</summary>
+<div class="label">&phi; = when &rarr; then</div><div class="rule logic">has_ckd = true
+    →  on_finerenone = false</div><div class="label">What each name is bound to</div><table><tr><th>Variable</th><th>Type</th><th>Terminology</th></tr><tr><td><span class="id">has_ckd</span><br><span style="font-size:12.5px;color:var(--muted)">Chronic kidney disease</span></td><td>bool</td><td style="word-break:break-all">http://snomed.info/sct|709044004|20260801 <span class="id">(+112 codes)</span></td></tr><tr><td><span class="id">on_finerenone</span><br><span style="font-size:12.5px;color:var(--muted)">finerenone</span></td><td>bool</td><td style="word-break:break-all">http://www.nlm.nih.gov/research/umls/rxnorm|2562811|unknown</td></tr></table>
+</details>
+<details><summary>Show the executable CQL (39 lines)</summary>
+<pre>library Demopmc123553500047 version &#x27;1.0.000&#x27;
+
+using FHIR version &#x27;4.0.1&#x27;
+include FHIRHelpers version &#x27;4.0.1&#x27; called FHIRHelpers
+
+codesystem &quot;RxNorm&quot;: &#x27;http://www.nlm.nih.gov/research/umls/rxnorm&#x27;
+codesystem &quot;SNOMED&quot;: &#x27;http://snomed.info/sct&#x27;
+
+code &quot;Chronic kidney disease codes&quot;: &#x27;709044004&#x27; from &quot;SNOMED&quot; display &#x27;Chronic kidney disease&#x27;
+code &quot;Finerenone codes&quot;: &#x27;2562811&#x27; from &quot;RxNorm&quot;
+code &quot;finerenone codes&quot;: &#x27;2562811&#x27; from &quot;RxNorm&quot; display &#x27;finerenone&#x27;
+
+context Patient
+
+/* PMC12355350:0047
+   action: avoid finerenone
+   strength: weak
+   source: and a weak recommendation against finerenone in adults with CKD.
+*/
+
+define &quot;Chronic kidney disease&quot;:
+  exists ([Condition: &quot;Chronic kidney disease codes&quot;])
+define &quot;finerenone&quot;:
+  exists ([MedicationRequest: &quot;finerenone codes&quot;])
+
+define &quot;Applicable&quot;:
+  &quot;Chronic kidney disease&quot;
+
+define &quot;Satisfied&quot;:
+  not &quot;finerenone&quot;
+
+define &quot;Compliant&quot;:
+  not &quot;Applicable&quot; or &quot;Satisfied&quot;
+
+define &quot;Deontic&quot;:
+  &#x27;obligation&#x27;
+
+define &quot;Violated&quot;:
+  &quot;Applicable&quot; and not &quot;Satisfied&quot;
+</pre></details>
+</div></details>
+<details class="card encode">
+<summary>
+<div class="head">
+<span class="id">PMC12355350:0050</span>
+<span class="badge encode">Encoded</span>
+</div>
+<blockquote>Across risk strata: weak recommendation in favour of tirzepatide in adults with obesity.</blockquote>
+</summary>
+<div class="body">
+<div class="label">Encoded as</div>
+<div class="rule">IF Obesity
+THEN should (weak recommendation): tirzepatide</div>
+<div class="why" style="margin-top:8px"><strong>Action:</strong> recommend tirzepatide</div>
+<div class="why" style="margin-top:4px;color:var(--muted)"><strong>Strength, as the guideline states it:</strong> weak recommendation in favour</div>
+
+<details><summary>Show the logic and its bindings</summary>
+<div class="label">&phi; = when &rarr; then</div><div class="rule logic">has_obesity = true
+    →  on_tirzepatide = true</div><div class="label">What each name is bound to</div><table><tr><th>Variable</th><th>Type</th><th>Terminology</th></tr><tr><td><span class="id">has_obesity</span><br><span style="font-size:12.5px;color:var(--muted)">Obesity</span></td><td>bool</td><td style="word-break:break-all">http://cts.nlm.nih.gov/fhir/ValueSet|2.16.840.1.113762.1.4.1272.8|20250318 <span class="id">(+21 codes)</span></td></tr><tr><td><span class="id">on_tirzepatide</span><br><span style="font-size:12.5px;color:var(--muted)">tirzepatide</span></td><td>bool</td><td style="word-break:break-all">http://www.nlm.nih.gov/research/umls/rxnorm|2601723|unknown</td></tr></table>
+</details>
+<details><summary>Show the executable CQL (39 lines)</summary>
+<pre>library Demopmc123553500050 version &#x27;1.0.000&#x27;
+
+using FHIR version &#x27;4.0.1&#x27;
+include FHIRHelpers version &#x27;4.0.1&#x27; called FHIRHelpers
+
+codesystem &quot;RxNorm&quot;: &#x27;http://www.nlm.nih.gov/research/umls/rxnorm&#x27;
+
+valueset &quot;Obesity codes&quot;: &#x27;urn:oid:2.16.840.1.113762.1.4.1272.8&#x27; version &#x27;20250318&#x27;
+
+code &quot;Tirzepatide codes&quot;: &#x27;2601723&#x27; from &quot;RxNorm&quot;
+code &quot;tirzepatide codes&quot;: &#x27;2601723&#x27; from &quot;RxNorm&quot; display &#x27;tirzepatide&#x27;
+
+context Patient
+
+/* PMC12355350:0050
+   action: recommend tirzepatide
+   strength: weak recommendation in favour
+   source: Across risk strata: weak recommendation in favour of tirzepatide in adults with obesity.
+*/
+
+define &quot;Obesity&quot;:
+  exists ([Condition: &quot;Obesity codes&quot;])
+define &quot;tirzepatide&quot;:
+  exists ([MedicationRequest: &quot;tirzepatide codes&quot;])
+
+define &quot;Applicable&quot;:
+  &quot;Obesity&quot;
+
+define &quot;Satisfied&quot;:
+  &quot;tirzepatide&quot;
+
+define &quot;Compliant&quot;:
+  not &quot;Applicable&quot; or &quot;Satisfied&quot;
+
+define &quot;Deontic&quot;:
+  &#x27;obligation&#x27;
+
+define &quot;Violated&quot;:
+  &quot;Applicable&quot; and not &quot;Satisfied&quot;
+</pre></details>
+</div></details>
+<details class="card encode">
+<summary>
+<div class="head">
+<span class="id">PMC12355350:0120</span>
+<span class="badge encode">Encoded</span>
+</div>
+<blockquote>Adults with established heart failure may favour SGLT-2 inhibitors over alternatives.</blockquote>
+</summary>
+<div class="body">
+<div class="label">Encoded as</div>
+<div class="rule">IF Heart failure
+THEN may: SGLT2 Inhibitors</div>
+<div class="why" style="margin-top:8px"><strong>Action:</strong> recommend SGLT-2 inhibitors</div>
+
+<details><summary>Show the logic and its bindings</summary>
+<div class="label">&phi; = when &rarr; then</div><div class="rule logic">has_heart_failure = true
+    →  on_sglt_2_inhibitors = true</div><div class="label">What each name is bound to</div><table><tr><th>Variable</th><th>Type</th><th>Terminology</th></tr><tr><td><span class="id">has_heart_failure</span><br><span style="font-size:12.5px;color:var(--muted)">Heart failure</span></td><td>bool</td><td style="word-break:break-all">http://snomed.info/sct|84114007|20260801 <span class="id">(+122 codes)</span></td></tr><tr><td><span class="id">on_sglt_2_inhibitors</span><br><span style="font-size:12.5px;color:var(--muted)">SGLT2 Inhibitors</span></td><td>bool</td><td style="word-break:break-all">http://cts.nlm.nih.gov/fhir/ValueSet|2.16.840.1.113762.1.4.1178.30|20260418 <span class="id">(+110 codes)</span></td></tr></table>
+</details>
+<details><summary>Show the executable CQL (46 lines)</summary>
+<pre>library Demopmc123553500120 version &#x27;1.0.000&#x27;
+
+using FHIR version &#x27;4.0.1&#x27;
+include FHIRHelpers version &#x27;4.0.1&#x27; called FHIRHelpers
+
+codesystem &quot;SNOMED&quot;: &#x27;http://snomed.info/sct&#x27;
+
+valueset &quot;SGLT2 Inhibitors codes&quot;: &#x27;urn:oid:2.16.840.1.113762.1.4.1178.30&#x27; version &#x27;20260418&#x27;
+valueset &quot;Sglt2 Inhibitors codes&quot;: &#x27;urn:oid:2.16.840.1.113762.1.4.1178.30&#x27; version &#x27;20260418&#x27;
+
+code &quot;Heart failure codes&quot;: &#x27;84114007&#x27; from &quot;SNOMED&quot; display &#x27;Heart failure&#x27;
+
+context Patient
+
+/* PMC12355350:0120
+   action: recommend SGLT-2 inhibitors
+   source: Adults with established heart failure may favour SGLT-2 inhibitors over alternatives.
+*/
+
+define &quot;Heart failure&quot;:
+  exists ([Condition: &quot;Heart failure codes&quot;])
+define &quot;SGLT2 Inhibitors&quot;:
+  exists ([MedicationRequest: &quot;SGLT2 Inhibitors codes&quot;])
+
+define &quot;Applicable&quot;:
+  &quot;Heart failure&quot;
+
+define &quot;Satisfied&quot;:
+  &quot;SGLT2 Inhibitors&quot;
+
+define &quot;Compliant&quot;:
+  not &quot;Applicable&quot; or &quot;Satisfied&quot;
+
+define &quot;Deontic&quot;:
+  &#x27;permission&#x27;
+
+// The source PERMITS this action; it does not require it.
+// Not taking a permitted option is not a violation.
+define &quot;OptionTaken&quot;:
+  &quot;Applicable&quot; and &quot;Satisfied&quot;
+
+define &quot;OptionNotTaken&quot;:
+  &quot;Applicable&quot; and not &quot;Satisfied&quot;
+
+define &quot;Violated&quot;:
+  false
+</pre></details>
+</div></details>
+<details class="card encode">
+<summary>
+<div class="head">
+<span class="id">PMC12355350:0121</span>
+<span class="badge encode">Encoded</span>
+</div>
+<blockquote>SGLT-2 inhibitors and GLP-1 receptor agonists can be combined.</blockquote>
+</summary>
+<div class="body">
+<div class="label">Encoded as</div>
+<div class="rule">IF SGLT2 Inhibitors
+THEN may: Glucagon-like peptide 1 receptor agonist-containing product</div>
+<div class="why" style="margin-top:8px"><strong>Action:</strong> recommend GLP-1 receptor agonist in combination with SGLT-2 inhibitor</div>
+
+<details><summary>Show the logic and its bindings</summary>
+<div class="label">&phi; = when &rarr; then</div><div class="rule logic">on_sglt_2_inhibitors = true
+    →  on_glp_1_receptor_agonists = true</div><div class="label">What each name is bound to</div><table><tr><th>Variable</th><th>Type</th><th>Terminology</th></tr><tr><td><span class="id">on_glp_1_receptor_agonists</span><br><span style="font-size:12.5px;color:var(--muted)">Glucagon-like peptide 1 receptor agonist-containing product</span></td><td>bool</td><td style="word-break:break-all">http://snomed.info/sct|416636000|20260801 <span class="id">(+45 codes)</span></td></tr><tr><td><span class="id">on_sglt_2_inhibitors</span><br><span style="font-size:12.5px;color:var(--muted)">SGLT2 Inhibitors</span></td><td>bool</td><td style="word-break:break-all">http://cts.nlm.nih.gov/fhir/ValueSet|2.16.840.1.113762.1.4.1178.30|20260418 <span class="id">(+110 codes)</span></td></tr></table>
+</details>
+<details><summary>Show the executable CQL (47 lines)</summary>
+<pre>library Demopmc123553500121 version &#x27;1.0.000&#x27;
+
+using FHIR version &#x27;4.0.1&#x27;
+include FHIRHelpers version &#x27;4.0.1&#x27; called FHIRHelpers
+
+codesystem &quot;ATC&quot;: &#x27;http://www.whocc.no/atc&#x27;
+
+valueset &quot;SGLT2 Inhibitors codes&quot;: &#x27;urn:oid:2.16.840.1.113762.1.4.1178.30&#x27; version &#x27;20260418&#x27;
+valueset &quot;Sglt2 Inhibitors codes&quot;: &#x27;urn:oid:2.16.840.1.113762.1.4.1178.30&#x27; version &#x27;20260418&#x27;
+
+code &quot;GLP-1 Receptor Agonist codes&quot;: &#x27;N0000178480&#x27; from &quot;ATC&quot; display &#x27;GLP-1 Receptor Agonist&#x27;
+code &quot;Glp-1 Receptor Agonist codes&quot;: &#x27;N0000178480&#x27; from &quot;ATC&quot;
+
+context Patient
+
+/* PMC12355350:0121
+   action: recommend GLP-1 receptor agonist in combination with SGLT-2 inhibitor
+   source: SGLT-2 inhibitors and GLP-1 receptor agonists can be combined.
+*/
+
+define &quot;GLP-1 Receptor Agonist&quot;:
+  exists ([MedicationRequest: &quot;GLP-1 Receptor Agonist codes&quot;])
+define &quot;SGLT2 Inhibitors&quot;:
+  exists ([MedicationRequest: &quot;SGLT2 Inhibitors codes&quot;])
+
+define &quot;Applicable&quot;:
+  &quot;SGLT2 Inhibitors&quot;
+
+define &quot;Satisfied&quot;:
+  &quot;GLP-1 Receptor Agonist&quot;
+
+define &quot;Compliant&quot;:
+  not &quot;Applicable&quot; or &quot;Satisfied&quot;
+
+define &quot;Deontic&quot;:
+  &#x27;permission&#x27;
+
+// The source PERMITS this action; it does not require it.
+// Not taking a permitted option is not a violation.
+define &quot;OptionTaken&quot;:
+  &quot;Applicable&quot; and &quot;Satisfied&quot;
+
+define &quot;OptionNotTaken&quot;:
+  &quot;Applicable&quot; and not &quot;Satisfied&quot;
+
+define &quot;Violated&quot;:
+  false
+</pre></details>
+</div></details>
+<details class="card encode">
+<summary>
+<div class="head">
+<span class="id">PMC12355350:0127</span>
+<span class="badge encode">Encoded</span>
+</div>
+<blockquote>Tirzepatide should not be given in combination with GLP-1 receptor agonists, but can be combined with SGLT-2 inhibitors and finerenone.</blockquote>
+</summary>
+<div class="body">
+<div class="label">Encoded as</div>
+<div class="rule">IF tirzepatide
+THEN must: NOT Glucagon-like peptide 1 receptor agonist-containing product</div>
+<div class="why" style="margin-top:8px"><strong>Action:</strong> avoid GLP-1 receptor agonists</div>
+<div class="label">Checks that fired</div>
+<div class="caution"><code>UNUSED_BOUND_CONCEPT</code> bound but not used in the rule: on_finerenone, on_sglt_2_inhibitors -- an outcome may legitimately be unused, a dropped population restriction may not</div>
+<details><summary>Show the logic and its bindings</summary>
+<div class="label">&phi; = when &rarr; then</div><div class="rule logic">on_tirzepatide = true
+    →  on_glp_1_receptor_agonists = false</div><div class="label">What each name is bound to</div><table><tr><th>Variable</th><th>Type</th><th>Terminology</th></tr><tr><td><span class="id">on_glp_1_receptor_agonists</span><br><span style="font-size:12.5px;color:var(--muted)">Glucagon-like peptide 1 receptor agonist-containing product</span></td><td>bool</td><td style="word-break:break-all">http://snomed.info/sct|416636000|20260801 <span class="id">(+45 codes)</span></td></tr><tr><td><span class="id">on_tirzepatide</span><br><span style="font-size:12.5px;color:var(--muted)">tirzepatide</span></td><td>bool</td><td style="word-break:break-all">http://www.nlm.nih.gov/research/umls/rxnorm|2601723|unknown</td></tr></table>
+</details>
+<details><summary>Show the executable CQL (48 lines)</summary>
+<pre>library Demopmc123553500127 version &#x27;1.0.000&#x27;
+
+using FHIR version &#x27;4.0.1&#x27;
+include FHIRHelpers version &#x27;4.0.1&#x27; called FHIRHelpers
+
+codesystem &quot;RxNorm&quot;: &#x27;http://www.nlm.nih.gov/research/umls/rxnorm&#x27;
+codesystem &quot;SNOMED&quot;: &#x27;http://snomed.info/sct&#x27;
+
+valueset &quot;SGLT2 Inhibitors codes&quot;: &#x27;urn:oid:2.16.840.1.113762.1.4.1178.30&#x27; version &#x27;20260418&#x27;
+valueset &quot;Sglt2 Inhibitors codes&quot;: &#x27;urn:oid:2.16.840.1.113762.1.4.1178.30&#x27; version &#x27;20260418&#x27;
+
+code &quot;Finerenone codes&quot;: &#x27;2562811&#x27; from &quot;RxNorm&quot;
+code &quot;Glucagon-Like Peptide 1 Receptor Agonist-Containing Product codes&quot;: &#x27;416636000&#x27; from &quot;SNOMED&quot;
+code &quot;Glucagon-like peptide 1 receptor agonist-containing product codes&quot;: &#x27;416636000&#x27; from &quot;SNOMED&quot; display &#x27;Glucagon-like peptide 1 receptor agonist-containing product&#x27;
+code &quot;Tirzepatide codes&quot;: &#x27;2601723&#x27; from &quot;RxNorm&quot;
+code &quot;finerenone codes&quot;: &#x27;2562811&#x27; from &quot;RxNorm&quot; display &#x27;finerenone&#x27;
+code &quot;tirzepatide codes&quot;: &#x27;2601723&#x27; from &quot;RxNorm&quot; display &#x27;tirzepatide&#x27;
+
+context Patient
+
+/* PMC12355350:0127
+   action: avoid GLP-1 receptor agonists
+   source: Tirzepatide should not be given in combination with GLP-1 receptor agonists, but can be combined with SGLT-2 inhibitors and finerenone.
+*/
+
+define &quot;finerenone&quot;:
+  exists ([MedicationRequest: &quot;finerenone codes&quot;])
+define &quot;Glucagon-like peptide 1 receptor agonist-containing product&quot;:
+  exists ([MedicationRequest: &quot;Glucagon-like peptide 1 receptor agonist-containing product codes&quot;])
+define &quot;SGLT2 Inhibitors&quot;:
+  exists ([MedicationRequest: &quot;SGLT2 Inhibitors codes&quot;])
+define &quot;tirzepatide&quot;:
+  exists ([MedicationRequest: &quot;tirzepatide codes&quot;])
+
+define &quot;Applicable&quot;:
+  &quot;tirzepatide&quot;
+
+define &quot;Satisfied&quot;:
+  not &quot;Glucagon-like peptide 1 receptor agonist-containing product&quot;
+
+define &quot;Compliant&quot;:
+  not &quot;Applicable&quot; or &quot;Satisfied&quot;
+
+define &quot;Deontic&quot;:
+  &#x27;obligation&#x27;
+
+define &quot;Violated&quot;:
+  &quot;Applicable&quot; and not &quot;Satisfied&quot;
+</pre></details>
+</div></details>
+<details class="card encode">
+<summary>
+<div class="head">
+<span class="id">PMC12355350:0131</span>
+<span class="badge encode">Encoded</span>
+</div>
+<blockquote>If replacing a GLP-1 receptor agonist with tirzepatide, initiation or continuation of an SGLT-2 inhibitor is indicated.</blockquote>
+</summary>
+<div class="body">
+<div class="label">Encoded as</div>
+<div class="rule">IF GLP-1 Receptor Agonist AND tirzepatide
+THEN must: SGLT2 Inhibitors</div>
+<div class="why" style="margin-top:8px"><strong>Action:</strong> recommend SGLT-2 inhibitor</div>
+
+<details><summary>Show the logic and its bindings</summary>
+<div class="label">&phi; = when &rarr; then</div><div class="rule logic">on_glp_1_receptor_agonist = true ∧ on_tirzepatide = true
+    →  on_sglt_2_inhibitor = true</div><div class="label">What each name is bound to</div><table><tr><th>Variable</th><th>Type</th><th>Terminology</th></tr><tr><td><span class="id">on_glp_1_receptor_agonist</span><br><span style="font-size:12.5px;color:var(--muted)">GLP-1 Receptor Agonist</span></td><td>bool</td><td style="word-break:break-all">http://www.whocc.no/atc|N0000178480</td></tr><tr><td><span class="id">on_sglt_2_inhibitor</span><br><span style="font-size:12.5px;color:var(--muted)">SGLT2 Inhibitors</span></td><td>bool</td><td style="word-break:break-all">http://cts.nlm.nih.gov/fhir/ValueSet|2.16.840.1.113762.1.4.1178.30|20260418 <span class="id">(+110 codes)</span></td></tr><tr><td><span class="id">on_tirzepatide</span><br><span style="font-size:12.5px;color:var(--muted)">tirzepatide</span></td><td>bool</td><td style="word-break:break-all">http://www.nlm.nih.gov/research/umls/rxnorm|2601723|unknown</td></tr></table>
+</details>
+<details><summary>Show the executable CQL (45 lines)</summary>
+<pre>library Demopmc123553500131 version &#x27;1.0.000&#x27;
+
+using FHIR version &#x27;4.0.1&#x27;
+include FHIRHelpers version &#x27;4.0.1&#x27; called FHIRHelpers
+
+codesystem &quot;ATC&quot;: &#x27;http://www.whocc.no/atc&#x27;
+codesystem &quot;RxNorm&quot;: &#x27;http://www.nlm.nih.gov/research/umls/rxnorm&#x27;
+
+valueset &quot;SGLT2 Inhibitors codes&quot;: &#x27;urn:oid:2.16.840.1.113762.1.4.1178.30&#x27; version &#x27;20260418&#x27;
+valueset &quot;Sglt2 Inhibitors codes&quot;: &#x27;urn:oid:2.16.840.1.113762.1.4.1178.30&#x27; version &#x27;20260418&#x27;
+
+code &quot;GLP-1 Receptor Agonist codes&quot;: &#x27;N0000178480&#x27; from &quot;ATC&quot; display &#x27;GLP-1 Receptor Agonist&#x27;
+code &quot;Glp-1 Receptor Agonist codes&quot;: &#x27;N0000178480&#x27; from &quot;ATC&quot;
+code &quot;Tirzepatide codes&quot;: &#x27;2601723&#x27; from &quot;RxNorm&quot;
+code &quot;tirzepatide codes&quot;: &#x27;2601723&#x27; from &quot;RxNorm&quot; display &#x27;tirzepatide&#x27;
+
+context Patient
+
+/* PMC12355350:0131
+   action: recommend SGLT-2 inhibitor
+   source: If replacing a GLP-1 receptor agonist with tirzepatide, initiation or continuation of an SGLT-2 inhibitor is indicated.
+*/
+
+define &quot;GLP-1 Receptor Agonist&quot;:
+  exists ([MedicationRequest: &quot;GLP-1 Receptor Agonist codes&quot;])
+define &quot;SGLT2 Inhibitors&quot;:
+  exists ([MedicationRequest: &quot;SGLT2 Inhibitors codes&quot;])
+define &quot;tirzepatide&quot;:
+  exists ([MedicationRequest: &quot;tirzepatide codes&quot;])
+
+define &quot;Applicable&quot;:
+  (&quot;GLP-1 Receptor Agonist&quot;
+  and &quot;tirzepatide&quot;)
+
+define &quot;Satisfied&quot;:
+  &quot;SGLT2 Inhibitors&quot;
+
+define &quot;Compliant&quot;:
+  not &quot;Applicable&quot; or &quot;Satisfied&quot;
+
+define &quot;Deontic&quot;:
+  &#x27;obligation&#x27;
+
+define &quot;Violated&quot;:
+  &quot;Applicable&quot; and not &quot;Satisfied&quot;
+</pre></details>
+</div></details>
+<details class="card encode">
+<summary>
+<div class="head">
+<span class="id">PMC12355350:0141</span>
+<span class="badge encode">Encoded</span>
+</div>
+<blockquote>For adults prioritising initiation of tirzepatide over GLP-1 receptor agonist therapy due to larger weight loss effects, initiation or continuation of an SGLT-2 inhibitor is indicated.</blockquote>
+</summary>
+<div class="body">
+<div class="label">Encoded as</div>
+<div class="rule">IF tirzepatide
+THEN must: SGLT2 Inhibitors</div>
+<div class="why" style="margin-top:8px"><strong>Action:</strong> recommend SGLT-2 inhibitor</div>
+<div class="why" style="margin-top:4px;color:var(--muted)"><strong>Strength, as the guideline states it:</strong> indicated</div>
+<div class="label">Checks that fired</div>
+<div class="caution"><code>UNUSED_BOUND_CONCEPT</code> bound but not used in the rule: has_weight_loss, on_glp_1_receptor_agonist -- an outcome may legitimately be unused, a dropped population restriction may not</div>
+<details><summary>Show the logic and its bindings</summary>
+<div class="label">&phi; = when &rarr; then</div><div class="rule logic">on_tirzepatide = true
+    →  on_sglt_2_inhibitor = true</div><div class="label">What each name is bound to</div><table><tr><th>Variable</th><th>Type</th><th>Terminology</th></tr><tr><td><span class="id">on_sglt_2_inhibitor</span><br><span style="font-size:12.5px;color:var(--muted)">SGLT2 Inhibitors</span></td><td>bool</td><td style="word-break:break-all">http://cts.nlm.nih.gov/fhir/ValueSet|2.16.840.1.113762.1.4.1178.30|20260418 <span class="id">(+110 codes)</span></td></tr><tr><td><span class="id">on_tirzepatide</span><br><span style="font-size:12.5px;color:var(--muted)">tirzepatide</span></td><td>bool</td><td style="word-break:break-all">http://www.nlm.nih.gov/research/umls/rxnorm|2601723|unknown</td></tr></table>
+</details>
+<details><summary>Show the executable CQL (49 lines)</summary>
+<pre>library Demopmc123553500141 version &#x27;1.0.000&#x27;
+
+using FHIR version &#x27;4.0.1&#x27;
+include FHIRHelpers version &#x27;4.0.1&#x27; called FHIRHelpers
+
+codesystem &quot;ATC&quot;: &#x27;http://www.whocc.no/atc&#x27;
+codesystem &quot;RxNorm&quot;: &#x27;http://www.nlm.nih.gov/research/umls/rxnorm&#x27;
+codesystem &quot;SNOMED&quot;: &#x27;http://snomed.info/sct&#x27;
+
+valueset &quot;SGLT2 Inhibitors codes&quot;: &#x27;urn:oid:2.16.840.1.113762.1.4.1178.30&#x27; version &#x27;20260418&#x27;
+valueset &quot;Sglt2 Inhibitors codes&quot;: &#x27;urn:oid:2.16.840.1.113762.1.4.1178.30&#x27; version &#x27;20260418&#x27;
+
+code &quot;GLP-1 Receptor Agonist codes&quot;: &#x27;N0000178480&#x27; from &quot;ATC&quot; display &#x27;GLP-1 Receptor Agonist&#x27;
+code &quot;Glp-1 Receptor Agonist codes&quot;: &#x27;N0000178480&#x27; from &quot;ATC&quot;
+code &quot;Tirzepatide codes&quot;: &#x27;2601723&#x27; from &quot;RxNorm&quot;
+code &quot;Weight loss codes&quot;: &#x27;816160009&#x27; from &quot;SNOMED&quot; display &#x27;Weight loss&#x27;
+code &quot;tirzepatide codes&quot;: &#x27;2601723&#x27; from &quot;RxNorm&quot; display &#x27;tirzepatide&#x27;
+
+context Patient
+
+/* PMC12355350:0141
+   action: recommend SGLT-2 inhibitor
+   strength: indicated
+   source: For adults prioritising initiation of tirzepatide over GLP-1 receptor agonist therapy due to larger weight loss effects, initiation or continuation of an SGLT-2 inhibitor is indicated.
+*/
+
+define &quot;Weight loss&quot;:
+  exists ([Condition: &quot;Weight loss codes&quot;])
+define &quot;GLP-1 Receptor Agonist&quot;:
+  exists ([MedicationRequest: &quot;GLP-1 Receptor Agonist codes&quot;])
+define &quot;SGLT2 Inhibitors&quot;:
+  exists ([MedicationRequest: &quot;SGLT2 Inhibitors codes&quot;])
+define &quot;tirzepatide&quot;:
+  exists ([MedicationRequest: &quot;tirzepatide codes&quot;])
+
+define &quot;Applicable&quot;:
+  &quot;tirzepatide&quot;
+
+define &quot;Satisfied&quot;:
+  &quot;SGLT2 Inhibitors&quot;
+
+define &quot;Compliant&quot;:
+  not &quot;Applicable&quot; or &quot;Satisfied&quot;
+
+define &quot;Deontic&quot;:
+  &#x27;obligation&#x27;
+
+define &quot;Violated&quot;:
+  &quot;Applicable&quot; and not &quot;Satisfied&quot;
+</pre></details>
+</div></details>
+<details class="card partial">
+<summary>
+<div class="head">
+<span class="id">PMC12355350:0045</span>
+<span class="badge partial">Partial</span>
+</div>
 <blockquote>• Lower risk (three or fewer cardiovascular risk factors without established cardiovascular disease (CVD) or chronic kidney disease (CKD)): weak recommendation against SGLT-2 inhibitors or GLP-1 receptor agonists.</blockquote>
 </summary>
 <div class="body">
 <div class="label">Encoded as</div>
 <div class="rule">IF three or fewer cardiovascular risk factors AND NOT CVD - cardiovascular disease AND NOT Chronic kidney disease
-THEN should (weak recommendation): NOT SGLT2 Inhibitors AND NOT GLP-1 Receptor Agonist</div>
+THEN should (weak recommendation): NOT SGLT2 Inhibitors AND NOT Glucagon-like peptide 1 receptor agonist-containing product</div>
 <div class="why" style="margin-top:8px"><strong>Action:</strong> avoid SGLT-2 inhibitors or GLP-1 receptor agonists</div>
-<div class="why" style="margin-top:4px;color:var(--muted)"><strong>Strength, as the guideline states it:</strong> weak recommendation against</div>
-
+<div class="why" style="margin-top:4px;color:var(--muted)"><strong>Strength, as the guideline states it:</strong> weak</div>
+<div class="label">Left undefined, on purpose</div>
+<div><span class="hole">has_three_fewer_cardiovascular_risk_factors</span></div>
+<div class="why" style="margin-top:6px;color:var(--muted)">These are free variables. Until a value is supplied the verdict for this rule is <em>cannot tell</em>, not <em>compliant</em>.</div>
+<div class="label">Checks that fired</div>
+<div class="caution"><code>PARTIAL_ENCODING</code> encoded with 1 free variable(s): has_three_fewer_cardiovascular_risk_factors</div>
 <details><summary>Show the logic and its bindings</summary>
 <div class="label">&phi; = when &rarr; then</div><div class="rule logic">has_three_fewer_cardiovascular_risk_factors = true ∧ has_cardiovascular_disease_cvd = false ∧ has_chronic_kidney_disease_ckd = false
-    →  on_sglt_2_inhibitors = false ∧ on_glp_1_receptor_agonists = false</div><div class="label">What each name is bound to</div><table><tr><th>Variable</th><th>Type</th><th>Terminology</th></tr><tr><td><span class="id">has_cardiovascular_disease_cvd</span><br><span style="font-size:12.5px;color:var(--muted)">CVD - cardiovascular disease</span></td><td>bool</td><td style="word-break:break-all">http://snomed.info/sct|49601007|20260801 <span class="id">(+500 codes)</span></td></tr><tr><td><span class="id">has_chronic_kidney_disease_ckd</span><br><span style="font-size:12.5px;color:var(--muted)">Chronic kidney disease</span></td><td>bool</td><td style="word-break:break-all">http://snomed.info/sct|709044004|20260801 <span class="id">(+112 codes)</span></td></tr><tr><td><span class="id">has_three_fewer_cardiovascular_risk_factors</span><br><span style="font-size:12.5px;color:var(--muted)">three or fewer cardiovascular risk factors</span></td><td>bool</td><td style="word-break:break-all"><em style="color:var(--part)">left free &mdash; no code</em></td></tr><tr><td><span class="id">on_glp_1_receptor_agonists</span><br><span style="font-size:12.5px;color:var(--muted)">GLP-1 Receptor Agonist</span></td><td>bool</td><td style="word-break:break-all">http://www.whocc.no/atc|N0000178480</td></tr><tr><td><span class="id">on_sglt_2_inhibitors</span><br><span style="font-size:12.5px;color:var(--muted)">SGLT2 Inhibitors</span></td><td>bool</td><td style="word-break:break-all">http://cts.nlm.nih.gov/fhir/ValueSet|2.16.840.1.113762.1.4.1178.30|20260418 <span class="id">(+110 codes)</span></td></tr></table>
+    →  on_sglt_2_inhibitors = false ∧ on_glp_1_receptor_agonists = false</div><div class="label">What each name is bound to</div><table><tr><th>Variable</th><th>Type</th><th>Terminology</th></tr><tr><td><span class="id">has_cardiovascular_disease_cvd</span><br><span style="font-size:12.5px;color:var(--muted)">CVD - cardiovascular disease</span></td><td>bool</td><td style="word-break:break-all">http://snomed.info/sct|49601007|20260801 <span class="id">(+500 codes)</span></td></tr><tr><td><span class="id">has_chronic_kidney_disease_ckd</span><br><span style="font-size:12.5px;color:var(--muted)">Chronic kidney disease</span></td><td>bool</td><td style="word-break:break-all">http://snomed.info/sct|709044004|20260801 <span class="id">(+112 codes)</span></td></tr><tr><td><span class="id">has_three_fewer_cardiovascular_risk_factors</span><br><span style="font-size:12.5px;color:var(--muted)">three or fewer cardiovascular risk factors</span></td><td>bool</td><td style="word-break:break-all"><em style="color:var(--part)">left free &mdash; no code</em></td></tr><tr><td><span class="id">on_glp_1_receptor_agonists</span><br><span style="font-size:12.5px;color:var(--muted)">Glucagon-like peptide 1 receptor agonist-containing product</span></td><td>bool</td><td style="word-break:break-all">http://snomed.info/sct|416636000|20260801 <span class="id">(+45 codes)</span></td></tr><tr><td><span class="id">on_sglt_2_inhibitors</span><br><span style="font-size:12.5px;color:var(--muted)">SGLT2 Inhibitors</span></td><td>bool</td><td style="word-break:break-all">http://cts.nlm.nih.gov/fhir/ValueSet|2.16.840.1.113762.1.4.1178.30|20260418 <span class="id">(+110 codes)</span></td></tr></table>
 </details>
+<details><summary>Show the executable CQL (58 lines)</summary>
+<pre>library Demopmc123553500045 version &#x27;1.0.000&#x27;
+
+using FHIR version &#x27;4.0.1&#x27;
+include FHIRHelpers version &#x27;4.0.1&#x27; called FHIRHelpers
+
+codesystem &quot;SNOMED&quot;: &#x27;http://snomed.info/sct&#x27;
+
+valueset &quot;SGLT2 Inhibitors codes&quot;: &#x27;urn:oid:2.16.840.1.113762.1.4.1178.30&#x27; version &#x27;20260418&#x27;
+valueset &quot;Sglt2 Inhibitors codes&quot;: &#x27;urn:oid:2.16.840.1.113762.1.4.1178.30&#x27; version &#x27;20260418&#x27;
+
+code &quot;CVD - cardiovascular disease codes&quot;: &#x27;49601007&#x27; from &quot;SNOMED&quot; display &#x27;CVD - cardiovascular disease&#x27;
+code &quot;Chronic kidney disease codes&quot;: &#x27;709044004&#x27; from &quot;SNOMED&quot; display &#x27;Chronic kidney disease&#x27;
+code &quot;Glucagon-Like Peptide 1 Receptor Agonist-Containing Product codes&quot;: &#x27;416636000&#x27; from &quot;SNOMED&quot;
+code &quot;Glucagon-like peptide 1 receptor agonist-containing product codes&quot;: &#x27;416636000&#x27; from &quot;SNOMED&quot; display &#x27;Glucagon-like peptide 1 receptor agonist-containing product&#x27;
+
+context Patient
+
+/* PMC12355350:0045
+   action: avoid SGLT-2 inhibitors or GLP-1 receptor agonists
+   strength: weak
+   source: • Lower risk (three or fewer cardiovascular risk factors without established cardiovascular disease (CVD) or chronic kidney disease (CKD)): weak recommendation against SGLT-2 inhibitors or GLP-1 receptor agonists.
+   PARTIAL: 2 unbound predicate(s) left null: has_cardiovascular_risk_factors, has_three_fewer_cardiovascular_risk_factors
+*/
+
+define &quot;CVD - cardiovascular disease&quot;:
+  exists ([Condition: &quot;CVD - cardiovascular disease codes&quot;])
+// UNBOUND: the source states this predicate but does not define it.
+// Left null so CQL&#x27;s three-valued logic propagates the uncertainty.
+define &quot;cardiovascular risk factors&quot;:
+  null as Boolean
+define &quot;Chronic kidney disease&quot;:
+  exists ([Condition: &quot;Chronic kidney disease codes&quot;])
+// UNBOUND: the source states this predicate but does not define it.
+// Left null so CQL&#x27;s three-valued logic propagates the uncertainty.
+define &quot;three or fewer cardiovascular risk factors&quot;:
+  null as Boolean
+define &quot;Glucagon-like peptide 1 receptor agonist-containing product&quot;:
+  exists ([MedicationRequest: &quot;Glucagon-like peptide 1 receptor agonist-containing product codes&quot;])
+define &quot;SGLT2 Inhibitors&quot;:
+  exists ([MedicationRequest: &quot;SGLT2 Inhibitors codes&quot;])
+
+define &quot;Applicable&quot;:
+  (&quot;three or fewer cardiovascular risk factors&quot;
+  and not &quot;CVD - cardiovascular disease&quot;
+  and not &quot;Chronic kidney disease&quot;)
+
+define &quot;Satisfied&quot;:
+  (not &quot;SGLT2 Inhibitors&quot;
+  and not &quot;Glucagon-like peptide 1 receptor agonist-containing product&quot;)
+
+define &quot;Compliant&quot;:
+  not &quot;Applicable&quot; or &quot;Satisfied&quot;
+
+define &quot;Deontic&quot;:
+  &#x27;obligation&#x27;
+
+define &quot;Violated&quot;:
+  &quot;Applicable&quot; and not &quot;Satisfied&quot;
+</pre></details>
 </div></details>
-<details class="card encode">
+<details class="card partial">
 <summary>
 <div class="head">
-<span class="id">PMC12355350:0048</span>
-<span class="badge encode">Encoded</span>
+<span class="id">PMC12355350:0046</span>
+<span class="badge partial">Partial</span>
 </div>
 <blockquote>• Moderate risk (more than three cardiovascular risk factors without established CVD or CKD; or established CVD and/or CKD at lower risk of complications): weak recommendation in favour of SGLT-2 inhibitors or GLP-1 receptor agonists; and a weak recommendation against finerenone in adults with CKD.</blockquote>
 </summary>
 <div class="body">
 <div class="label">Encoded as</div>
-<div class="rule">IF (more than three cardiovascular risk factors AND NOT CVD - cardiovascular disease AND NOT Chronic kidney disease) OR (CVD - cardiovascular disease AND at lower risk of complications) OR (Chronic kidney disease AND at lower risk of complications)
-THEN should (weak recommendation): SGLT2 Inhibitors OR GLP-1 Receptor Agonist</div>
+<div class="rule">IF more than three cardiovascular risk factors OR at lower risk of complications
+THEN should (weak recommendation): SGLT2 Inhibitors OR Glucagon-like peptide 1 receptor agonist-containing product</div>
 <div class="why" style="margin-top:8px"><strong>Action:</strong> recommend SGLT-2 inhibitors or GLP-1 receptor agonists</div>
 <div class="why" style="margin-top:4px;color:var(--muted)"><strong>Strength, as the guideline states it:</strong> weak</div>
-
+<div class="label">Left undefined, on purpose</div>
+<div><span class="hole">has_lower_risk_complications</span><span class="hole">has_more_than_three_cardiovascular_risk</span></div>
+<div class="why" style="margin-top:6px;color:var(--muted)">These are free variables. Until a value is supplied the verdict for this rule is <em>cannot tell</em>, not <em>compliant</em>.</div>
+<div class="label">Checks that fired</div>
+<div class="caution"><code>UNUSED_BOUND_CONCEPT</code> bound but not used in the rule: has_ckd, has_cvd, on_finerenone -- an outcome may legitimately be unused, a dropped clause or population restriction may not</div>
+<div class="caution"><code>PARTIAL_ENCODING</code> encoded with 2 free variable(s): has_lower_risk_complications, has_more_than_three_cardiovascular_risk</div>
 <details><summary>Show the logic and its bindings</summary>
-<div class="label">&phi; = when &rarr; then</div><div class="rule logic">(has_more_than_three_cardiovascular_risk = true ∧ has_cardiovascular_disease_cvd = false ∧ has_chronic_kidney_disease_ckd = false) ∨ (has_cardiovascular_disease_cvd = true ∧ has_lower_risk_complications = true) ∨ (has_chronic_kidney_disease_ckd = true ∧ has_lower_risk_complications = true)
-    →  on_sglt_2_inhibitors = true ∨ on_glp_1_receptor_agonists = true</div><div class="label">What each name is bound to</div><table><tr><th>Variable</th><th>Type</th><th>Terminology</th></tr><tr><td><span class="id">has_cardiovascular_disease_cvd</span><br><span style="font-size:12.5px;color:var(--muted)">CVD - cardiovascular disease</span></td><td>bool</td><td style="word-break:break-all">http://snomed.info/sct|49601007|20260801 <span class="id">(+500 codes)</span></td></tr><tr><td><span class="id">has_chronic_kidney_disease_ckd</span><br><span style="font-size:12.5px;color:var(--muted)">Chronic kidney disease</span></td><td>bool</td><td style="word-break:break-all">http://snomed.info/sct|709044004|20260801 <span class="id">(+112 codes)</span></td></tr><tr><td><span class="id">has_lower_risk_complications</span><br><span style="font-size:12.5px;color:var(--muted)">at lower risk of complications</span></td><td>bool</td><td style="word-break:break-all"><em style="color:var(--part)">left free &mdash; no code</em></td></tr><tr><td><span class="id">has_more_than_three_cardiovascular_risk</span><br><span style="font-size:12.5px;color:var(--muted)">more than three cardiovascular risk factors</span></td><td>bool</td><td style="word-break:break-all"><em style="color:var(--part)">left free &mdash; no code</em></td></tr><tr><td><span class="id">on_glp_1_receptor_agonists</span><br><span style="font-size:12.5px;color:var(--muted)">GLP-1 Receptor Agonist</span></td><td>bool</td><td style="word-break:break-all">http://www.whocc.no/atc|N0000178480</td></tr><tr><td><span class="id">on_sglt_2_inhibitors</span><br><span style="font-size:12.5px;color:var(--muted)">SGLT2 Inhibitors</span></td><td>bool</td><td style="word-break:break-all">http://cts.nlm.nih.gov/fhir/ValueSet|2.16.840.1.113762.1.4.1178.30|20260418 <span class="id">(+110 codes)</span></td></tr></table>
+<div class="label">&phi; = when &rarr; then</div><div class="rule logic">has_more_than_three_cardiovascular_risk = true ∨ has_lower_risk_complications = true
+    →  on_sglt_2_inhibitors = true ∨ on_glp_1_receptor_agonists = true</div><div class="label">What each name is bound to</div><table><tr><th>Variable</th><th>Type</th><th>Terminology</th></tr><tr><td><span class="id">has_lower_risk_complications</span><br><span style="font-size:12.5px;color:var(--muted)">at lower risk of complications</span></td><td>bool</td><td style="word-break:break-all"><em style="color:var(--part)">left free &mdash; no code</em></td></tr><tr><td><span class="id">has_more_than_three_cardiovascular_risk</span><br><span style="font-size:12.5px;color:var(--muted)">more than three cardiovascular risk factors</span></td><td>bool</td><td style="word-break:break-all"><em style="color:var(--part)">left free &mdash; no code</em></td></tr><tr><td><span class="id">on_glp_1_receptor_agonists</span><br><span style="font-size:12.5px;color:var(--muted)">Glucagon-like peptide 1 receptor agonist-containing product</span></td><td>bool</td><td style="word-break:break-all">http://snomed.info/sct|416636000|20260801 <span class="id">(+45 codes)</span></td></tr><tr><td><span class="id">on_sglt_2_inhibitors</span><br><span style="font-size:12.5px;color:var(--muted)">SGLT2 Inhibitors</span></td><td>bool</td><td style="word-break:break-all">http://cts.nlm.nih.gov/fhir/ValueSet|2.16.840.1.113762.1.4.1178.30|20260418 <span class="id">(+110 codes)</span></td></tr></table>
 </details>
+<details><summary>Show the executable CQL (66 lines)</summary>
+<pre>library Demopmc123553500046 version &#x27;1.0.000&#x27;
+
+using FHIR version &#x27;4.0.1&#x27;
+include FHIRHelpers version &#x27;4.0.1&#x27; called FHIRHelpers
+
+codesystem &quot;RxNorm&quot;: &#x27;http://www.nlm.nih.gov/research/umls/rxnorm&#x27;
+codesystem &quot;SNOMED&quot;: &#x27;http://snomed.info/sct&#x27;
+
+valueset &quot;SGLT2 Inhibitors codes&quot;: &#x27;urn:oid:2.16.840.1.113762.1.4.1178.30&#x27; version &#x27;20260418&#x27;
+valueset &quot;Sglt2 Inhibitors codes&quot;: &#x27;urn:oid:2.16.840.1.113762.1.4.1178.30&#x27; version &#x27;20260418&#x27;
+
+code &quot;Cardiovascular disease codes&quot;: &#x27;49601007&#x27; from &quot;SNOMED&quot; display &#x27;Cardiovascular disease&#x27;
+code &quot;Chronic kidney disease codes&quot;: &#x27;709044004&#x27; from &quot;SNOMED&quot; display &#x27;Chronic kidney disease&#x27;
+code &quot;Finerenone codes&quot;: &#x27;2562811&#x27; from &quot;RxNorm&quot;
+code &quot;Glucagon-Like Peptide 1 Receptor Agonist-Containing Product codes&quot;: &#x27;416636000&#x27; from &quot;SNOMED&quot;
+code &quot;Glucagon-like peptide 1 receptor agonist-containing product codes&quot;: &#x27;416636000&#x27; from &quot;SNOMED&quot; display &#x27;Glucagon-like peptide 1 receptor agonist-containing product&#x27;
+code &quot;finerenone codes&quot;: &#x27;2562811&#x27; from &quot;RxNorm&quot; display &#x27;finerenone&#x27;
+
+context Patient
+
+/* PMC12355350:0046
+   action: recommend SGLT-2 inhibitors or GLP-1 receptor agonists
+   strength: weak
+   source: • Moderate risk (more than three cardiovascular risk factors without established CVD or CKD; or established CVD and/or CKD at lower risk of complications): weak recommendation in favour of SGLT-2 inhibitors or GLP-1 receptor agonists; and a weak recommendation against finerenone in adults with CKD.
+   PARTIAL: 3 unbound predicate(s) left null: has_cardiovascular_risk_factors, has_lower_risk_complications, has_more_than_three_cardiovascular_risk
+*/
+
+// UNBOUND: the source states this predicate but does not define it.
+// Left null so CQL&#x27;s three-valued logic propagates the uncertainty.
+define &quot;cardiovascular risk factors&quot;:
+  null as Boolean
+define &quot;Chronic kidney disease&quot;:
+  exists ([Condition: &quot;Chronic kidney disease codes&quot;])
+define &quot;Cardiovascular disease&quot;:
+  exists ([Condition: &quot;Cardiovascular disease codes&quot;])
+// UNBOUND: the source states this predicate but does not define it.
+// Left null so CQL&#x27;s three-valued logic propagates the uncertainty.
+define &quot;at lower risk of complications&quot;:
+  null as Boolean
+// UNBOUND: the source states this predicate but does not define it.
+// Left null so CQL&#x27;s three-valued logic propagates the uncertainty.
+define &quot;more than three cardiovascular risk factors&quot;:
+  null as Boolean
+define &quot;finerenone&quot;:
+  exists ([MedicationRequest: &quot;finerenone codes&quot;])
+define &quot;Glucagon-like peptide 1 receptor agonist-containing product&quot;:
+  exists ([MedicationRequest: &quot;Glucagon-like peptide 1 receptor agonist-containing product codes&quot;])
+define &quot;SGLT2 Inhibitors&quot;:
+  exists ([MedicationRequest: &quot;SGLT2 Inhibitors codes&quot;])
+
+define &quot;Applicable&quot;:
+  (&quot;more than three cardiovascular risk factors&quot;
+  or &quot;at lower risk of complications&quot;)
+
+define &quot;Satisfied&quot;:
+  (&quot;SGLT2 Inhibitors&quot;
+  or &quot;Glucagon-like peptide 1 receptor agonist-containing product&quot;)
+
+define &quot;Compliant&quot;:
+  not &quot;Applicable&quot; or &quot;Satisfied&quot;
+
+define &quot;Deontic&quot;:
+  &#x27;obligation&#x27;
+
+define &quot;Violated&quot;:
+  &quot;Applicable&quot; and not &quot;Satisfied&quot;
+</pre></details>
 </div></details>
-<details class="card encode">
+<details class="card partial">
 <summary>
 <div class="head">
-<span class="id">PMC12355350:0049</span>
-<span class="badge encode">Encoded</span>
+<span class="id">PMC12355350:0048</span>
+<span class="badge partial">Partial</span>
 </div>
 <blockquote>• Higher risk (established CVD and/or CKD at higher risk of complications, or established heart failure): strong recommendation in favour of SGLT-2 inhibitors or GLP-1 receptor agonists; and a weak recommendation in favour of finerenone in adults with CKD.</blockquote>
 </summary>
 <div class="body">
 <div class="label">Encoded as</div>
-<div class="rule">IF CVD - cardiovascular disease OR (Chronic kidney disease AND at higher risk of complications) OR Heart failure
-THEN must (strong recommendation): SGLT2 Inhibitors OR GLP-1 Receptor Agonist</div>
+<div class="rule">IF Higher risk
+THEN must (strong recommendation): SGLT2 Inhibitors OR Glucagon-like peptide 1 receptor agonist-containing product</div>
 <div class="why" style="margin-top:8px"><strong>Action:</strong> recommend SGLT-2 inhibitors or GLP-1 receptor agonists</div>
 <div class="why" style="margin-top:4px;color:var(--muted)"><strong>Strength, as the guideline states it:</strong> strong recommendation in favour</div>
-
+<div class="label">Left undefined, on purpose</div>
+<div><span class="hole">has_higher_risk</span></div>
+<div class="why" style="margin-top:6px;color:var(--muted)">These are free variables. Until a value is supplied the verdict for this rule is <em>cannot tell</em>, not <em>compliant</em>.</div>
+<div class="label">Checks that fired</div>
+<div class="caution"><code>UNUSED_BOUND_CONCEPT</code> bound but not used in the rule: has_ckd, has_cvd, has_heart_failure, on_finerenone -- an outcome may legitimately be unused, a dropped clause or population restriction may not</div>
+<div class="caution"><code>PARTIAL_ENCODING</code> encoded with 1 free variable(s): has_higher_risk</div>
 <details><summary>Show the logic and its bindings</summary>
-<div class="label">&phi; = when &rarr; then</div><div class="rule logic">has_cardiovascular_disease_cvd = true ∨ (has_chronic_kidney_disease_ckd = true ∧ has_higher_risk_complications = true) ∨ has_heart_failure = true
-    →  on_sglt_2_inhibitors = true ∨ on_glp_1_receptor_agonists = true</div><div class="label">What each name is bound to</div><table><tr><th>Variable</th><th>Type</th><th>Terminology</th></tr><tr><td><span class="id">has_cardiovascular_disease_cvd</span><br><span style="font-size:12.5px;color:var(--muted)">CVD - cardiovascular disease</span></td><td>bool</td><td style="word-break:break-all">http://snomed.info/sct|49601007|20260801 <span class="id">(+500 codes)</span></td></tr><tr><td><span class="id">has_chronic_kidney_disease_ckd</span><br><span style="font-size:12.5px;color:var(--muted)">Chronic kidney disease</span></td><td>bool</td><td style="word-break:break-all">http://snomed.info/sct|709044004|20260801 <span class="id">(+112 codes)</span></td></tr><tr><td><span class="id">has_heart_failure</span><br><span style="font-size:12.5px;color:var(--muted)">Heart failure</span></td><td>bool</td><td style="word-break:break-all">http://snomed.info/sct|84114007|20260801 <span class="id">(+122 codes)</span></td></tr><tr><td><span class="id">has_higher_risk_complications</span><br><span style="font-size:12.5px;color:var(--muted)">at higher risk of complications</span></td><td>bool</td><td style="word-break:break-all"><em style="color:var(--part)">left free &mdash; no code</em></td></tr><tr><td><span class="id">on_glp_1_receptor_agonists</span><br><span style="font-size:12.5px;color:var(--muted)">GLP-1 Receptor Agonist</span></td><td>bool</td><td style="word-break:break-all">http://www.whocc.no/atc|N0000178480</td></tr><tr><td><span class="id">on_sglt_2_inhibitors</span><br><span style="font-size:12.5px;color:var(--muted)">SGLT2 Inhibitors</span></td><td>bool</td><td style="word-break:break-all">http://cts.nlm.nih.gov/fhir/ValueSet|2.16.840.1.113762.1.4.1178.30|20260418 <span class="id">(+110 codes)</span></td></tr></table>
+<div class="label">&phi; = when &rarr; then</div><div class="rule logic">has_higher_risk = true
+    →  on_sglt_2_inhibitors = true ∨ on_glp_1_receptor_agonists = true</div><div class="label">What each name is bound to</div><table><tr><th>Variable</th><th>Type</th><th>Terminology</th></tr><tr><td><span class="id">has_higher_risk</span><br><span style="font-size:12.5px;color:var(--muted)">Higher risk</span></td><td>bool</td><td style="word-break:break-all"><em style="color:var(--part)">left free &mdash; no code</em></td></tr><tr><td><span class="id">on_glp_1_receptor_agonists</span><br><span style="font-size:12.5px;color:var(--muted)">Glucagon-like peptide 1 receptor agonist-containing product</span></td><td>bool</td><td style="word-break:break-all">http://snomed.info/sct|416636000|20260801 <span class="id">(+45 codes)</span></td></tr><tr><td><span class="id">on_sglt_2_inhibitors</span><br><span style="font-size:12.5px;color:var(--muted)">SGLT2 Inhibitors</span></td><td>bool</td><td style="word-break:break-all">http://cts.nlm.nih.gov/fhir/ValueSet|2.16.840.1.113762.1.4.1178.30|20260418 <span class="id">(+110 codes)</span></td></tr></table>
 </details>
+<details><summary>Show the executable CQL (64 lines)</summary>
+<pre>library Demopmc123553500048 version &#x27;1.0.000&#x27;
+
+using FHIR version &#x27;4.0.1&#x27;
+include FHIRHelpers version &#x27;4.0.1&#x27; called FHIRHelpers
+
+codesystem &quot;RxNorm&quot;: &#x27;http://www.nlm.nih.gov/research/umls/rxnorm&#x27;
+codesystem &quot;SNOMED&quot;: &#x27;http://snomed.info/sct&#x27;
+
+valueset &quot;SGLT2 Inhibitors codes&quot;: &#x27;urn:oid:2.16.840.1.113762.1.4.1178.30&#x27; version &#x27;20260418&#x27;
+valueset &quot;Sglt2 Inhibitors codes&quot;: &#x27;urn:oid:2.16.840.1.113762.1.4.1178.30&#x27; version &#x27;20260418&#x27;
+
+code &quot;Cardiovascular disease codes&quot;: &#x27;49601007&#x27; from &quot;SNOMED&quot; display &#x27;Cardiovascular disease&#x27;
+code &quot;Chronic kidney disease codes&quot;: &#x27;709044004&#x27; from &quot;SNOMED&quot; display &#x27;Chronic kidney disease&#x27;
+code &quot;Finerenone codes&quot;: &#x27;2562811&#x27; from &quot;RxNorm&quot;
+code &quot;Glucagon-Like Peptide 1 Receptor Agonist-Containing Product codes&quot;: &#x27;416636000&#x27; from &quot;SNOMED&quot;
+code &quot;Glucagon-like peptide 1 receptor agonist-containing product codes&quot;: &#x27;416636000&#x27; from &quot;SNOMED&quot; display &#x27;Glucagon-like peptide 1 receptor agonist-containing product&#x27;
+code &quot;Heart failure codes&quot;: &#x27;84114007&#x27; from &quot;SNOMED&quot; display &#x27;Heart failure&#x27;
+code &quot;finerenone codes&quot;: &#x27;2562811&#x27; from &quot;RxNorm&quot; display &#x27;finerenone&#x27;
+
+context Patient
+
+/* PMC12355350:0048
+   action: recommend SGLT-2 inhibitors or GLP-1 receptor agonists
+   strength: strong recommendation in favour
+   source: • Higher risk (established CVD and/or CKD at higher risk of complications, or established heart failure): strong recommendation in favour of SGLT-2 inhibitors or GLP-1 receptor agonists; and a weak recommendation in favour of finerenone in adults with CKD.
+   PARTIAL: 2 unbound predicate(s) left null: has_higher_risk, has_higher_risk_complications
+*/
+
+define &quot;Chronic kidney disease&quot;:
+  exists ([Condition: &quot;Chronic kidney disease codes&quot;])
+define &quot;Cardiovascular disease&quot;:
+  exists ([Condition: &quot;Cardiovascular disease codes&quot;])
+define &quot;Heart failure&quot;:
+  exists ([Condition: &quot;Heart failure codes&quot;])
+// UNBOUND: the source states this predicate but does not define it.
+// Left null so CQL&#x27;s three-valued logic propagates the uncertainty.
+define &quot;Higher risk&quot;:
+  null as Boolean
+// UNBOUND: the source states this predicate but does not define it.
+// Left null so CQL&#x27;s three-valued logic propagates the uncertainty.
+define &quot;at higher risk of complications&quot;:
+  null as Boolean
+define &quot;finerenone&quot;:
+  exists ([MedicationRequest: &quot;finerenone codes&quot;])
+define &quot;Glucagon-like peptide 1 receptor agonist-containing product&quot;:
+  exists ([MedicationRequest: &quot;Glucagon-like peptide 1 receptor agonist-containing product codes&quot;])
+define &quot;SGLT2 Inhibitors&quot;:
+  exists ([MedicationRequest: &quot;SGLT2 Inhibitors codes&quot;])
+
+define &quot;Applicable&quot;:
+  &quot;Higher risk&quot;
+
+define &quot;Satisfied&quot;:
+  (&quot;SGLT2 Inhibitors&quot;
+  or &quot;Glucagon-like peptide 1 receptor agonist-containing product&quot;)
+
+define &quot;Compliant&quot;:
+  not &quot;Applicable&quot; or &quot;Satisfied&quot;
+
+define &quot;Deontic&quot;:
+  &#x27;obligation&#x27;
+
+define &quot;Violated&quot;:
+  &quot;Applicable&quot; and not &quot;Satisfied&quot;
+</pre></details>
+</div></details>
+<details class="card partial">
+<summary>
+<div class="head">
+<span class="id">PMC12355350:0130</span>
+<span class="badge partial">Partial</span>
+</div>
+<blockquote>In adults at higher risk of cardiovascular and kidney complications, tirzepatide should generally not replace medications effective in reducing the risk of these complications. If replacing a GLP-1 receptor agonist with tirzepatide, initiation or continuation of an SGLT-2 inhibitor is indicated.</blockquote>
+</summary>
+<div class="body">
+<div class="label">Encoded as</div>
+<div class="rule">IF cardiovascular and kidney complications AND tirzepatide AND NOT GLP-1 Receptor Agonist
+THEN must: SGLT2 Inhibitors</div>
+<div class="why" style="margin-top:8px"><strong>Action:</strong> recommend SGLT-2 inhibitor initiation or continuation</div>
+<div class="label">Left undefined, on purpose</div>
+<div><span class="hole">has_cardiovascular_kidney_complications</span></div>
+<div class="why" style="margin-top:6px;color:var(--muted)">These are free variables. Until a value is supplied the verdict for this rule is <em>cannot tell</em>, not <em>compliant</em>.</div>
+<div class="label">Checks that fired</div>
+<div class="caution"><code>DROPPED_CONCEPT_RISK</code> 1 concept(s) did not bind, so a strict encoding may have silently omitted them; retrying with them declared as holes</div>
+<div class="caution"><code>PARTIAL_ENCODING</code> encoded with 1 free variable(s): has_cardiovascular_kidney_complications</div>
+<details><summary>Show the logic and its bindings</summary>
+<div class="label">&phi; = when &rarr; then</div><div class="rule logic">has_cardiovascular_kidney_complications = true ∧ on_tirzepatide = true ∧ on_glp_1_receptor_agonist = false
+    →  on_sglt_2_inhibitor = true</div><div class="label">What each name is bound to</div><table><tr><th>Variable</th><th>Type</th><th>Terminology</th></tr><tr><td><span class="id">has_cardiovascular_kidney_complications</span><br><span style="font-size:12.5px;color:var(--muted)">cardiovascular and kidney complications</span></td><td>bool</td><td style="word-break:break-all"><em style="color:var(--part)">left free &mdash; no code</em></td></tr><tr><td><span class="id">on_glp_1_receptor_agonist</span><br><span style="font-size:12.5px;color:var(--muted)">GLP-1 Receptor Agonist</span></td><td>bool</td><td style="word-break:break-all">http://www.whocc.no/atc|N0000178480</td></tr><tr><td><span class="id">on_sglt_2_inhibitor</span><br><span style="font-size:12.5px;color:var(--muted)">SGLT2 Inhibitors</span></td><td>bool</td><td style="word-break:break-all">http://cts.nlm.nih.gov/fhir/ValueSet|2.16.840.1.113762.1.4.1178.30|20260418 <span class="id">(+110 codes)</span></td></tr><tr><td><span class="id">on_tirzepatide</span><br><span style="font-size:12.5px;color:var(--muted)">tirzepatide</span></td><td>bool</td><td style="word-break:break-all">http://www.nlm.nih.gov/research/umls/rxnorm|2601723|unknown</td></tr></table>
+</details>
+<details><summary>Show the executable CQL (51 lines)</summary>
+<pre>library Demopmc123553500130 version &#x27;1.0.000&#x27;
+
+using FHIR version &#x27;4.0.1&#x27;
+include FHIRHelpers version &#x27;4.0.1&#x27; called FHIRHelpers
+
+codesystem &quot;ATC&quot;: &#x27;http://www.whocc.no/atc&#x27;
+codesystem &quot;RxNorm&quot;: &#x27;http://www.nlm.nih.gov/research/umls/rxnorm&#x27;
+
+valueset &quot;SGLT2 Inhibitors codes&quot;: &#x27;urn:oid:2.16.840.1.113762.1.4.1178.30&#x27; version &#x27;20260418&#x27;
+valueset &quot;Sglt2 Inhibitors codes&quot;: &#x27;urn:oid:2.16.840.1.113762.1.4.1178.30&#x27; version &#x27;20260418&#x27;
+
+code &quot;GLP-1 Receptor Agonist codes&quot;: &#x27;N0000178480&#x27; from &quot;ATC&quot; display &#x27;GLP-1 Receptor Agonist&#x27;
+code &quot;Glp-1 Receptor Agonist codes&quot;: &#x27;N0000178480&#x27; from &quot;ATC&quot;
+code &quot;Tirzepatide codes&quot;: &#x27;2601723&#x27; from &quot;RxNorm&quot;
+code &quot;tirzepatide codes&quot;: &#x27;2601723&#x27; from &quot;RxNorm&quot; display &#x27;tirzepatide&#x27;
+
+context Patient
+
+/* PMC12355350:0130
+   action: recommend SGLT-2 inhibitor initiation or continuation
+   source: In adults at higher risk of cardiovascular and kidney complications, tirzepatide should generally not replace medications effective in reducing the risk of these complications. If replacing a GLP-1 receptor agonist with tirzepatide, initiation or continuation of an SGLT-2 inhibitor is indicated.
+   PARTIAL: 1 unbound predicate(s) left null: has_cardiovascular_kidney_complications
+*/
+
+// UNBOUND: the source states this predicate but does not define it.
+// Left null so CQL&#x27;s three-valued logic propagates the uncertainty.
+define &quot;cardiovascular and kidney complications&quot;:
+  null as Boolean
+define &quot;GLP-1 Receptor Agonist&quot;:
+  exists ([MedicationRequest: &quot;GLP-1 Receptor Agonist codes&quot;])
+define &quot;SGLT2 Inhibitors&quot;:
+  exists ([MedicationRequest: &quot;SGLT2 Inhibitors codes&quot;])
+define &quot;tirzepatide&quot;:
+  exists ([MedicationRequest: &quot;tirzepatide codes&quot;])
+
+define &quot;Applicable&quot;:
+  (&quot;cardiovascular and kidney complications&quot;
+  and &quot;tirzepatide&quot;
+  and not &quot;GLP-1 Receptor Agonist&quot;)
+
+define &quot;Satisfied&quot;:
+  &quot;SGLT2 Inhibitors&quot;
+
+define &quot;Compliant&quot;:
+  not &quot;Applicable&quot; or &quot;Satisfied&quot;
+
+define &quot;Deontic&quot;:
+  &#x27;obligation&#x27;
+
+define &quot;Violated&quot;:
+  &quot;Applicable&quot; and not &quot;Satisfied&quot;
+</pre></details>
 </div></details>
 <details class="card refuse">
 <summary>
 <div class="head">
-<span class="id">PMC12355350:0124</span>
+<span class="id">PMC12355350:0062</span>
 <span class="badge refuse">Refused</span>
 </div>
-<blockquote>Understanding the recommendation—Given the benefit on overall survival (high certainty evidence), important benefits on cardiovascular and kidney outcomes (moderate to high certainty evidence), and taking into account risk of harms (moderate certainty evidence) and treatment burdens, all or almost all higher risk patients with established disease were anticipated to be inclined to accept treatment; this justified a strong recommendation in favour.</blockquote>
+<blockquote>When considering which risk group is appropriate for an individual patient, users of the guideline should first consider whether they have established CVD or CKD.</blockquote>
+</summary>
+<div class="body">
+<div class="label">Left undefined, on purpose</div>
+<div><span class="hole">has_risk_group_appropriate</span></div>
+<div class="why" style="margin-top:6px;color:var(--muted)">These are free variables. Until a value is supplied the verdict for this rule is <em>cannot tell</em>, not <em>compliant</em>.</div>
+<div class="label">Not encoded because</div>
+<div class="why">the sentence is about a service or a system, not a patient <span class="id">(not_patient_level)</span></div>
+<div class="why" style="margin-top:8px;color:var(--muted)">This is meta-guidance addressed to &#x27;users of the guideline&#x27; about how to apply the risk-stratification scheme, not a statement about what care an individual patient should receive. It specifies no action on a patient&#x27;s care plan.</div>
+
+</div></details>
+<details class="card refuse">
+<summary>
+<div class="head">
+<span class="id">PMC12355350:0068</span>
+<span class="badge refuse">Refused</span>
+</div>
+<blockquote>Adults with CKD may be classified based on eGFR and degree of albuminuria based on the KDIGO classification (supplement 2).</blockquote>
+</summary>
+<div class="body">
+<div class="label">Not encoded because</div>
+<div class="why">the sentence needs a construct this logic does not have <span class="id">(beyond_dsl)</span></div>
+<div class="why" style="margin-top:8px;color:var(--muted)">This statement describes how to interpret/classify existing results (staging CKD by eGFR and albuminuria per the KDIGO table) rather than prescribing an action for the patient&#x27;s care plan; it has no when -&gt; then action structure expressible in the DSL.</div>
+
+</div></details>
+<details class="card refuse">
+<summary>
+<div class="head">
+<span class="id">PMC12355350:0069</span>
+<span class="badge refuse">Refused</span>
+</div>
+<blockquote>For patients with established CVD, clinicians should rely on gestalt or one of several publicly available prognostic models (supplement 3) to assess a patient&#x27;s risk of cardiovascular and kidney complications.</blockquote>
+</summary>
+<div class="body">
+<div class="label">Left undefined, on purpose</div>
+<div><span class="hole">has_gestalt</span><span class="hole">has_risk_cardiovascular_kidney_complications</span><span class="hole">has_cardiovascular_kidney_complications</span></div>
+<div class="why" style="margin-top:6px;color:var(--muted)">These are free variables. Until a value is supplied the verdict for this rule is <em>cannot tell</em>, not <em>compliant</em>.</div>
+<div class="label">Not encoded because</div>
+<div class="why">the sentence turns on a judgement it does not define <span class="id">(vague_predicate)</span></div>
+<div class="why" style="margin-top:8px;color:var(--muted)">The recommendation directs clinicians to assess risk using &#x27;gestalt&#x27; or an unspecified choice among &#x27;one of several publicly available prognostic models&#x27;, neither of which has a definable threshold or operationalizable criterion for a care plan check.</div>
+
+</div></details>
+<details class="card refuse">
+<summary>
+<div class="head">
+<span class="id">PMC12355350:0071</span>
+<span class="badge refuse">Refused</span>
+</div>
+<blockquote>Decision makers should additionally consider the presence (or absence) of factors such as: history of myocardial infarction, coronary intervention, ischaemic heart disease, heart failure, cerebrovascular disease, peripheral vascular disease, or atrial fibrillation; older age; male sex; cardiovascular risk factors (summarised above); and kidney function.</blockquote>
+</summary>
+<div class="body">
+<div class="label">Left undefined, on purpose</div>
+<div><span class="hole">has_older_age</span><span class="hole">has_cardiovascular_risk_factors_summarised_above</span><span class="hole">has_kidney_function</span></div>
+<div class="why" style="margin-top:6px;color:var(--muted)">These are free variables. Until a value is supplied the verdict for this rule is <em>cannot tell</em>, not <em>compliant</em>.</div>
+<div class="label">Not encoded because</div>
+<div class="why">the sentence needs a construct this logic does not have <span class="id">(beyond_dsl)</span></div>
+<div class="why" style="margin-top:8px;color:var(--muted)">This statement is meta-guidance about what decision makers should weigh when deliberating, not a conditional linking a patient state to a required care-plan action. It names a list of factors to &#x27;consider&#x27; with no threshold, direction, or action, so it cannot be expressed as when -&gt; then.</div>
+<div class="label">Checks that fired</div>
+<div class="caution"><code>REGISTRY_TRUNCATED</code> 1 of 3 holes dropped to keep the decoding grammar compilable</div>
+</div></details>
+<details class="card refuse">
+<summary>
+<div class="head">
+<span class="id">PMC12355350:0074</span>
+<span class="badge refuse">Refused</span>
+</div>
+<blockquote>Beyond this, clinicians may consider a specific patient’s risk of cardiovascular and kidney complications for more individualised decision making.</blockquote>
+</summary>
+<div class="body">
+<div class="label">Left undefined, on purpose</div>
+<div><span class="hole">has_risk_cardiovascular_kidney_complications</span><span class="hole">has_more_individualised_decision_making</span><span class="hole">has_kidney_complications</span></div>
+<div class="why" style="margin-top:6px;color:var(--muted)">These are free variables. Until a value is supplied the verdict for this rule is <em>cannot tell</em>, not <em>compliant</em>.</div>
+<div class="label">Not encoded because</div>
+<div class="why">the sentence turns on a judgement it does not define <span class="id">(vague_predicate)</span></div>
+<div class="why" style="margin-top:8px;color:var(--muted)">The recommendation offers no defined threshold or action: it points to a patient&#x27;s &#x27;risk of cardiovascular and kidney complications&#x27; for &#x27;more individualised decision making&#x27;, neither of which is operationalised as a codable predicate or care-plan action. It is also permissive (&#x27;may consider&#x27;) with no specified target.</div>
+
+</div></details>
+<details class="card refuse">
+<summary>
+<div class="head">
+<span class="id">PMC12355350:0082</span>
+<span class="badge refuse">Refused</span>
+</div>
+<blockquote>When applying this evidence and related recommendations to an individual, users should consider the proportional effect on weight anticipated and apply this to the individual’s body weight.</blockquote>
+</summary>
+<div class="body">
+<div class="label">Left undefined, on purpose</div>
+<div><span class="hole">has_proportional_effect_weight_anticipated</span></div>
+<div class="why" style="margin-top:6px;color:var(--muted)">These are free variables. Until a value is supplied the verdict for this rule is <em>cannot tell</em>, not <em>compliant</em>.</div>
+<div class="label">Not encoded because</div>
+<div class="why">the sentence is about a service or a system, not a patient <span class="id">(not_patient_level)</span></div>
+<div class="why" style="margin-top:8px;color:var(--muted)">This is meta-guidance to users about how to interpret and apply the evidence and recommendations (scaling a proportional weight effect to an individual&#x27;s body weight), not a statement about what care an individual patient should receive. It has no encodable applicability condition or care-plan action.</div>
+
+</div></details>
+<details class="card refuse">
+<summary>
+<div class="head">
+<span class="id">PMC12355350:0085</span>
+<span class="badge refuse">Refused</span>
+</div>
+<blockquote>Users should generally prioritise medications for which a strong recommendation in favour of use is provided for the relevant risk stratum, followed by medications for which a weak or conditional recommendation in favour is provided.</blockquote>
 </summary>
 <div class="body">
 <div class="label">Not encoded because</div>
 <div class="why">a clinical concept in the sentence could not be resolved to a terminology code <span class="id">(unbound_concept)</span></div>
-<div class="why" style="margin-top:8px;color:var(--muted)">no clinical concept in the statement resolved to a code</div>
 
 </div></details>
 <details class="card refuse">
 <summary>
 <div class="head">
-<span class="id">values-preferences-01</span>
+<span class="id">PMC12355350:0086</span>
 <span class="badge refuse">Refused</span>
 </div>
-<blockquote>The panel accordingly made judgments regarding the values and preferences of typical well-informed patients with diabetes</blockquote>
+<blockquote>When faced with multiple recommended alternatives, choice of medications should be contextual, tailored to the individual and informed by shared decision making.</blockquote>
 </summary>
 <div class="body">
 <div class="label">Not encoded because</div>
-<div class="why">the sentence is about a service or a system, not a patient <span class="id">(not_patient_level)</span></div>
-<div class="why" style="margin-top:8px;color:var(--muted)">This passage reports patient preference research and panel judgments about typical values and preferences, plus guideline update scheduling. It states no actionable patient-level recommendation, and its qualifiers are unquantifiable.</div>
+<div class="why">a clinical concept in the sentence could not be resolved to a terminology code <span class="id">(unbound_concept)</span></div>
+
+</div></details>
+<details class="card refuse">
+<summary>
+<div class="head">
+<span class="id">PMC12355350:0091</span>
+<span class="badge refuse">Refused</span>
+</div>
+<blockquote>Clinicians and patients may choose to avoid combining candidate medications in certain contexts, including where the additive burden of administration or additive harms of treatment are substantial, or where additive benefits are not anticipated to be substantial.</blockquote>
+</summary>
+<div class="body">
+<div class="label">Not encoded because</div>
+<div class="why">a clinical concept in the sentence could not be resolved to a terminology code <span class="id">(unbound_concept)</span></div>
+
+</div></details>
+<details class="card refuse">
+<summary>
+<div class="head">
+<span class="id">PMC12355350:0093</span>
+<span class="badge refuse">Refused</span>
+</div>
+<blockquote>Adults already taking medications with gastrointestinal side effects (such as metformin) may choose to avoid adding in other drugs with similar side effects (such as GLP-1 receptor agonists) if the cumulative risk of gastrointestinal events exceeds anticipated benefits or is perceived as being too large a harm overall.</blockquote>
+</summary>
+<div class="body">
+<div class="label">Left undefined, on purpose</div>
+<div><span class="hole">has_gastrointestinal_side_effects</span></div>
+<div class="why" style="margin-top:6px;color:var(--muted)">These are free variables. Until a value is supplied the verdict for this rule is <em>cannot tell</em>, not <em>compliant</em>.</div>
+<div class="label">Not encoded because</div>
+<div class="why">the guideline hedged: the action is discretionary, not required <span class="id">(defeasible)</span></div>
+<div class="why" style="margin-top:8px;color:var(--muted)">The recommendation is explicitly permissive and preference-sensitive (&#x27;may choose to avoid&#x27;), hinging on an undefined subjective weighing of cumulative risk versus anticipated benefit; its force is optional by design and the threshold is undefined.</div>
+
+</div></details>
+<details class="card refuse">
+<summary>
+<div class="head">
+<span class="id">PMC12355350:0098</span>
+<span class="badge refuse">Refused</span>
+</div>
+<blockquote>Patients should ideally be involved in shared decision making.</blockquote>
+</summary>
+<div class="body">
+<div class="label">Not encoded because</div>
+<div class="why">a clinical concept in the sentence could not be resolved to a terminology code <span class="id">(unbound_concept)</span></div>
+
+</div></details>
+<details class="card refuse">
+<summary>
+<div class="head">
+<span class="id">PMC12355350:0111</span>
+<span class="badge refuse">Refused</span>
+</div>
+<blockquote>When choosing between alternatives, patients should consider the relative impact of specific cardiovascular and kidney benefits and reduction in body weight offered by both medications.</blockquote>
+</summary>
+<div class="body">
+<div class="label">Left undefined, on purpose</div>
+<div><span class="hole">has_alternatives</span><span class="hole">has_both_medications</span><span class="hole">has_kidney</span></div>
+<div class="why" style="margin-top:6px;color:var(--muted)">These are free variables. Until a value is supplied the verdict for this rule is <em>cannot tell</em>, not <em>compliant</em>.</div>
+<div class="label">Not encoded because</div>
+<div class="why">the guideline hedged: the action is discretionary, not required <span class="id">(defeasible)</span></div>
+<div class="why" style="margin-top:8px;color:var(--muted)">This is preference-sensitive shared decision-making guidance: patients weigh the relative importance of cardiovascular, kidney, and weight benefits when choosing between agents. No specific applicability condition or required care-plan action can be derived; the force is deliberative rather than obligatory.</div>
+
+</div></details>
+<details class="card refuse">
+<summary>
+<div class="head">
+<span class="id">PMC12355350:0128</span>
+<span class="badge refuse">Refused</span>
+</div>
+<blockquote>When choosing between GLP-1 receptor agonists and tirzepatide, decision makers should weigh the higher certainty of cardiovascular and kidney benefits (offered by GLP-1 receptor agonists) against larger weight loss benefits (offered by tirzepatide).</blockquote>
+</summary>
+<div class="body">
+<div class="label">Not encoded because</div>
+<div class="why">the guideline hedged: the action is discretionary, not required <span class="id">(defeasible)</span></div>
+<div class="why" style="margin-top:8px;color:var(--muted)">The statement asks decision makers to weigh competing benefits when choosing between two agents rather than requiring any specific action for a defined patient population. It is a preference-sensitive, shared-decision-making trade-off with no determinate obligation, so it cannot be encoded as when -&gt; then.</div>
 
 </div></details>
 <footer>

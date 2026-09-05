@@ -1,0 +1,295 @@
+{
+ "doc": "PMC13270348",
+ "abbrevs": {
+  "NRS": "Numeric rating scale",
+  "AP": "acute pancreatitis",
+  "EPC": "European Pancreatic Club",
+  "EDS": "European Digestive Surgery",
+  "ESDO": "European Society of Digestive Oncology",
+  "EAGEN": "European Association for Gastroenterology Endoscopy & Nutrition",
+  "ESPGHAN": "European Society for Paediatric Gastroenterology, the Hepatology and Nutrition",
+  "ESGAR": "European Society of Gastrointestinal and Abdominal Radiology",
+  "ESPCG": "European Society of Primary Care Gastroenterology",
+  "WGs": "Working groups",
+  "PICO": "Population, Intervention, Comparison, and Outcome",
+  "GRADE": "Grading of Recommendations, Assessment, Development and Evaluation",
+  "WHO": "World Health Organization",
+  "PCA": "Patient\u2010controlled analgesia",
+  "CHM": "Chinese herbal medicine",
+  "CQCQD": "Chaiqin Chengqi Decoction",
+  "VAS": "visual analogue scale",
+  "LOS": "length of stay",
+  "EUS": "endoscopic ultrasound",
+  "UEG": "United European Gastroenterology"
+ },
+ "statements": [
+  [
+   "PMC13270348:0110",
+   "Patient\u2010controlled (intravenous) analgesia is widely used in acute pain management, but we suggest that PCA should be used with caution in the context of AP."
+  ],
+  [
+   "PMC13270348:0159",
+   "We suggest that acupuncture with appropriate acupoints may be effective in relieving abdominal pain and reducing the time to oral intake without significant side effects in patients with AP and may be considered."
+  ],
+  [
+   "PMC13270348:0205",
+   "In children with AP, oral feeding does not significantly increase pain, and we suggest that oral feeding may be considered."
+  ],
+  [
+   "PMC13270348:0087",
+   "We suggest that for mild to moderate pain, using the WHO ladder may be sufficient for achieving pain control in patients hospitalized with acute pancreatitis."
+  ],
+  [
+   "PMC13270348:0094",
+   "We suggest using strong opioids, especially buprenorphine and pentazocine, in patients hospitalized with acute pancreatitis, as current evidence shows that they provide superior pain relief over non\u2010opioid medications in terms of pain control and decreased need for rescue analgesia."
+  ],
+  [
+   "PMC13270348:0114",
+   "The role of unconventional analgesics in the pain management in AP in terms of analgesia efficacy and improvement in patient\u2010reported outcomes is only experimental, and we suggest against their use for standard clinical practice."
+  ],
+  [
+   "PMC13270348:0136",
+   "we suggest against its use until further high\u2010quality research is conducted"
+  ],
+  [
+   "PMC13270348:0154",
+   "CHM formula Chaiqin Chengqi Decoction may have positive effects on pain control and intestinal symptoms in patients with severe AP and we suggest its use."
+  ],
+  [
+   "PMC13270348:0182",
+   "We suggest taking into consideration that sufficient pain management may increase compliance with an enhanced recovery program in patients with acute pancreatitis, especially in mild disease."
+  ],
+  [
+   "PMC13270348:0196",
+   "We suggest taking into account that sufficient pain relief may improve patients\u2019 comfort, possibility to undertake physical activity, and may further reduce complications in acute pancreatitis."
+  ],
+  [
+   "PMC13270348:0021",
+   "We suggest against the use of unconventional analgesics in standard clinical practice, as their role in analgesic efficacy and improvement in patient\u2010reported outcomes is only experimental."
+  ],
+  [
+   "PMC13270348:0022",
+   "Safety profile of unconventional analgesics remains unclear; we suggest against their use in standard clinical practice."
+  ],
+  [
+   "PMC13270348:0024",
+   "We recommend epidural analgesia combined with standard care over standard care alone, as it improves patient\u2010reported outcomes and quality of life, particularly in severe acute pancreatitis, provided local expertise is available."
+  ],
+  [
+   "PMC13270348:0025",
+   "Epidural analgesia may improve respiratory outcomes and survival; however, we suggest against its routine use due to inconsistent evidence."
+  ],
+  [
+   "PMC13270348:0038",
+   "In children, we suggest the type of analgesics (opioid vs. non\u2010opioid) used does not affect outcomes such as length of stay or intensive care admission."
+  ],
+  [
+   "PMC13270348:0039",
+   "We suggest considering early oral feeding in children, as it does not worsen pain or length of stay."
+  ],
+  [
+   "PMC13270348:0018",
+   "Opioids are not associated with increased adverse outcomes and should not be delayed due to safety concerns to ensure adequate severe pain control."
+  ],
+  [
+   "PMC13270348:0020",
+   "Patient\u2010controlled analgesia should be used cautiously and is not routinely recommended in AP"
+  ],
+  [
+   "PMC13270348:0023",
+   "Local complications may contribute to pain in AP, and these should be actively identified and managed."
+  ],
+  [
+   "PMC13270348:0043",
+   "Routine scheduled imaging is not recommended for patients discharged with pain after acute pancreatitis; however, imaging should be considered in cases of recurrent or escalating pain to exclude complications."
+  ],
+  [
+   "PMC13270348:0069",
+   "A multidimensional approach to pain assessment may be considered given its use in other disease processes such as chronic pancreatitis with established benefit."
+  ],
+  [
+   "PMC13270348:0210",
+   "The utilization of a multidisciplinary approach to pain management can be extrapolated from the postoperative setting, which has been shown to decrease postoperative opioid use and may be considered."
+  ],
+  [
+   "PMC13270348:0012",
+   "Multidimensional pain assessment may be considered given its established benefit in chronic pancreatitis."
+  ],
+  [
+   "PMC13270348:0026",
+   "Epidural analgesia is a safe option with appropriate monitoring and aseptic technique and may be considered for AP pain management where local expertise is available."
+  ],
+  [
+   "PMC13270348:0040",
+   "Multidisciplinary pain management can be extrapolated from postoperative settings and may be considered in paediatric AP"
+  ],
+  [
+   "PMC13270348:0044",
+   "EUS may be considered when aetiology remains unclear."
+  ],
+  [
+   "PMC13270348:0047",
+   "No strong evidence linking alcoholic aetiology to increased opioid use at discharge; opioids may be considered to ensure adequate pain relief at discharge in both alcohol and biliary AP"
+  ],
+  [
+   "PMC13270348:0061",
+   "acute pain services or similar consultations by pain specialists are recommended for acute postoperative pain as well"
+  ],
+  [
+   "PMC13270348:0219",
+   "The use of NSAIDs is contraindicated in the third trimester of pregnancy."
+  ],
+  [
+   "PMC13270348:0063",
+   "In clinical practice, treatment escalation in AP should be discussed with acute pain services and pain specialists when available."
+  ],
+  [
+   "PMC13270348:0279",
+   "Acupuncture appears to be effective in relieving abdominal pain and reducing the time to oral intake without significant side effects in patients with AP and should be considered where expertise is available."
+  ],
+  [
+   "PMC13270348:0280",
+   "In children, a multidisciplinary approach to pain management, including the use of simple analgesics, opioids, interventional procedures, and behavioural pain management interventions should be considered."
+  ],
+  [
+   "PMC13270348:0281",
+   "When opioid therapy is required, a clear follow\u2010up plan should be in place to minimize the risk of prolonged and harmful use."
+  ],
+  [
+   "PMC13270348:0051",
+   "Recommendations from non\u2010specific (non\u2010AP) guidelines related to acute pain, for example, acute postoperative pain, may be applicable for treating acute pain from AP, as AP guidelines are unavailable."
+  ],
+  [
+   "PMC13270348:0056",
+   "Escalation of treatment intensity for AP\u2010related pain may be performed similarly to that used in other acute pain situations, for example, acute postoperative pain, if no contraindications are applicable."
+  ],
+  [
+   "PMC13270348:0073",
+   "Evidence from acute pain in general can be used as a reference, indicating assessment frequency between every 5th to 60th minute, depending on pain intensity."
+  ],
+  [
+   "PMC13270348:0077",
+   "Both unidimensional scales are equally suited for acute pain assessment in general and can be used for AP pain. The NRS scale may be preferred due to better compliance in most studies."
+  ],
+  [
+   "PMC13270348:0078",
+   "The NRS scale may be preferred due to better compliance in most studies."
+  ],
+  [
+   "PMC13270348:0083",
+   "A multidimensional approach to pain assessment may be preferable but not so extensive that feasibility is compromised."
+  ],
+  [
+   "PMC13270348:0088",
+   "For patients with severe pain, however, this approach may be insufficient. As such, more potent analgesics such as opioids may be warranted upon presentation."
+  ],
+  [
+   "PMC13270348:0089",
+   "As such, more potent analgesics such as opioids may be warranted upon presentation."
+  ],
+  [
+   "PMC13270348:0090",
+   "A step\u2010down approach may be more appropriate for severe pain in acute pancreatitis"
+  ],
+  [
+   "PMC13270348:0099",
+   "In patients with AP and severe pain, we suggest that safety concerns should not delay the timely use of opioids to ensure adequate pain management."
+  ],
+  [
+   "PMC13270348:0118",
+   "We suggest against their use in routine clinical practice."
+  ],
+  [
+   "PMC13270348:0125",
+   "For disease management, including pain control, it remains important that these complications are identified and treated appropriately."
+  ],
+  [
+   "PMC13270348:0131",
+   "We recommend its use when local expertise is available."
+  ],
+  [
+   "PMC13270348:0140",
+   "We suggest that epidural analgesia may be considered when expertise is available, and strict aseptic techniques and close monitoring are essential."
+  ],
+  [
+   "PMC13270348:0164",
+   "Non\u2010opioid analgesics may be preferable due to opioid side effects on the gastrointestinal system, including slow transit, nausea, and indigestion."
+  ],
+  [
+   "PMC13270348:0230",
+   "In recurrent or escalating pain after AP, there might be a clinical indication for imaging to rule out complications although there are no specific studies reporting on its usefulness in this cohort."
+  ],
+  [
+   "PMC13270348:0238",
+   "EUS can be considered to investigate the etiology of pancreatitis in patients with inconclusive imaging examinations."
+  ],
+  [
+   "PMC13270348:0262",
+   "Hence, opioids may be considered to ensure adequate pain relief for both alcohol and biliary etiology AP at discharge."
+  ],
+  [
+   "PMC13270348:0009",
+   "Recommendations from non\u2010specific acute pain guidelines may be applied to AP as disease\u2010specific guidelines for AP are lacking."
+  ],
+  [
+   "PMC13270348:0010",
+   "Escalation of analgesic therapy in AP can follow principles used in other acute pain conditions."
+  ],
+  [
+   "PMC13270348:0013",
+   "General acute pain practices can be used with respect to assessment frequencies (every 5\u201360 min depending on intensity)."
+  ],
+  [
+   "PMC13270348:0014",
+   "Numeric rating scale (NRS) may be preferred over VAS due to better patient compliance however, both scales are equally suited for acute pain management in general."
+  ],
+  [
+   "PMC13270348:0016",
+   "WHO analgesic ladder may be sufficient for mild\u2013moderate pain; opioids may be required early in severe AP, and a step\u2010down may be warranted upon presentation."
+  ],
+  [
+   "PMC13270348:0017",
+   "Strong opioids such as buprenorphine and pentazocine provide better pain relief and reduce the need for rescue analgesia compared to non\u2010opioid medications like NSAIDs in patients hospitalized with AP."
+  ],
+  [
+   "PMC13270348:0028",
+   "CHM formula chaiqin chengqi decoction may improve symptoms but has limited evidence and potential risks"
+  ],
+  [
+   "PMC13270348:0029",
+   "Acupuncture may reduce abdominal pain and time to oral intake without significant side effects"
+  ],
+  [
+   "PMC13270348:0030",
+   "Adequate pain control may improve tolerance to enteral feeding and reduce time to oral intake; non\u2010opioid analgesics may be preferable due to opioid\u2010related gastrointestinal side effects."
+  ],
+  [
+   "PMC13270348:0033",
+   "Adequate pain control may reduce risk of complications associated with central nervous system sensitisation such as chronic pain and opioid dependence."
+  ],
+  [
+   "PMC13270348:0034",
+   "Effective pain management may improve compliance with enhanced recovery pathways especially in mild AP"
+  ],
+  [
+   "PMC13270348:0035",
+   "Adequate pain control may shorten recovery time and improve return to daily activities and return to work periods."
+  ],
+  [
+   "PMC13270348:0036",
+   "Adequate pain control improves quality of life and reduces psychological stress."
+  ],
+  [
+   "PMC13270348:0041",
+   "Epidural analgesia may be more effective than opioids in pregnancy in relieving AP pain, though evidence is limited."
+  ],
+  [
+   "PMC13270348:0045",
+   "Routine CT follow\u2010up is not recommended unless clinically indicated or in unexplained aetiology."
+  ],
+  [
+   "PMC13270348:0046",
+   "MRCP may be useful to assess the cause of pancreatitis related to ductal anomalies and routine follow\u2010up MRCP is not recommended."
+  ]
+ ]
+}

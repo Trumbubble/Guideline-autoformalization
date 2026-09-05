@@ -583,6 +583,62 @@ def test_a_healthy_index_records_no_transport_failure():
     assert len(IX.failures) == 0
 
 
+# ---------------------------- a rejected credential is ours too (R38)
+
+class _RejectedCredentialIndex:
+    """A terminology source whose credential was rejected. Unlike a dead
+    server it reports the fault ONCE, at run level, and then makes no further
+    request -- so the per-statement failure count is zero from the second
+    statement on."""
+    DEGRADED = ("VSAC rejected the UMLS credential (HTTP 401), so curated "
+                "value sets were not consulted anywhere in this document",)
+
+    def __init__(self):
+        self.failures = bind.TransportFailures()
+        self.degraded = self.DEGRADED
+    def search(self, phrase, kind, k=8):
+        return []
+    def expand(self, system, code, limit=200):
+        return ()
+    def validate(self, system, code):
+        return False
+    def version(self, system):
+        return None
+
+def test_a_rejected_credential_qualifies_every_refusal_not_just_the_first():
+    """The subtler dress of the bug TransportFailures fixed. Once the source
+    stops being asked, a delta-counted warning fires on the first statement and
+    never again, and every later refusal is published as the guideline's
+    residue. Measured: one document, 157 findings, all of them downstream of a
+    single bad key."""
+    ix = _RejectedCredentialIndex()
+    first = triage(S_OK, ix, statement_id="s1", source_span=S_OK)
+    second = triage(S_OK, ix, statement_id="s2", source_span=S_OK)
+    assert "TERMINOLOGY_UNAVAILABLE" in codes(first)
+    assert "TERMINOLOGY_UNAVAILABLE" in codes(second)
+    assert len(ix.failures) == 0, "the fault is run-level, not per lookup"
+    detail = [e.detail for e in second.evidence
+              if e.code == "TERMINOLOGY_UNAVAILABLE"][0]
+    assert "401" in detail and "may not" in detail
+
+def test_a_rejected_credential_counts_as_retrieval_attributable():
+    assert spectrum([triage(S_OK, _RejectedCredentialIndex(), statement_id="s",
+                            source_span=S_OK)])["retrieval_attributable"] == 1
+
+def test_a_degraded_source_does_not_footnote_a_statement_that_bound_cleanly():
+    """The warning qualifies a refusal. A statement that needed nothing from
+    the degraded source has nothing to qualify, and saying so anyway is how a
+    residue report becomes unreadable."""
+    class _Wrapped:
+        degraded = _RejectedCredentialIndex.DEGRADED
+        def __init__(self, inner):
+            self.inner, self.failures = inner, inner.failures
+        def __getattr__(self, name):
+            return getattr(self.inner, name)
+    t = triage(S_OK, _Wrapped(IX), statement_id="s", source_span=S_OK)
+    assert "TERMINOLOGY_UNAVAILABLE" not in codes(t)
+
+
 def test_a_dropped_clause_is_reported_on_the_partial_path_too():
     """The real PMC12355350:0048: "...in favour of SGLT-2 inhibitors or GLP-1
     receptor agonists; AND a weak recommendation against finerenone in adults

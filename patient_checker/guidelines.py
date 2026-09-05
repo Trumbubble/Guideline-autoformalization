@@ -295,7 +295,8 @@ def _raw_source_path(guideline_id: str, filename: str | None) -> Path:
 
 
 def ingest(title: str, *, file_bytes=None, filename=None, text=None,
-           live: bool = False, api_key: str | None = None) -> dict:
+           live: bool = False, api_key: str | None = None,
+           owner: str | None = None) -> dict:
     """Turn an uploaded document (or pasted text) into a stored bundle.
 
     Runs CQL_converter's real pipeline -- segment -> gate.triage (bind + formalize)
@@ -322,7 +323,7 @@ def ingest(title: str, *, file_bytes=None, filename=None, text=None,
     guideline_id = _slug(title)
     return _ingest_into(
         guideline_id, title, file_bytes=file_bytes, filename=filename,
-        text=text, live=live, api_key=api_key,
+        text=text, live=live, api_key=api_key, owner=owner,
     )
 
 
@@ -357,7 +358,7 @@ def reprocess(guideline_id: str, *, api_key: str | None = None) -> dict:
 
 def _ingest_into(guideline_id: str, title: str, *, file_bytes=None,
                  filename=None, text=None, live: bool = False,
-                 api_key: str | None = None) -> dict:
+                 api_key: str | None = None, owner: str | None = None) -> dict:
     """Fast part only: extract text, segment it, and either run the rest
     inline (live=False -- no model calls, so there's nothing worth tracking)
     or hand it to a background thread and return a 'processing' marker the
@@ -379,13 +380,14 @@ def _ingest_into(guideline_id: str, title: str, *, file_bytes=None,
 
     if not live:
         return _run_ingest(guideline_id, title, filename, live, api_key,
-                           stmts, manifest)
+                           stmts, manifest, owner=owner)
 
     total = len(stmts)
     _progress_set(guideline_id, done=0, total=total, status="processing")
     threading.Thread(
         target=_run_ingest_tracked,
-        args=(guideline_id, title, filename, live, api_key, stmts, manifest),
+        args=(guideline_id, title, filename, live, api_key, stmts, manifest,
+              owner),
         daemon=True,
     ).start()
     return {"id": guideline_id, "status": "processing", "total": total}
@@ -449,7 +451,7 @@ def _lower_and_compile(guideline_id: str, rules, reg) -> dict:
 
 
 def _run_ingest(guideline_id, title, filename, live, api_key, stmts,
-                manifest, *, track: bool = False) -> dict:
+                manifest, *, track: bool = False, owner: str | None = None) -> dict:
     """The actual pipeline run: gate.triage per statement, then the bundle
     write. Identical to what this function used to do inline; the only
     change is the `track` flag, which reports each statement's completion
@@ -560,6 +562,9 @@ def _run_ingest(guideline_id, title, filename, live, api_key, stmts,
         "id": guideline_id,
         "title": title,
         "created_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        # Which browser uploaded this; see _visible_to(). None means the
+        # pre-loaded demo set, visible to everyone.
+        "owner": owner,
         "source_filename": filename,
         "live": live,
         "statements": manifest.get("statements", 0),
@@ -580,12 +585,12 @@ def _run_ingest(guideline_id, title, filename, live, api_key, stmts,
 
 
 def _run_ingest_tracked(guideline_id, title, filename, live, api_key,
-                        stmts, manifest) -> None:
+                        stmts, manifest, owner: str | None = None) -> None:
     """Thread target: _run_ingest with tracking on, reporting its outcome
     to _PROGRESS instead of returning/raising to a caller that isn't there."""
     try:
         entry = _run_ingest(guideline_id, title, filename, live, api_key,
-                            stmts, manifest, track=True)
+                            stmts, manifest, track=True, owner=owner)
         _progress_set(guideline_id, status="done", result=entry)
     except Exception as exc:  # a background thread has no caller to raise to
         _progress_set(guideline_id, status="error", error=str(exc))
@@ -633,6 +638,18 @@ def register_bundle(bundle_path, title: str | None = None,
         "needs_model_count": 0,
         "rejected_count": len(rejected),
     }
+    # Carry forward the flags that describe WHO an entry belongs to and
+    # WHERE it is shown. Re-running a document through demo.py rewrites its
+    # bundle and lands here; without this it would silently stop being a
+    # demo entry and reappear in everybody's personal library.
+    previous = next((e for e in _load_index() if e.get("id") == guideline_id), None)
+    if previous:
+        for carried in ("demo", "owner"):
+            if previous.get(carried) is not None:
+                entry[carried] = previous[carried]
+        # A re-run changes the rules, not what the guideline is called.
+        if previous.get("title"):
+            entry["title"] = previous["title"]
     entries = [e for e in _load_index() if e.get("id") != guideline_id]
     _save_index(entries + [entry])
     return entry
@@ -642,7 +659,13 @@ def register_bundle(bundle_path, title: str | None = None,
 # ingest() generates -- so it can point at a fixed URL. Each is backed by
 # Track A's own committed bundle (checked into git, unlike guidelines/
 # itself, which is gitignored runtime data).
-_DEMO_SEEDS = [("pmc12355350", "PMC12355350"), ("pmc13270348", "PMC13270348")]
+_DEMO_SEEDS = [
+    ("pmc12355350", "PMC12355350",
+     "Type 2 diabetes: cardiovascular, kidney and weight-loss therapeutics "
+     "(living guideline)"),
+    ("pmc13270348", "PMC13270348",
+     "Pain management in acute pancreatitis (European interdisciplinary)"),
+]
 
 
 def seed_demo_guidelines() -> None:
@@ -655,20 +678,41 @@ def seed_demo_guidelines() -> None:
     GET /guidelines/pmc12355350 instead. Skips (rather than re-registering)
     an id that is already present, so this costs nothing on every normal
     startup after the first."""
-    existing = {e.get("id") for e in _load_index()}
-    for guideline_id, doc_id in _DEMO_SEEDS:
+    # Backfill the flag on a store that predates it, so an already-seeded
+    # deployment stops listing these in the personal library and starts
+    # refusing to delete them.
+    entries = _load_index()
+    demo_ids = {gid for gid, _, _ in _DEMO_SEEDS}
+    changed = False
+    for entry in entries:
+        if entry.get("id") in demo_ids and not entry.get("demo"):
+            entry["demo"] = True
+            changed = True
+    if changed:
+        _save_index(entries)
+
+    existing = {e.get("id") for e in entries}
+    for guideline_id, doc_id, title in _DEMO_SEEDS:
         if guideline_id in existing:
             continue
         bundle_path = Path(__file__).parent / f"bundle.{doc_id}.json"
         if not bundle_path.exists():
             continue
         try:
-            register_bundle(str(bundle_path), title=doc_id, guideline_id=guideline_id)
+            registered = register_bundle(str(bundle_path), title=title,
+                                         guideline_id=guideline_id)
+            # Mark it as demo content: hidden from the personal library,
+            # and refusing delete/rename like the built-in fixture set.
+            fresh = _load_index()
+            for entry in fresh:
+                if entry.get("id") == registered["id"]:
+                    entry["demo"] = True
+            _save_index(fresh)
         except Exception as exc:  # a broken seed must not block the server starting
             print(f"[warn] could not seed demo guideline {guideline_id!r}: {exc}")
 
 
-def delete_guideline(guideline_id: str) -> dict:
+def delete_guideline(guideline_id: str, owner: str | None = None) -> dict:
     """Remove an uploaded guideline: its index entry, its bundle, and the raw
     upload kept for reprocessing. The fixture set is built in, not stored, so
     it cannot be deleted -- refused rather than silently ignored, since a
@@ -679,6 +723,11 @@ def delete_guideline(guideline_id: str) -> dict:
     meta = next((e for e in entries if e.get("id") == guideline_id), None)
     if meta is None:
         raise IngestError(f"unknown guideline {guideline_id!r}")
+    if is_demo(meta):
+        raise IngestError(
+            "this is a built-in demo guideline and cannot be deleted")
+    if not _owns(meta, owner):
+        raise IngestError("this guideline was uploaded from another browser")
 
     (STORE_DIR / f"{guideline_id}.json").unlink(missing_ok=True)
     raw = _raw_source_path(guideline_id, meta.get("source_filename"))
@@ -695,7 +744,7 @@ def delete_guideline(guideline_id: str) -> dict:
     return {"id": guideline_id, "deleted": True}
 
 
-def rename_guideline(guideline_id: str, title: str) -> dict:
+def rename_guideline(guideline_id: str, title: str, owner: str | None = None) -> dict:
     """Change a guideline's display title in place.
 
     The id is left alone deliberately: it names the bundle on disk, the raw
@@ -710,12 +759,59 @@ def rename_guideline(guideline_id: str, title: str) -> dict:
     meta = next((e for e in entries if e.get("id") == guideline_id), None)
     if meta is None:
         raise IngestError(f"unknown guideline {guideline_id!r}")
+    if is_demo(meta):
+        raise IngestError(
+            "this is a built-in demo guideline and cannot be renamed")
+    if not _owns(meta, owner):
+        raise IngestError("this guideline was uploaded from another browser")
     meta["title"] = title
     _save_index(entries)
     return meta
 
 
-def list_guidelines() -> list:
+# --- per-browser ownership -------------------------------------------------
+#
+# There is no login here. A visitor's browser mints a random id and sends it
+# as X-GF-Client; an upload records it as the entry's `owner`, and the
+# listing hides entries owned by somebody else. That keeps one visitor's
+# uploads out of another's dashboard, which is what it is for.
+#
+# It is NOT access control: the id is client-supplied and forgeable, and a
+# guideline fetched directly by id is still served to anyone who has the id.
+# Treat anything uploaded here as public, and do not rely on this to keep a
+# document private.
+#
+# Entries with no `owner` are the pre-loaded demo set (and anything uploaded
+# before this existed). They stay visible to everyone on purpose.
+# The demo page (/demo) walks a fixed list of guideline ids and shows each
+# one with hand-written scenarios. Those entries have to survive whatever a
+# visitor does on the main dashboard, so they are marked `demo` in the index:
+# they are not listed in the personal library, and they refuse delete and
+# rename the way the built-in fixture set does. A visitor should never have
+# to upload anything to see the demo.
+def is_demo(entry: dict) -> bool:
+    return bool(entry.get("demo"))
+
+
+def _visible_to(entry: dict, owner: str | None) -> bool:
+    if is_demo(entry):
+        return False          # /demo lists these; the library does not
+    entry_owner = entry.get("owner")
+    if not entry_owner:
+        return True
+    return bool(owner) and entry_owner == owner
+
+
+def _owns(entry: dict, owner: str | None) -> bool:
+    """May this caller mutate the entry? An unowned entry stays mutable so
+    the pre-loaded set can still be tidied up; an owned one is its owner's."""
+    entry_owner = entry.get("owner")
+    if not entry_owner:
+        return True
+    return bool(owner) and entry_owner == owner
+
+
+def list_guidelines(owner: str | None = None) -> list:
     fixture_entry = {
         "id": FIXTURES_ID,
         "title": "Hand-authored fixtures",
@@ -739,7 +835,11 @@ def list_guidelines() -> list:
         "rejected_count": 0,
         "builtin": True,
     }
-    return [fixture_entry] + [dict(e, builtin=False) for e in _load_index()]
+    return [fixture_entry] + [
+        dict(e, builtin=False, mine=bool(e.get("owner")) and e.get("owner") == owner)
+        for e in _load_index()
+        if _visible_to(e, owner)
+    ]
 
 
 def get_guideline(guideline_id: str):

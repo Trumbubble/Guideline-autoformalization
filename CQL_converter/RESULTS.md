@@ -2330,3 +2330,77 @@ added without the table being updated.
 
 This is R33g's shape once more, in a different medium: something was wrong and
 returned a usable-looking value -- a table that reads as authoritative.
+
+## R38 · One bad key, 789 transport failures, and a residue report nobody could read
+
+Found by looking at a checker page for the JBDS-IP guideline
+(`trial2-db48ab`, PMC13074134) and reading the banner it carried:
+
+> `TERMINOLOGY_UNAVAILABLE` 26 terminology lookup(s) failed (transport or
+> server error, not an absent concept) … 'Biguanide' (drug_class): HTTPError:
+> HTTP Error 401: ; 'Thiazolidinediones' (drug_class): HTTPError: HTTP Error
+> 401: ; …
+
+Counted across the stored bundle: **789 recorded 401s, 157 of 160 findings
+carrying the warning, and 48 of the document's 55 `unbound_concept` refusals
+qualified by it.** The residue that document reports is largely not the
+document's.
+
+Two distinct faults were being reported through one channel.
+
+**HTTP 401 — a rejected credential, reported once per phrase.** VSAC is the
+only authenticated source in the binder (HTTP Basic, `apikey:$UMLS_API_KEY`);
+SNOMED, LOINC and RxNav are anonymous. So a 401 can only mean our key was
+refused, which is a fact about the run, not about the phrase — and it will be
+the answer to every subsequent lookup too. Confirmed by construction: a junk
+key reproduces `HTTP Error 401` exactly, and the key in `.env` succeeds on
+30/30 live lookups including the three named in the banner. `.env` had not
+been touched since 28 Aug; the bundle was built on 4 Sep. The mechanism was
+`load_env`'s `os.environ.setdefault` — **an exported `UMLS_API_KEY` silently
+won over the file on disk**, so a stale export from a forgotten shell
+credentialled the whole run.
+
+**HTTP 400 — a request we should never have made.** PMC13270348's 88 failures
+were all 400, over exactly four phrases: `AP`, `ap`, `CT`, `ct`. VSAC's
+`title:contains` rejects a search string under three characters. The mention
+proposer legitimately emits two-letter abbreviations, so every one was issued,
+rejected, and recorded as a *transport* fault qualifying that statement's
+refusal. Reproduced today: `'ap'` → 400, `'abc'` → 200.
+
+**Fixes.**
+
+1. `VSAC_MIN_QUERY = 3`. A request the API defines as invalid is ours not to
+   make, not a blip to report.
+2. A 401 (or 403 — a lapsed licence) sets `_auth_rejected`, which makes
+   `available` false. Every caller already guards on `available`, so one 401
+   stops the whole run asking. It is recorded **once**, on a new run-level
+   channel, not once per phrase.
+3. `load_env` now overrides. A `.env` is the value the operator most recently
+   chose; an export is usually left over from a shell they have forgotten
+   about, and it fails silently — a wrong key looks exactly like a right one.
+   Containers are unaffected: they ship no `.env`, so platform secrets stand.
+   An empty assignment in the file is skipped rather than blanking a real
+   variable.
+
+**The subtler bug inside the fix.** Making the 401 stop the run breaks the
+gate's warning, which is counted by *delta* on `len(index.failures)`: with no
+further requests the delta is zero from the second statement on, and every
+later refusal would go out unqualified — the exact failure `TransportFailures`
+was built to prevent, in a different dress. Hence two channels with different
+lifetimes: a per-lookup failure is a blip on one binding attempt, a **degraded
+source** is true for the whole document and does not decay. `degraded_of(index)`
+mirrors `getattr(index, "failures", ())` so a caller need not know which index
+class it was handed, and the gate attaches the run-level notice only where
+there is a refusal to qualify — a statement that bound cleanly needed nothing
+from the degraded source.
+
+Pinned by `test_bind.py` (the guard, the once-not-per-phrase 401, a genuine
+timeout still recorded per phrase, propagation through `RemoteIndex` and
+`CachedIndex`, and `.env` precedence) and `test_gate.py`
+(`test_a_rejected_credential_qualifies_every_refusal_not_just_the_first`).
+
+**Same shape as R33a and R33d.** An infrastructure failure returned a value
+indistinguishable from a result — here twice over: a bad credential
+indistinguishable from a vocabulary gap, and our own malformed request
+indistinguishable from a server fault. The bundles built under the bad key
+should be regenerated before any residue count from them is quoted.

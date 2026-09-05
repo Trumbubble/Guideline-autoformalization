@@ -357,6 +357,41 @@ const backdrop = document.getElementById("modal-backdrop");
 const statusEl = document.getElementById("upload-status");
 const submitBtn = document.getElementById("submit-btn");
 const liveCheckbox = document.getElementById("live");
+
+// --- per-browser identity -------------------------------------------------
+// No login: this browser mints a random id once and sends it as X-GF-Client,
+// so the dashboard lists this visitor's uploads plus the pre-loaded set, and
+// not other visitors' uploads. It is deliberately NOT access control -- the
+// id is client-supplied, and anyone holding a guideline's id can still open
+// it directly. Anything uploaded to a public deployment should be treated as
+// public.
+const CLIENT_KEY = "gf_client_id";
+
+function clientId() {
+  let id = null;
+  try { id = localStorage.getItem(CLIENT_KEY); } catch (err) {}
+  if (!id) {
+    id = (crypto.randomUUID && crypto.randomUUID()) ||
+         (Date.now().toString(36) + Math.random().toString(36).slice(2));
+    try { localStorage.setItem(CLIENT_KEY, id); } catch (err) {}
+  }
+  return id;
+}
+
+// Every same-origin fetch carries the id, so list/upload/delete/rename all
+// agree on who is asking without each call remembering to add it.
+const _fetch = window.fetch.bind(window);
+window.fetch = function (input, init) {
+  init = init || {};
+  const url = typeof input === "string" ? input : (input && input.url) || "";
+  if (!/^https?:/i.test(url) || url.startsWith(location.origin)) {
+    const headers = new Headers(init.headers || (typeof input === "object" && input.headers) || {});
+    if (!headers.has("X-GF-Client")) headers.set("X-GF-Client", clientId());
+    init = Object.assign({}, init, { headers });
+  }
+  return _fetch(input, init);
+};
+
 const keyPanel = document.getElementById("key-panel");
 const keyInput = document.getElementById("api-key");
 const keyHint = document.getElementById("key-hint");
@@ -571,8 +606,30 @@ function showProgress(done, total) {
     `${done} / ${total} statement${total === 1 ? "" : "s"} formalized (${pct}%)`;
 }
 
+function showWaiting(message) {
+  // A <progress> with no value attribute renders indeterminate -- the right
+  // affordance when work is ongoing but this machine cannot see the counter.
+  progressWrap.classList.add("active");
+  progressBar.removeAttribute("value");
+  progressLabel.textContent = message;
+}
+
 function hideProgress() {
   progressWrap.classList.remove("active");
+  progressBar.value = 0;
+}
+
+// The stored guideline -- not the progress record -- is the source of truth
+// for a finished run. Returns the entry, or null if it is not there (yet).
+async function fetchStoredGuideline(guidelineId) {
+  try {
+    const response = await fetch(`/guidelines/${encodeURIComponent(guidelineId)}`);
+    if (!response.ok) return null;
+    const entry = await response.json();
+    return entry && entry.id ? entry : null;
+  } catch (err) {
+    return null;
+  }
 }
 
 // A live run is one statement at a time, each a real model round trip -- a
@@ -582,12 +639,36 @@ function hideProgress() {
 // it goes. Resolves with the finished entry (same shape a synchronous
 // upload always returned); throws on failure or on losing track of it.
 async function pollProgress(guidelineId) {
+  // _PROGRESS lives in ONE process's memory and a finished run deletes its
+  // record once read, so a 404 here is routine rather than fatal: the poll
+  // may have been balanced onto a machine that never ran the job, or it may
+  // simply have arrived after completion. Neither means the upload failed,
+  // so fall back to the stored guideline before reporting anything.
+  let unseen = 0;
+  const UNSEEN_LIMIT = 20;          // ~18s at the 900ms cadence below
+
   while (true) {
     const response = await fetch(`/guidelines/${encodeURIComponent(guidelineId)}/progress`);
+
     if (!response.ok) {
-      hideProgress();
-      throw new Error("lost track of this upload's progress -- check the guideline list");
+      const stored = await fetchStoredGuideline(guidelineId);
+      if (stored) {
+        hideProgress();
+        return stored;
+      }
+      if (++unseen >= UNSEEN_LIMIT) {
+        hideProgress();
+        throw new Error(
+          "could not follow this upload -- it may still be running. " +
+          "Refresh the guideline list in a moment."
+        );
+      }
+      showWaiting("Working… (waiting for the run to report back)");
+      await new Promise((resolve) => setTimeout(resolve, 900));
+      continue;
     }
+
+    unseen = 0;
     const data = await response.json();
     if (data.status === "finalizing") {
       // Every statement has been formalized; the bundle's shared vocabulary
@@ -601,7 +682,7 @@ async function pollProgress(guidelineId) {
     }
     if (data.status === "done") {
       hideProgress();
-      return data.result;
+      return data.result || (await fetchStoredGuideline(guidelineId));
     }
     if (data.status === "error") {
       hideProgress();

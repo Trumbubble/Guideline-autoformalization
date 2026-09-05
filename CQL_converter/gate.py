@@ -499,12 +499,27 @@ def triage(statement: str, index, *, statement_id: str = "s",
     # regression: "no terminology binding for 'oral feeding'" became
     # "4 terminology lookup(s) failed...". A meta-warning must trail the finding
     # it qualifies.
+    #
+    # Two channels, because they qualify a refusal differently. A per-lookup
+    # failure is counted by DELTA -- it says this binding attempt hit a blip.
+    # A degraded SOURCE is true for the whole document and does not decay: once
+    # VSAC has rejected our credential no further request is made, so the delta
+    # is zero from the second statement on and every later refusal would go out
+    # unqualified. That is the bug this channel exists to prevent, and it is
+    # the same bug in a subtler dress than the one TransportFailures fixed.
+    # Only attached where there is something to qualify: a statement that bound
+    # cleanly needs no footnote about a source it did not need.
+    _detail = []
     if _failed > 0:
+        _detail.append(f"{_failed} terminology lookup(s) failed (transport or "
+                       f"server error, not an absent concept): "
+                       + "; ".join(index.failures.summary()[-_failed:])[:200])
+    if refusals:
+        _detail += list(bind.degraded_of(index))
+    if _detail:
         ev.append(Evidence("binder", "TERMINOLOGY_UNAVAILABLE",
-                           f"{_failed} terminology lookup(s) failed (transport or "
-                           f"server error, not an absent concept), so a refusal "
-                           f"here may not be a property of the guideline: "
-                           + "; ".join(index.failures.summary()[-_failed:])[:200]))
+                           "; ".join(_detail) + " -- so a refusal here may not "
+                           "be a property of the guideline"))
 
     reg = bind.registry_from_bindings(bindings, events=datable_events(bindings))
     _companions = dose_companions(bindings, statement) + age_companion(statement)

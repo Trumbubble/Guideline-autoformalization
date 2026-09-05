@@ -1,0 +1,35 @@
+# --- never ship secrets -------------------------------------------------
+.env
+.env.*
+*.pem
+*.key
+
+# --- huge, and the app degrades gracefully without them ------------------
+# semantic/ is 2.3GB of precomputed embeddings; bind.py falls back to
+# lexical retrieval via SemanticUnavailable when it is absent.
+CQL_converter/semantic/
+# engine/ is the JVM+Node CQL toolchain (89MB of node_modules and classes).
+# The paper's Limitations already state cql-to-elm has never been run.
+patient_checker/engine/
+# loinc.db is a leftover staging artifact -- nothing in the codebase reads it.
+CQL_converter/loinc.db
+CQL_converter/demo.db
+
+# --- source releases: build-time input only, already baked into terms.db --
+Loinc_2.83/
+RxNorm_full_08032026/
+SnomedCT_InternationalRF2_PRODUCTION_20260801T120000Z/
+
+# --- repo cruft ----------------------------------------------------------
+.git/
+.gitignore
+__pycache__/
+**/__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+venv/
+paper/
+Formatting_Instructions_For_NeurIPS_2026/
+*.md
+!requirements.txt

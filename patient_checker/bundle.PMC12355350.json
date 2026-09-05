@@ -515,6 +515,28 @@
     "unbound": false
    },
    {
+    "name": "has_cardiovascular_kidney_complications",
+    "type": "bool",
+    "unit": null,
+    "description": "cardiovascular and kidney complications",
+    "binding": null,
+    "role": "observation",
+    "plausible": null,
+    "codes": [],
+    "unbound": true
+   },
+   {
+    "name": "has_cardiovascular_risk_factors",
+    "type": "bool",
+    "unit": null,
+    "description": "cardiovascular risk factors",
+    "binding": null,
+    "role": "observation",
+    "plausible": null,
+    "codes": [],
+    "unbound": true
+   },
+   {
     "name": "has_chronic_kidney_disease_ckd",
     "type": "bool",
     "unit": null,
@@ -817,6 +839,39 @@
     "unbound": true
    },
    {
+    "name": "has_obesity",
+    "type": "bool",
+    "unit": null,
+    "description": "Obesity",
+    "binding": "http://cts.nlm.nih.gov/fhir/ValueSet|2.16.840.1.113762.1.4.1272.8|20250318",
+    "role": "observation",
+    "plausible": null,
+    "codes": [
+     "E66.01",
+     "E66.09",
+     "E66.1",
+     "E66.2",
+     "E66.8",
+     "E66.9",
+     "Z68.30",
+     "Z68.31",
+     "Z68.32",
+     "Z68.33",
+     "Z68.34",
+     "Z68.35",
+     "Z68.36",
+     "Z68.37",
+     "Z68.38",
+     "Z68.39",
+     "Z68.41",
+     "Z68.42",
+     "Z68.43",
+     "Z68.44",
+     "Z68.45"
+    ],
+    "unbound": false
+   },
+   {
     "name": "has_three_fewer_cardiovascular_risk_factors",
     "type": "bool",
     "unit": null,
@@ -826,6 +881,21 @@
     "plausible": null,
     "codes": [],
     "unbound": true
+   },
+   {
+    "name": "has_weight_loss",
+    "type": "bool",
+    "unit": null,
+    "description": "Weight loss",
+    "binding": "http://snomed.info/sct|816160009|20260801",
+    "role": "observation",
+    "plausible": null,
+    "codes": [
+     "1162534004",
+     "816160009",
+     "816172003"
+    ],
+    "unbound": false
    },
    {
     "name": "on_finerenone",
@@ -839,7 +909,7 @@
     "unbound": false
    },
    {
-    "name": "on_glp_1_receptor_agonists",
+    "name": "on_glp_1_receptor_agonist",
     "type": "bool",
     "unit": null,
     "description": "GLP-1 Receptor Agonist",
@@ -847,6 +917,63 @@
     "role": "action",
     "plausible": null,
     "codes": [],
+    "unbound": false
+   },
+   {
+    "name": "on_glp_1_receptor_agonists",
+    "type": "bool",
+    "unit": null,
+    "description": "Glucagon-like peptide 1 receptor agonist-containing product",
+    "binding": "http://snomed.info/sct|416636000|20260801",
+    "role": "action",
+    "plausible": null,
+    "codes": [
+     "1003647000",
+     "1003648005",
+     "1003649002",
+     "1010536005",
+     "1010537001",
+     "1010538006",
+     "1010539003",
+     "1010540001",
+     "1010541002",
+     "1155637009",
+     "1155638004",
+     "1155639007",
+     "1236758005",
+     "1237218000",
+     "1332132001",
+     "416636000",
+     "417734003",
+     "444907006",
+     "703905003",
+     "714081009",
+     "715778002",
+     "715779005",
+     "763570007",
+     "764284009",
+     "764285005",
+     "764330009",
+     "766085000",
+     "766086004",
+     "770768004",
+     "774449006",
+     "775712006",
+     "775913009",
+     "776341007",
+     "776548002",
+     "776560001",
+     "777514008",
+     "779559007",
+     "779728007",
+     "780439007",
+     "780440009",
+     "782102009",
+     "786283007",
+     "786718009",
+     "789390003",
+     "789391004"
+    ],
     "unbound": false
    },
    {
@@ -970,13 +1097,24 @@
      "2638693"
     ],
     "unbound": false
+   },
+   {
+    "name": "on_tirzepatide",
+    "type": "bool",
+    "unit": null,
+    "description": "tirzepatide",
+    "binding": "http://www.nlm.nih.gov/research/umls/rxnorm|2601723|unknown",
+    "role": "action",
+    "plausible": null,
+    "codes": [],
+    "unbound": false
    }
   ],
   "events": []
  },
  "rules": [
   {
-   "rule_id": "PMC12355350:0047",
+   "rule_id": "PMC12355350:0045",
    "when": {
     "kind": "and",
     "operands": [
@@ -1019,72 +1157,27 @@
    },
    "action": "avoid",
    "target": "SGLT-2 inhibitors or GLP-1 receptor agonists",
-   "strength": "weak recommendation against",
+   "strength": "weak",
    "deontic": "obligation",
    "source_page": null,
    "source_span": "\u2022 Lower risk (three or fewer cardiovascular risk factors without established cardiovascular disease (CVD) or chronic kidney disease (CKD)): weak recommendation against SGLT-2 inhibitors or GLP-1 receptor agonists."
   },
   {
-   "rule_id": "PMC12355350:0048",
+   "rule_id": "PMC12355350:0046",
    "when": {
     "kind": "or",
     "operands": [
      {
-      "kind": "and",
-      "operands": [
-       {
-        "kind": "cmp",
-        "var": "has_more_than_three_cardiovascular_risk",
-        "op": "==",
-        "value": true
-       },
-       {
-        "kind": "cmp",
-        "var": "has_cardiovascular_disease_cvd",
-        "op": "==",
-        "value": false
-       },
-       {
-        "kind": "cmp",
-        "var": "has_chronic_kidney_disease_ckd",
-        "op": "==",
-        "value": false
-       }
-      ]
+      "kind": "cmp",
+      "var": "has_more_than_three_cardiovascular_risk",
+      "op": "==",
+      "value": true
      },
      {
-      "kind": "and",
-      "operands": [
-       {
-        "kind": "cmp",
-        "var": "has_cardiovascular_disease_cvd",
-        "op": "==",
-        "value": true
-       },
-       {
-        "kind": "cmp",
-        "var": "has_lower_risk_complications",
-        "op": "==",
-        "value": true
-       }
-      ]
-     },
-     {
-      "kind": "and",
-      "operands": [
-       {
-        "kind": "cmp",
-        "var": "has_chronic_kidney_disease_ckd",
-        "op": "==",
-        "value": true
-       },
-       {
-        "kind": "cmp",
-        "var": "has_lower_risk_complications",
-        "op": "==",
-        "value": true
-       }
-      ]
+      "kind": "cmp",
+      "var": "has_lower_risk_complications",
+      "op": "==",
+      "value": true
      }
     ]
    },
@@ -1113,40 +1206,33 @@
    "source_span": "\u2022 Moderate risk (more than three cardiovascular risk factors without established CVD or CKD; or established CVD and/or CKD at lower risk of complications): weak recommendation in favour of SGLT-2 inhibitors or GLP-1 receptor agonists; and a weak recommendation against finerenone in adults with CKD."
   },
   {
-   "rule_id": "PMC12355350:0049",
+   "rule_id": "PMC12355350:0047",
    "when": {
-    "kind": "or",
-    "operands": [
-     {
-      "kind": "cmp",
-      "var": "has_cardiovascular_disease_cvd",
-      "op": "==",
-      "value": true
-     },
-     {
-      "kind": "and",
-      "operands": [
-       {
-        "kind": "cmp",
-        "var": "has_chronic_kidney_disease_ckd",
-        "op": "==",
-        "value": true
-       },
-       {
-        "kind": "cmp",
-        "var": "has_higher_risk_complications",
-        "op": "==",
-        "value": true
-       }
-      ]
-     },
-     {
-      "kind": "cmp",
-      "var": "has_heart_failure",
-      "op": "==",
-      "value": true
-     }
-    ]
+    "kind": "cmp",
+    "var": "has_chronic_kidney_disease_ckd",
+    "op": "==",
+    "value": true
+   },
+   "then": {
+    "kind": "cmp",
+    "var": "on_finerenone",
+    "op": "==",
+    "value": false
+   },
+   "action": "avoid",
+   "target": "finerenone",
+   "strength": "weak",
+   "deontic": "obligation",
+   "source_page": null,
+   "source_span": "and a weak recommendation against finerenone in adults with CKD."
+  },
+  {
+   "rule_id": "PMC12355350:0048",
+   "when": {
+    "kind": "cmp",
+    "var": "has_higher_risk",
+    "op": "==",
+    "value": true
    },
    "then": {
     "kind": "or",
@@ -1171,36 +1257,366 @@
    "deontic": "obligation",
    "source_page": null,
    "source_span": "\u2022 Higher risk (established CVD and/or CKD at higher risk of complications, or established heart failure): strong recommendation in favour of SGLT-2 inhibitors or GLP-1 receptor agonists; and a weak recommendation in favour of finerenone in adults with CKD."
+  },
+  {
+   "rule_id": "PMC12355350:0050",
+   "when": {
+    "kind": "cmp",
+    "var": "has_obesity",
+    "op": "==",
+    "value": true
+   },
+   "then": {
+    "kind": "cmp",
+    "var": "on_tirzepatide",
+    "op": "==",
+    "value": true
+   },
+   "action": "recommend",
+   "target": "tirzepatide",
+   "strength": "weak recommendation in favour",
+   "deontic": "obligation",
+   "source_page": null,
+   "source_span": "Across risk strata: weak recommendation in favour of tirzepatide in adults with obesity."
+  },
+  {
+   "rule_id": "PMC12355350:0131",
+   "when": {
+    "kind": "and",
+    "operands": [
+     {
+      "kind": "cmp",
+      "var": "on_glp_1_receptor_agonist",
+      "op": "==",
+      "value": true
+     },
+     {
+      "kind": "cmp",
+      "var": "on_tirzepatide",
+      "op": "==",
+      "value": true
+     }
+    ]
+   },
+   "then": {
+    "kind": "cmp",
+    "var": "on_sglt_2_inhibitors",
+    "op": "==",
+    "value": true
+   },
+   "action": "recommend",
+   "target": "SGLT-2 inhibitor",
+   "strength": null,
+   "deontic": "obligation",
+   "source_page": null,
+   "source_span": "If replacing a GLP-1 receptor agonist with tirzepatide, initiation or continuation of an SGLT-2 inhibitor is indicated."
+  },
+  {
+   "rule_id": "PMC12355350:0127",
+   "when": {
+    "kind": "cmp",
+    "var": "on_tirzepatide",
+    "op": "==",
+    "value": true
+   },
+   "then": {
+    "kind": "cmp",
+    "var": "on_glp_1_receptor_agonists",
+    "op": "==",
+    "value": false
+   },
+   "action": "avoid",
+   "target": "GLP-1 receptor agonists",
+   "strength": null,
+   "deontic": "obligation",
+   "source_page": null,
+   "source_span": "Tirzepatide should not be given in combination with GLP-1 receptor agonists, but can be combined with SGLT-2 inhibitors and finerenone."
+  },
+  {
+   "rule_id": "PMC12355350:0141",
+   "when": {
+    "kind": "cmp",
+    "var": "on_tirzepatide",
+    "op": "==",
+    "value": true
+   },
+   "then": {
+    "kind": "cmp",
+    "var": "on_sglt_2_inhibitors",
+    "op": "==",
+    "value": true
+   },
+   "action": "recommend",
+   "target": "SGLT-2 inhibitor",
+   "strength": "indicated",
+   "deontic": "obligation",
+   "source_page": null,
+   "source_span": "For adults prioritising initiation of tirzepatide over GLP-1 receptor agonist therapy due to larger weight loss effects, initiation or continuation of an SGLT-2 inhibitor is indicated."
+  },
+  {
+   "rule_id": "PMC12355350:0130",
+   "when": {
+    "kind": "and",
+    "operands": [
+     {
+      "kind": "cmp",
+      "var": "has_cardiovascular_kidney_complications",
+      "op": "==",
+      "value": true
+     },
+     {
+      "kind": "cmp",
+      "var": "on_tirzepatide",
+      "op": "==",
+      "value": true
+     },
+     {
+      "kind": "cmp",
+      "var": "on_glp_1_receptor_agonist",
+      "op": "==",
+      "value": false
+     }
+    ]
+   },
+   "then": {
+    "kind": "cmp",
+    "var": "on_sglt_2_inhibitors",
+    "op": "==",
+    "value": true
+   },
+   "action": "recommend",
+   "target": "SGLT-2 inhibitor initiation or continuation",
+   "strength": null,
+   "deontic": "obligation",
+   "source_page": null,
+   "source_span": "In adults at higher risk of cardiovascular and kidney complications, tirzepatide should generally not replace medications effective in reducing the risk of these complications. If replacing a GLP-1 receptor agonist with tirzepatide, initiation or continuation of an SGLT-2 inhibitor is indicated."
+  },
+  {
+   "rule_id": "PMC12355350:0120",
+   "when": {
+    "kind": "cmp",
+    "var": "has_heart_failure",
+    "op": "==",
+    "value": true
+   },
+   "then": {
+    "kind": "cmp",
+    "var": "on_sglt_2_inhibitors",
+    "op": "==",
+    "value": true
+   },
+   "action": "recommend",
+   "target": "SGLT-2 inhibitors",
+   "strength": null,
+   "deontic": "permission",
+   "source_page": null,
+   "source_span": "Adults with established heart failure may favour SGLT-2 inhibitors over alternatives."
+  },
+  {
+   "rule_id": "PMC12355350:0121",
+   "when": {
+    "kind": "cmp",
+    "var": "on_sglt_2_inhibitors",
+    "op": "==",
+    "value": true
+   },
+   "then": {
+    "kind": "cmp",
+    "var": "on_glp_1_receptor_agonists",
+    "op": "==",
+    "value": true
+   },
+   "action": "recommend",
+   "target": "GLP-1 receptor agonist in combination with SGLT-2 inhibitor",
+   "strength": null,
+   "deontic": "permission",
+   "source_page": null,
+   "source_span": "SGLT-2 inhibitors and GLP-1 receptor agonists can be combined."
   }
  ],
  "refusals": [
   {
-   "rule_id": "values-preferences-01",
-   "reason_code": "not_patient_level",
-   "reason_text": "This passage reports patient preference research and panel judgments about typical values and preferences, plus guideline update scheduling. It states no actionable patient-level recommendation, and its qualifiers are unquantifiable.",
-   "source_page": null,
-   "source_span": "The panel accordingly made judgments regarding the values and preferences of typical well-informed patients with diabetes",
-   "confidence": 0.9,
-   "undefined_predicates": [
-    "moderate or high certainty of important benefits",
-    "moderate or high certainty of little or no increased risk of harms",
-    "harmful outcomes are less patient-important",
-    "outcomes of critical patient importance",
-    "substantial weight loss effects",
-    "higher value placed on body weight change",
-    "adequate funding and resources"
-   ],
-   "evidence": [
-    "patients generally preferred SGLT-2 inhibitors, GLP-1 receptor agonists, and dipeptidyl peptidase 4 inhibitors over other therapies",
-    "The guideline is planned for updates on an annual basis at minimum"
-   ]
-  },
-  {
-   "rule_id": "PMC12355350:0124",
+   "rule_id": "PMC12355350:0085",
    "reason_code": "unbound_concept",
    "reason_text": "no clinical concept in the statement resolved to a code",
    "source_page": null,
-   "source_span": "Understanding the recommendation\u2014Given the benefit on overall survival (high certainty evidence), important benefits on cardiovascular and kidney outcomes (moderate to high certainty evidence), and taking into account risk of harms (moderate certainty evidence) and treatment burdens, all or almost all higher risk patients with established disease were anticipated to be inclined to accept treatment; this justified a strong recommendation in favour.",
+   "source_span": "Users should generally prioritise medications for which a strong recommendation in favour of use is provided for the relevant risk stratum, followed by medications for which a weak or conditional recommendation in favour is provided.",
+   "confidence": 1.0,
+   "undefined_predicates": [],
+   "evidence": [
+    "[binder/NO_BOUND_VOCABULARY] no clinical concept in the statement resolved to a code"
+   ]
+  },
+  {
+   "rule_id": "PMC12355350:0086",
+   "reason_code": "unbound_concept",
+   "reason_text": "no clinical concept in the statement resolved to a code",
+   "source_page": null,
+   "source_span": "When faced with multiple recommended alternatives, choice of medications should be contextual, tailored to the individual and informed by shared decision making.",
+   "confidence": 1.0,
+   "undefined_predicates": [],
+   "evidence": [
+    "[binder/NO_BOUND_VOCABULARY] no clinical concept in the statement resolved to a code"
+   ]
+  },
+  {
+   "rule_id": "cvd-ckd-risk-group-ordering",
+   "reason_code": "not_patient_level",
+   "reason_text": "This is meta-guidance addressed to 'users of the guideline' about how to apply the risk-stratification scheme, not a statement about what care an individual patient should receive. It specifies no action on a patient's care plan.",
+   "source_page": null,
+   "source_span": "users of the guideline should first consider whether they have established CVD or CKD",
+   "confidence": 0.9,
+   "undefined_predicates": [
+    "users of the guideline should first consider",
+    "which risk group is appropriate"
+   ],
+   "evidence": [
+    "When considering which risk group is appropriate for an individual patient, users of the guideline should first consider whether they have established CVD or CKD."
+   ]
+  },
+  {
+   "rule_id": "cvd-factors-consideration",
+   "reason_code": "beyond_dsl",
+   "reason_text": "This statement is meta-guidance about what decision makers should weigh when deliberating, not a conditional linking a patient state to a required care-plan action. It names a list of factors to 'consider' with no threshold, direction, or action, so it cannot be expressed as when -> then.",
+   "source_page": null,
+   "source_span": "Decision makers should additionally consider the presence (or absence) of factors such as: history of myocardial infarction, coronary intervention, ischaemic heart disease, heart failure, cerebrovascular disease, peripheral vascular disease, or atrial fibrillation; older age; male sex; cardiovascular risk factors (summarised above); and kidney function.",
+   "confidence": 0.85,
+   "undefined_predicates": [
+    "should additionally consider the presence (or absence) of factors such as",
+    "older age",
+    "cardiovascular risk factors (summarised above)",
+    "kidney function"
+   ],
+   "evidence": [
+    "No action target is specified; the recommendation governs deliberation rather than a care plan.",
+    "'factors such as' makes the list open-ended and non-exhaustive."
+   ]
+  },
+  {
+   "rule_id": "cv_kidney_risk_individualisation",
+   "reason_code": "vague_predicate",
+   "reason_text": "The recommendation offers no defined threshold or action: it points to a patient's 'risk of cardiovascular and kidney complications' for 'more individualised decision making', neither of which is operationalised as a codable predicate or care-plan action. It is also permissive ('may consider') with no specified target.",
+   "source_page": null,
+   "source_span": "Beyond this, clinicians may consider a specific patient\u2019s risk of cardiovascular and kidney complications for more individualised decision making.",
+   "confidence": null,
+   "undefined_predicates": [
+    "risk of cardiovascular and kidney complications",
+    "more individualised decision making"
+   ],
+   "evidence": [
+    "Beyond this, clinicians may consider a specific patient\u2019s risk of cardiovascular and kidney complications for more individualised decision making."
+   ]
+  },
+  {
+   "rule_id": "PMC12355350:0091",
+   "reason_code": "unbound_concept",
+   "reason_text": "no clinical concept in the statement resolved to a code",
+   "source_page": null,
+   "source_span": "Clinicians and patients may choose to avoid combining candidate medications in certain contexts, including where the additive burden of administration or additive harms of treatment are substantial, or where additive benefits are not anticipated to be substantial.",
+   "confidence": 1.0,
+   "undefined_predicates": [],
+   "evidence": [
+    "[binder/NO_BOUND_VOCABULARY] no clinical concept in the statement resolved to a code"
+   ]
+  },
+  {
+   "rule_id": "gi-cumulative-risk-glp1",
+   "reason_code": "defeasible",
+   "reason_text": "The recommendation is explicitly permissive and preference-sensitive ('may choose to avoid'), hinging on an undefined subjective weighing of cumulative risk versus anticipated benefit; its force is optional by design and the threshold is undefined.",
+   "source_page": null,
+   "source_span": "Adults already taking medications with gastrointestinal side effects (such as metformin) may choose to avoid adding in other drugs with similar side effects (such as GLP-1 receptor agonists) if the cumulative risk of gastrointestinal events exceeds anticipated benefits or is perceived as being too large a harm overall.",
+   "confidence": null,
+   "undefined_predicates": [
+    "may choose to avoid",
+    "if the cumulative risk of gastrointestinal events exceeds anticipated benefits",
+    "perceived as being too large a harm overall"
+   ],
+   "evidence": [
+    "Adults already taking medications with gastrointestinal side effects (such as metformin) may choose to avoid adding in other drugs with similar side effects (such as GLP-1 receptor agonists)"
+   ]
+  },
+  {
+   "rule_id": "cv_kidney_weight_tradeoff_preference",
+   "reason_code": "defeasible",
+   "reason_text": "This is preference-sensitive shared decision-making guidance: patients weigh the relative importance of cardiovascular, kidney, and weight benefits when choosing between agents. No specific applicability condition or required care-plan action can be derived; the force is deliberative rather than obligatory.",
+   "source_page": null,
+   "source_span": "When choosing between alternatives, patients should consider the relative impact of specific cardiovascular and kidney benefits and reduction in body weight offered by both medications.",
+   "confidence": 0.85,
+   "undefined_predicates": [
+    "the relative impact of specific cardiovascular and kidney benefits",
+    "alternatives",
+    "both medications"
+   ],
+   "evidence": [
+    "patients should consider"
+   ]
+  },
+  {
+   "rule_id": "glp1-vs-tirzepatide-tradeoff",
+   "reason_code": "defeasible",
+   "reason_text": "The statement asks decision makers to weigh competing benefits when choosing between two agents rather than requiring any specific action for a defined patient population. It is a preference-sensitive, shared-decision-making trade-off with no determinate obligation, so it cannot be encoded as when -> then.",
+   "source_page": null,
+   "source_span": "When choosing between GLP-1 receptor agonists and tirzepatide, decision makers should weigh the higher certainty of cardiovascular and kidney benefits (offered by GLP-1 receptor agonists) against larger weight loss benefits (offered by tirzepatide).",
+   "confidence": null,
+   "undefined_predicates": [
+    "decision makers should weigh the higher certainty of cardiovascular and kidney benefits (offered by GLP-1 receptor agonists) against larger weight loss benefits (offered by tirzepatide)",
+    "When choosing between GLP-1 receptor agonists and tirzepatide"
+   ],
+   "evidence": [
+    "No applicability condition on patient characteristics is stated",
+    "No single action is mandated or permitted; the output is a judgment weighing"
+   ]
+  },
+  {
+   "rule_id": "ckd-kdigo-classification",
+   "reason_code": "beyond_dsl",
+   "reason_text": "This statement describes how to interpret/classify existing results (staging CKD by eGFR and albuminuria per the KDIGO table) rather than prescribing an action for the patient's care plan; it has no when -> then action structure expressible in the DSL.",
+   "source_page": null,
+   "source_span": "Adults with CKD may be classified based on eGFR and degree of albuminuria based on the KDIGO classification (supplement 2).",
+   "confidence": 0.8,
+   "undefined_predicates": [
+    "classified based on eGFR and degree of albuminuria based on the KDIGO classification"
+   ],
+   "evidence": [
+    "No action (recommend/avoid/hold/monitor/refer/screen) is specified; the output is a classification label, not a care-plan obligation."
+   ]
+  },
+  {
+   "rule_id": "cvd-risk-assessment-gestalt",
+   "reason_code": "vague_predicate",
+   "reason_text": "The recommendation directs clinicians to assess risk using 'gestalt' or an unspecified choice among 'one of several publicly available prognostic models', neither of which has a definable threshold or operationalizable criterion for a care plan check.",
+   "source_page": null,
+   "source_span": "clinicians should rely on gestalt or one of several publicly available prognostic models (supplement 3) to assess a patient's risk of cardiovascular and kidney complications",
+   "confidence": 0.72,
+   "undefined_predicates": [
+    "gestalt",
+    "one of several publicly available prognostic models",
+    "risk of cardiovascular and kidney complications"
+   ],
+   "evidence": [
+    "For patients with established CVD, clinicians should rely on gestalt or one of several publicly available prognostic models (supplement 3) to assess a patient's risk of cardiovascular and kidney complications."
+   ]
+  },
+  {
+   "rule_id": "apply-proportional-weight-effect",
+   "reason_code": "not_patient_level",
+   "reason_text": "This is meta-guidance to users about how to interpret and apply the evidence and recommendations (scaling a proportional weight effect to an individual's body weight), not a statement about what care an individual patient should receive. It has no encodable applicability condition or care-plan action.",
+   "source_page": null,
+   "source_span": "users should consider the proportional effect on weight anticipated and apply this to the individual's body weight",
+   "confidence": 0.85,
+   "undefined_predicates": [
+    "the proportional effect on weight anticipated"
+   ],
+   "evidence": [
+    "When applying this evidence and related recommendations to an individual, users should consider..."
+   ]
+  },
+  {
+   "rule_id": "PMC12355350:0098",
+   "reason_code": "unbound_concept",
+   "reason_text": "no clinical concept in the statement resolved to a code",
+   "source_page": null,
+   "source_span": "Patients should ideally be involved in shared decision making.",
    "confidence": 1.0,
    "undefined_predicates": [],
    "evidence": [
@@ -1210,6 +1626,893 @@
  ],
  "merged_concepts": {
   "has_cvd": "has_cardiovascular_disease_cvd",
-  "has_ckd": "has_chronic_kidney_disease_ckd"
- }
+  "has_ckd": "has_chronic_kidney_disease_ckd",
+  "on_sglt_2_inhibitor": "on_sglt_2_inhibitors"
+ },
+ "findings": [
+  {
+   "statement_id": "PMC12355350:0045",
+   "statement": "\u2022 Lower risk (three or fewer cardiovascular risk factors without established cardiovascular disease (CVD) or chronic kidney disease (CKD)): weak recommendation against SGLT-2 inhibitors or GLP-1 receptor agonists.",
+   "decision": "partial",
+   "reason_code": null,
+   "confidence": 1.0,
+   "open_holes": [
+    "has_three_fewer_cardiovascular_risk_factors"
+   ],
+   "evidence": [
+    {
+     "source": "binder",
+     "code": "unbound_unselected",
+     "detail": "no terminology binding for 'cardiovascular risk factors' (condition): The phrase refers to countable individual cardiovascular risk factors (e.g., hypertension, smoking, dyslipidemia), not to an overall risk state or assessment. No candidate represents 'cardiovascular risk factor' as such: [2]/[4] are risk-of-disease states, [0] is an event risk, [6] is a generic risk factor without cardiovascular specificity, and [9] is hypertension-specific. Binding to any would change the meaning."
+    },
+    {
+     "source": "validator",
+     "code": "OPEN_HOLE",
+     "detail": "'has_three_fewer_cardiovascular_risk_factors' is an unbound predicate the guideline states but does not define"
+    },
+    {
+     "source": "model",
+     "code": "PARTIAL_ENCODING",
+     "detail": "encoded with 1 free variable(s): has_three_fewer_cardiovascular_risk_factors"
+    }
+   ],
+   "rule_id": "PMC12355350:0045",
+   "action": "avoid SGLT-2 inhibitors or GLP-1 receptor agonists",
+   "deontic": "obligation",
+   "strength": "weak",
+   "logic": "has_three_fewer_cardiovascular_risk_factors = true \u2227 has_cardiovascular_disease_cvd = false \u2227 has_chronic_kidney_disease_ckd = false\n    \u2192  on_sglt_2_inhibitors = false \u2227 on_glp_1_receptor_agonists = false",
+   "variables": [
+    {
+     "name": "has_cardiovascular_disease_cvd",
+     "type": "bool",
+     "unit": null,
+     "description": "CVD - cardiovascular disease",
+     "binding": "http://snomed.info/sct|49601007|20260801",
+     "unbound": false,
+     "codes": 500
+    },
+    {
+     "name": "has_chronic_kidney_disease_ckd",
+     "type": "bool",
+     "unit": null,
+     "description": "Chronic kidney disease",
+     "binding": "http://snomed.info/sct|709044004|20260801",
+     "unbound": false,
+     "codes": 112
+    },
+    {
+     "name": "has_three_fewer_cardiovascular_risk_factors",
+     "type": "bool",
+     "unit": null,
+     "description": "three or fewer cardiovascular risk factors",
+     "binding": null,
+     "unbound": true,
+     "codes": 0
+    },
+    {
+     "name": "on_glp_1_receptor_agonists",
+     "type": "bool",
+     "unit": null,
+     "description": "Glucagon-like peptide 1 receptor agonist-containing product",
+     "binding": "http://snomed.info/sct|416636000|20260801",
+     "unbound": false,
+     "codes": 45
+    },
+    {
+     "name": "on_sglt_2_inhibitors",
+     "type": "bool",
+     "unit": null,
+     "description": "SGLT2 Inhibitors",
+     "binding": "http://cts.nlm.nih.gov/fhir/ValueSet|2.16.840.1.113762.1.4.1178.30|20260418",
+     "unbound": false,
+     "codes": 110
+    }
+   ],
+   "english": "IF three or fewer cardiovascular risk factors AND NOT CVD - cardiovascular disease AND NOT Chronic kidney disease\nTHEN should (weak recommendation): NOT SGLT2 Inhibitors AND NOT Glucagon-like peptide 1 receptor agonist-containing product",
+   "cql": "patient_checker/cql/bundle.PMC12355350/PMC12355350_0045.cql"
+  },
+  {
+   "statement_id": "PMC12355350:0046",
+   "statement": "\u2022 Moderate risk (more than three cardiovascular risk factors without established CVD or CKD; or established CVD and/or CKD at lower risk of complications): weak recommendation in favour of SGLT-2 inhibitors or GLP-1 receptor agonists; and a weak recommendation against finerenone in adults with CKD.",
+   "decision": "partial",
+   "reason_code": null,
+   "confidence": 1.0,
+   "open_holes": [
+    "has_lower_risk_complications",
+    "has_more_than_three_cardiovascular_risk"
+   ],
+   "evidence": [
+    {
+     "source": "binder",
+     "code": "unbound_unselected",
+     "detail": "no terminology binding for 'cardiovascular risk factors' (condition): The phrase denotes countable individual cardiovascular risk factors (e.g., hypertension, smoking, dyslipidemia) being tallied, not a single risk state. No candidate represents 'cardiovascular risk factor' as a category; 'Risk of cardiovascular disease'/'At risk of cardiovascular disease' are risk states, not the enumerable factors, and 'Risk factor' (80943009) is unqualified. Concept is under-determined by the candidates."
+    },
+    {
+     "source": "validator",
+     "code": "OPEN_HOLE",
+     "detail": "'has_lower_risk_complications' is an unbound predicate the guideline states but does not define"
+    },
+    {
+     "source": "validator",
+     "code": "OPEN_HOLE",
+     "detail": "'has_more_than_three_cardiovascular_risk' is an unbound predicate the guideline states but does not define"
+    },
+    {
+     "source": "gate",
+     "code": "UNUSED_BOUND_CONCEPT",
+     "detail": "bound but not used in the rule: has_ckd, has_cvd, on_finerenone -- an outcome may legitimately be unused, a dropped clause or population restriction may not"
+    },
+    {
+     "source": "model",
+     "code": "PARTIAL_ENCODING",
+     "detail": "encoded with 2 free variable(s): has_lower_risk_complications, has_more_than_three_cardiovascular_risk"
+    }
+   ],
+   "rule_id": "PMC12355350:0046",
+   "action": "recommend SGLT-2 inhibitors or GLP-1 receptor agonists",
+   "deontic": "obligation",
+   "strength": "weak",
+   "logic": "has_more_than_three_cardiovascular_risk = true \u2228 has_lower_risk_complications = true\n    \u2192  on_sglt_2_inhibitors = true \u2228 on_glp_1_receptor_agonists = true",
+   "variables": [
+    {
+     "name": "has_lower_risk_complications",
+     "type": "bool",
+     "unit": null,
+     "description": "at lower risk of complications",
+     "binding": null,
+     "unbound": true,
+     "codes": 0
+    },
+    {
+     "name": "has_more_than_three_cardiovascular_risk",
+     "type": "bool",
+     "unit": null,
+     "description": "more than three cardiovascular risk factors",
+     "binding": null,
+     "unbound": true,
+     "codes": 0
+    },
+    {
+     "name": "on_glp_1_receptor_agonists",
+     "type": "bool",
+     "unit": null,
+     "description": "Glucagon-like peptide 1 receptor agonist-containing product",
+     "binding": "http://snomed.info/sct|416636000|20260801",
+     "unbound": false,
+     "codes": 45
+    },
+    {
+     "name": "on_sglt_2_inhibitors",
+     "type": "bool",
+     "unit": null,
+     "description": "SGLT2 Inhibitors",
+     "binding": "http://cts.nlm.nih.gov/fhir/ValueSet|2.16.840.1.113762.1.4.1178.30|20260418",
+     "unbound": false,
+     "codes": 110
+    }
+   ],
+   "english": "IF more than three cardiovascular risk factors OR at lower risk of complications\nTHEN should (weak recommendation): SGLT2 Inhibitors OR Glucagon-like peptide 1 receptor agonist-containing product",
+   "cql": "patient_checker/cql/bundle.PMC12355350/PMC12355350_0046.cql"
+  },
+  {
+   "statement_id": "PMC12355350:0047",
+   "statement": "and a weak recommendation against finerenone in adults with CKD.",
+   "decision": "encode",
+   "reason_code": null,
+   "confidence": 1.0,
+   "open_holes": [],
+   "evidence": [],
+   "rule_id": "PMC12355350:0047",
+   "action": "avoid finerenone",
+   "deontic": "obligation",
+   "strength": "weak",
+   "logic": "has_ckd = true\n    \u2192  on_finerenone = false",
+   "variables": [
+    {
+     "name": "has_ckd",
+     "type": "bool",
+     "unit": null,
+     "description": "Chronic kidney disease",
+     "binding": "http://snomed.info/sct|709044004|20260801",
+     "unbound": false,
+     "codes": 112
+    },
+    {
+     "name": "on_finerenone",
+     "type": "bool",
+     "unit": null,
+     "description": "finerenone",
+     "binding": "http://www.nlm.nih.gov/research/umls/rxnorm|2562811|unknown",
+     "unbound": false,
+     "codes": 0
+    }
+   ],
+   "english": "IF Chronic kidney disease\nTHEN should (weak recommendation): NOT finerenone",
+   "cql": "patient_checker/cql/bundle.PMC12355350/PMC12355350_0047.cql"
+  },
+  {
+   "statement_id": "PMC12355350:0048",
+   "statement": "\u2022 Higher risk (established CVD and/or CKD at higher risk of complications, or established heart failure): strong recommendation in favour of SGLT-2 inhibitors or GLP-1 receptor agonists; and a weak recommendation in favour of finerenone in adults with CKD.",
+   "decision": "partial",
+   "reason_code": null,
+   "confidence": 1.0,
+   "open_holes": [
+    "has_higher_risk"
+   ],
+   "evidence": [
+    {
+     "source": "validator",
+     "code": "OPEN_HOLE",
+     "detail": "'has_higher_risk' is an unbound predicate the guideline states but does not define"
+    },
+    {
+     "source": "gate",
+     "code": "UNUSED_BOUND_CONCEPT",
+     "detail": "bound but not used in the rule: has_ckd, has_cvd, has_heart_failure, on_finerenone -- an outcome may legitimately be unused, a dropped clause or population restriction may not"
+    },
+    {
+     "source": "model",
+     "code": "PARTIAL_ENCODING",
+     "detail": "encoded with 1 free variable(s): has_higher_risk"
+    }
+   ],
+   "rule_id": "PMC12355350:0048",
+   "action": "recommend SGLT-2 inhibitors or GLP-1 receptor agonists",
+   "deontic": "obligation",
+   "strength": "strong recommendation in favour",
+   "logic": "has_higher_risk = true\n    \u2192  on_sglt_2_inhibitors = true \u2228 on_glp_1_receptor_agonists = true",
+   "variables": [
+    {
+     "name": "has_higher_risk",
+     "type": "bool",
+     "unit": null,
+     "description": "Higher risk",
+     "binding": null,
+     "unbound": true,
+     "codes": 0
+    },
+    {
+     "name": "on_glp_1_receptor_agonists",
+     "type": "bool",
+     "unit": null,
+     "description": "Glucagon-like peptide 1 receptor agonist-containing product",
+     "binding": "http://snomed.info/sct|416636000|20260801",
+     "unbound": false,
+     "codes": 45
+    },
+    {
+     "name": "on_sglt_2_inhibitors",
+     "type": "bool",
+     "unit": null,
+     "description": "SGLT2 Inhibitors",
+     "binding": "http://cts.nlm.nih.gov/fhir/ValueSet|2.16.840.1.113762.1.4.1178.30|20260418",
+     "unbound": false,
+     "codes": 110
+    }
+   ],
+   "english": "IF Higher risk\nTHEN must (strong recommendation): SGLT2 Inhibitors OR Glucagon-like peptide 1 receptor agonist-containing product",
+   "cql": "patient_checker/cql/bundle.PMC12355350/PMC12355350_0048.cql"
+  },
+  {
+   "statement_id": "PMC12355350:0050",
+   "statement": "Across risk strata: weak recommendation in favour of tirzepatide in adults with obesity.",
+   "decision": "encode",
+   "reason_code": null,
+   "confidence": 1.0,
+   "open_holes": [],
+   "evidence": [],
+   "rule_id": "PMC12355350:0050",
+   "action": "recommend tirzepatide",
+   "deontic": "obligation",
+   "strength": "weak recommendation in favour",
+   "logic": "has_obesity = true\n    \u2192  on_tirzepatide = true",
+   "variables": [
+    {
+     "name": "has_obesity",
+     "type": "bool",
+     "unit": null,
+     "description": "Obesity",
+     "binding": "http://cts.nlm.nih.gov/fhir/ValueSet|2.16.840.1.113762.1.4.1272.8|20250318",
+     "unbound": false,
+     "codes": 21
+    },
+    {
+     "name": "on_tirzepatide",
+     "type": "bool",
+     "unit": null,
+     "description": "tirzepatide",
+     "binding": "http://www.nlm.nih.gov/research/umls/rxnorm|2601723|unknown",
+     "unbound": false,
+     "codes": 0
+    }
+   ],
+   "english": "IF Obesity\nTHEN should (weak recommendation): tirzepatide",
+   "cql": "patient_checker/cql/bundle.PMC12355350/PMC12355350_0050.cql"
+  },
+  {
+   "statement_id": "PMC12355350:0085",
+   "statement": "Users should generally prioritise medications for which a strong recommendation in favour of use is provided for the relevant risk stratum, followed by medications for which a weak or conditional recommendation in favour is provided.",
+   "decision": "refuse",
+   "reason_code": "unbound_concept",
+   "confidence": 0.0,
+   "open_holes": [],
+   "evidence": [
+    {
+     "source": "binder",
+     "code": "NO_BOUND_VOCABULARY",
+     "detail": "no clinical concept in the statement resolved to a code"
+    }
+   ]
+  },
+  {
+   "statement_id": "PMC12355350:0131",
+   "statement": "If replacing a GLP-1 receptor agonist with tirzepatide, initiation or continuation of an SGLT-2 inhibitor is indicated.",
+   "decision": "encode",
+   "reason_code": null,
+   "confidence": 1.0,
+   "open_holes": [],
+   "evidence": [],
+   "rule_id": "PMC12355350:0131",
+   "action": "recommend SGLT-2 inhibitor",
+   "deontic": "obligation",
+   "strength": null,
+   "logic": "on_glp_1_receptor_agonist = true \u2227 on_tirzepatide = true\n    \u2192  on_sglt_2_inhibitor = true",
+   "variables": [
+    {
+     "name": "on_glp_1_receptor_agonist",
+     "type": "bool",
+     "unit": null,
+     "description": "GLP-1 Receptor Agonist",
+     "binding": "http://www.whocc.no/atc|N0000178480",
+     "unbound": false,
+     "codes": 0
+    },
+    {
+     "name": "on_sglt_2_inhibitor",
+     "type": "bool",
+     "unit": null,
+     "description": "SGLT2 Inhibitors",
+     "binding": "http://cts.nlm.nih.gov/fhir/ValueSet|2.16.840.1.113762.1.4.1178.30|20260418",
+     "unbound": false,
+     "codes": 110
+    },
+    {
+     "name": "on_tirzepatide",
+     "type": "bool",
+     "unit": null,
+     "description": "tirzepatide",
+     "binding": "http://www.nlm.nih.gov/research/umls/rxnorm|2601723|unknown",
+     "unbound": false,
+     "codes": 0
+    }
+   ],
+   "english": "IF GLP-1 Receptor Agonist AND tirzepatide\nTHEN must: SGLT2 Inhibitors",
+   "cql": "patient_checker/cql/bundle.PMC12355350/PMC12355350_0131.cql"
+  },
+  {
+   "statement_id": "PMC12355350:0127",
+   "statement": "Tirzepatide should not be given in combination with GLP-1 receptor agonists, but can be combined with SGLT-2 inhibitors and finerenone.",
+   "decision": "encode",
+   "reason_code": null,
+   "confidence": 1.0,
+   "open_holes": [],
+   "evidence": [
+    {
+     "source": "gate",
+     "code": "UNUSED_BOUND_CONCEPT",
+     "detail": "bound but not used in the rule: on_finerenone, on_sglt_2_inhibitors -- an outcome may legitimately be unused, a dropped population restriction may not"
+    }
+   ],
+   "rule_id": "PMC12355350:0127",
+   "action": "avoid GLP-1 receptor agonists",
+   "deontic": "obligation",
+   "strength": null,
+   "logic": "on_tirzepatide = true\n    \u2192  on_glp_1_receptor_agonists = false",
+   "variables": [
+    {
+     "name": "on_glp_1_receptor_agonists",
+     "type": "bool",
+     "unit": null,
+     "description": "Glucagon-like peptide 1 receptor agonist-containing product",
+     "binding": "http://snomed.info/sct|416636000|20260801",
+     "unbound": false,
+     "codes": 45
+    },
+    {
+     "name": "on_tirzepatide",
+     "type": "bool",
+     "unit": null,
+     "description": "tirzepatide",
+     "binding": "http://www.nlm.nih.gov/research/umls/rxnorm|2601723|unknown",
+     "unbound": false,
+     "codes": 0
+    }
+   ],
+   "english": "IF tirzepatide\nTHEN must: NOT Glucagon-like peptide 1 receptor agonist-containing product",
+   "cql": "patient_checker/cql/bundle.PMC12355350/PMC12355350_0127.cql"
+  },
+  {
+   "statement_id": "PMC12355350:0141",
+   "statement": "For adults prioritising initiation of tirzepatide over GLP-1 receptor agonist therapy due to larger weight loss effects, initiation or continuation of an SGLT-2 inhibitor is indicated.",
+   "decision": "encode",
+   "reason_code": null,
+   "confidence": 1.0,
+   "open_holes": [],
+   "evidence": [
+    {
+     "source": "gate",
+     "code": "UNUSED_BOUND_CONCEPT",
+     "detail": "bound but not used in the rule: has_weight_loss, on_glp_1_receptor_agonist -- an outcome may legitimately be unused, a dropped population restriction may not"
+    }
+   ],
+   "rule_id": "PMC12355350:0141",
+   "action": "recommend SGLT-2 inhibitor",
+   "deontic": "obligation",
+   "strength": "indicated",
+   "logic": "on_tirzepatide = true\n    \u2192  on_sglt_2_inhibitor = true",
+   "variables": [
+    {
+     "name": "on_sglt_2_inhibitor",
+     "type": "bool",
+     "unit": null,
+     "description": "SGLT2 Inhibitors",
+     "binding": "http://cts.nlm.nih.gov/fhir/ValueSet|2.16.840.1.113762.1.4.1178.30|20260418",
+     "unbound": false,
+     "codes": 110
+    },
+    {
+     "name": "on_tirzepatide",
+     "type": "bool",
+     "unit": null,
+     "description": "tirzepatide",
+     "binding": "http://www.nlm.nih.gov/research/umls/rxnorm|2601723|unknown",
+     "unbound": false,
+     "codes": 0
+    }
+   ],
+   "english": "IF tirzepatide\nTHEN must: SGLT2 Inhibitors",
+   "cql": "patient_checker/cql/bundle.PMC12355350/PMC12355350_0141.cql"
+  },
+  {
+   "statement_id": "PMC12355350:0086",
+   "statement": "When faced with multiple recommended alternatives, choice of medications should be contextual, tailored to the individual and informed by shared decision making.",
+   "decision": "refuse",
+   "reason_code": "unbound_concept",
+   "confidence": 0.0,
+   "open_holes": [],
+   "evidence": [
+    {
+     "source": "binder",
+     "code": "NO_BOUND_VOCABULARY",
+     "detail": "no clinical concept in the statement resolved to a code"
+    }
+   ]
+  },
+  {
+   "statement_id": "PMC12355350:0062",
+   "statement": "When considering which risk group is appropriate for an individual patient, users of the guideline should first consider whether they have established CVD or CKD.",
+   "decision": "refuse",
+   "reason_code": "not_patient_level",
+   "confidence": 0.0,
+   "open_holes": [
+    "has_risk_group_appropriate"
+   ],
+   "evidence": [
+    {
+     "source": "model",
+     "code": "not_patient_level",
+     "detail": "This is meta-guidance addressed to 'users of the guideline' about how to apply the risk-stratification scheme, not a statement about what care an individual patient should receive. It specifies no action on a patient's care plan."
+    },
+    {
+     "source": "gate",
+     "code": "GRAMMAR_OFFERED",
+     "detail": "decoder could emit [and, cmp, not, or] over vars [has_ckd, has_cvd] and events [none]"
+    }
+   ]
+  },
+  {
+   "statement_id": "PMC12355350:0071",
+   "statement": "Decision makers should additionally consider the presence (or absence) of factors such as: history of myocardial infarction, coronary intervention, ischaemic heart disease, heart failure, cerebrovascular disease, peripheral vascular disease, or atrial fibrillation; older age; male sex; cardiovascular risk factors (summarised above); and kidney function.",
+   "decision": "refuse",
+   "reason_code": "beyond_dsl",
+   "confidence": 0.0,
+   "open_holes": [
+    "has_older_age",
+    "has_cardiovascular_risk_factors_summarised_above",
+    "has_kidney_function"
+   ],
+   "evidence": [
+    {
+     "source": "gate",
+     "code": "REGISTRY_TRUNCATED",
+     "detail": "1 of 3 holes dropped to keep the decoding grammar compilable"
+    },
+    {
+     "source": "model",
+     "code": "beyond_dsl",
+     "detail": "This statement is meta-guidance about what decision makers should weigh when deliberating, not a conditional linking a patient state to a required care-plan action. It names a list of factors to 'consider' with no threshold, direction, or action, so it cannot be expressed as when -> then."
+    },
+    {
+     "source": "gate",
+     "code": "GRAMMAR_OFFERED",
+     "detail": "decoder could emit [and, between, cmp, delta, not, or, since] over vars [coronary_intervention, has_atrial_fibrillation, has_cerebrovascular_disease, has_heart_failure, has_ischaemic_heart_disease, has_myocardial_infarction, has_peripheral_vascular_disease, kidney_function] and events [coronary_intervention]"
+    }
+   ]
+  },
+  {
+   "statement_id": "PMC12355350:0074",
+   "statement": "Beyond this, clinicians may consider a specific patient\u2019s risk of cardiovascular and kidney complications for more individualised decision making.",
+   "decision": "refuse",
+   "reason_code": "vague_predicate",
+   "confidence": 0.0,
+   "open_holes": [
+    "has_risk_cardiovascular_kidney_complications",
+    "has_more_individualised_decision_making",
+    "has_kidney_complications"
+   ],
+   "evidence": [
+    {
+     "source": "binder",
+     "code": "unbound_unselected",
+     "detail": "no terminology binding for 'kidney complications' (condition): The sentence uses 'kidney complications' in a general sense of adverse renal outcomes (e.g., CKD progression, kidney failure) in a patient risk-stratification context, not a procedure-related renal complication, dialysis complication, or nephrotoxicity. No candidate matches this broad clinical outcome category."
+    },
+    {
+     "source": "model",
+     "code": "vague_predicate",
+     "detail": "The recommendation offers no defined threshold or action: it points to a patient's 'risk of cardiovascular and kidney complications' for 'more individualised decision making', neither of which is operationalised as a codable predicate or care-plan action. It is also permissive ('may consider') with no specified target."
+    },
+    {
+     "source": "gate",
+     "code": "GRAMMAR_OFFERED",
+     "detail": "decoder could emit [and, cmp, not, or] over vars [has_cardiovascular] and events [none]"
+    }
+   ]
+  },
+  {
+   "statement_id": "PMC12355350:0091",
+   "statement": "Clinicians and patients may choose to avoid combining candidate medications in certain contexts, including where the additive burden of administration or additive harms of treatment are substantial, or where additive benefits are not anticipated to be substantial.",
+   "decision": "refuse",
+   "reason_code": "unbound_concept",
+   "confidence": 0.0,
+   "open_holes": [],
+   "evidence": [
+    {
+     "source": "binder",
+     "code": "NO_BOUND_VOCABULARY",
+     "detail": "no clinical concept in the statement resolved to a code"
+    }
+   ]
+  },
+  {
+   "statement_id": "PMC12355350:0093",
+   "statement": "Adults already taking medications with gastrointestinal side effects (such as metformin) may choose to avoid adding in other drugs with similar side effects (such as GLP-1 receptor agonists) if the cumulative risk of gastrointestinal events exceeds anticipated benefits or is perceived as being too large a harm overall.",
+   "decision": "refuse",
+   "reason_code": "defeasible",
+   "confidence": 0.0,
+   "open_holes": [
+    "has_gastrointestinal_side_effects"
+   ],
+   "evidence": [
+    {
+     "source": "binder",
+     "code": "unbound_unselected",
+     "detail": "no terminology binding for 'gastrointestinal side effects' (condition): The phrase means adverse effects manifesting in the GI tract caused by any drug (metformin, GLP-1 RAs). Candidate [2] 'Gastrointestinal tract drug side effect' belongs to a series ([3] cardiac drug, [4] psychiatric drug, [5] diabetic drug side effects) denoting side effects OF drugs of that therapeutic class, i.e., side effects of gastrointestinal-tract drugs \\u2014 not GI-system side effects of other drugs. That is a near-miss in the wrong direction, and [8] 'Adverse drug effect' is too generic to capture the gastrointestinal localization. No candidate settles the intended concept."
+    },
+    {
+     "source": "model",
+     "code": "defeasible",
+     "detail": "The recommendation is explicitly permissive and preference-sensitive ('may choose to avoid'), hinging on an undefined subjective weighing of cumulative risk versus anticipated benefit; its force is optional by design and the threshold is undefined."
+    },
+    {
+     "source": "gate",
+     "code": "GRAMMAR_OFFERED",
+     "detail": "decoder could emit [and, cmp, not, or, since] over vars [has_gastrointestinal_events, on_glp_1_receptor_agonists, on_metformin] and events [on_glp_1_receptor_agonists, on_metformin]"
+    }
+   ]
+  },
+  {
+   "statement_id": "PMC12355350:0111",
+   "statement": "When choosing between alternatives, patients should consider the relative impact of specific cardiovascular and kidney benefits and reduction in body weight offered by both medications.",
+   "decision": "refuse",
+   "reason_code": "defeasible",
+   "confidence": 0.0,
+   "open_holes": [
+    "has_alternatives",
+    "has_both_medications",
+    "has_kidney"
+   ],
+   "evidence": [
+    {
+     "source": "binder",
+     "code": "unbound_unselected",
+     "detail": "no terminology binding for 'kidney' (condition): The phrase 'kidney' here is part of 'kidney benefits' \u2014 a vague reference to renal outcomes of drug therapy, not a specific coded renal function finding. None of the candidates (which are specific renal function states) matches, and the sentence does not settle which renal outcome is meant. Kidney-related outcomes can be coded facts, so data is capturable in principle."
+    },
+    {
+     "source": "model",
+     "code": "defeasible",
+     "detail": "This is preference-sensitive shared decision-making guidance: patients weigh the relative importance of cardiovascular, kidney, and weight benefits when choosing between agents. No specific applicability condition or required care-plan action can be derived; the force is deliberative rather than obligatory."
+    },
+    {
+     "source": "gate",
+     "code": "GRAMMAR_OFFERED",
+     "detail": "decoder could emit [and, between, cmp, not, or] over vars [body_weight] and events [none]"
+    }
+   ]
+  },
+  {
+   "statement_id": "PMC12355350:0128",
+   "statement": "When choosing between GLP-1 receptor agonists and tirzepatide, decision makers should weigh the higher certainty of cardiovascular and kidney benefits (offered by GLP-1 receptor agonists) against larger weight loss benefits (offered by tirzepatide).",
+   "decision": "refuse",
+   "reason_code": "defeasible",
+   "confidence": 0.0,
+   "open_holes": [],
+   "evidence": [
+    {
+     "source": "model",
+     "code": "defeasible",
+     "detail": "The statement asks decision makers to weigh competing benefits when choosing between two agents rather than requiring any specific action for a defined patient population. It is a preference-sensitive, shared-decision-making trade-off with no determinate obligation, so it cannot be encoded as when -> then."
+    },
+    {
+     "source": "gate",
+     "code": "GRAMMAR_OFFERED",
+     "detail": "decoder could emit [and, cmp, not, or, since] over vars [on_glp_1_receptor_agonists, on_tirzepatide] and events [on_glp_1_receptor_agonists, on_tirzepatide]"
+    }
+   ]
+  },
+  {
+   "statement_id": "PMC12355350:0130",
+   "statement": "In adults at higher risk of cardiovascular and kidney complications, tirzepatide should generally not replace medications effective in reducing the risk of these complications. If replacing a GLP-1 receptor agonist with tirzepatide, initiation or continuation of an SGLT-2 inhibitor is indicated.",
+   "decision": "partial",
+   "reason_code": null,
+   "confidence": 1.0,
+   "open_holes": [
+    "has_cardiovascular_kidney_complications"
+   ],
+   "evidence": [
+    {
+     "source": "binder",
+     "code": "unbound_unselected",
+     "detail": "no terminology binding for 'cardiovascular and kidney complications' (condition): The phrase denotes a broad composite of cardiovascular and kidney outcomes; no candidate captures both (candidate 0 'Cardiovascular renal disease' is a specific disease entity, not the composite outcome category; others are procedure/device complications). Concept is under-determined among the offered options, though such outcomes are codable in principle."
+    },
+    {
+     "source": "gate",
+     "code": "DROPPED_CONCEPT_RISK",
+     "detail": "1 concept(s) did not bind, so a strict encoding may have silently omitted them; retrying with them declared as holes"
+    },
+    {
+     "source": "validator",
+     "code": "OPEN_HOLE",
+     "detail": "'has_cardiovascular_kidney_complications' is an unbound predicate the guideline states but does not define"
+    },
+    {
+     "source": "model",
+     "code": "PARTIAL_ENCODING",
+     "detail": "encoded with 1 free variable(s): has_cardiovascular_kidney_complications"
+    }
+   ],
+   "rule_id": "PMC12355350:0130",
+   "action": "recommend SGLT-2 inhibitor initiation or continuation",
+   "deontic": "obligation",
+   "strength": null,
+   "logic": "has_cardiovascular_kidney_complications = true \u2227 on_tirzepatide = true \u2227 on_glp_1_receptor_agonist = false\n    \u2192  on_sglt_2_inhibitor = true",
+   "variables": [
+    {
+     "name": "has_cardiovascular_kidney_complications",
+     "type": "bool",
+     "unit": null,
+     "description": "cardiovascular and kidney complications",
+     "binding": null,
+     "unbound": true,
+     "codes": 0
+    },
+    {
+     "name": "on_glp_1_receptor_agonist",
+     "type": "bool",
+     "unit": null,
+     "description": "GLP-1 Receptor Agonist",
+     "binding": "http://www.whocc.no/atc|N0000178480",
+     "unbound": false,
+     "codes": 0
+    },
+    {
+     "name": "on_sglt_2_inhibitor",
+     "type": "bool",
+     "unit": null,
+     "description": "SGLT2 Inhibitors",
+     "binding": "http://cts.nlm.nih.gov/fhir/ValueSet|2.16.840.1.113762.1.4.1178.30|20260418",
+     "unbound": false,
+     "codes": 110
+    },
+    {
+     "name": "on_tirzepatide",
+     "type": "bool",
+     "unit": null,
+     "description": "tirzepatide",
+     "binding": "http://www.nlm.nih.gov/research/umls/rxnorm|2601723|unknown",
+     "unbound": false,
+     "codes": 0
+    }
+   ],
+   "english": "IF cardiovascular and kidney complications AND tirzepatide AND NOT GLP-1 Receptor Agonist\nTHEN must: SGLT2 Inhibitors",
+   "cql": "patient_checker/cql/bundle.PMC12355350/PMC12355350_0130.cql"
+  },
+  {
+   "statement_id": "PMC12355350:0068",
+   "statement": "Adults with CKD may be classified based on eGFR and degree of albuminuria based on the KDIGO classification (supplement 2).",
+   "decision": "refuse",
+   "reason_code": "beyond_dsl",
+   "confidence": 0.0,
+   "open_holes": [],
+   "evidence": [
+    {
+     "source": "model",
+     "code": "beyond_dsl",
+     "detail": "This statement describes how to interpret/classify existing results (staging CKD by eGFR and albuminuria per the KDIGO table) rather than prescribing an action for the patient's care plan; it has no when -> then action structure expressible in the DSL."
+    },
+    {
+     "source": "gate",
+     "code": "GRAMMAR_OFFERED",
+     "detail": "decoder could emit [and, between, cmp, not, or] over vars [albuminuria, egfr, has_ckd] and events [none]"
+    }
+   ]
+  },
+  {
+   "statement_id": "PMC12355350:0069",
+   "statement": "For patients with established CVD, clinicians should rely on gestalt or one of several publicly available prognostic models (supplement 3) to assess a patient's risk of cardiovascular and kidney complications.",
+   "decision": "refuse",
+   "reason_code": "vague_predicate",
+   "confidence": 0.0,
+   "open_holes": [
+    "has_gestalt",
+    "has_risk_cardiovascular_kidney_complications",
+    "has_cardiovascular_kidney_complications"
+   ],
+   "evidence": [
+    {
+     "source": "binder",
+     "code": "unbound_unselected",
+     "detail": "no terminology binding for 'cardiovascular and kidney complications' (condition): The phrase denotes a composite outcome category (cardiovascular events plus kidney complications) in a risk-prognostication context; no candidate captures both. 'Cardiovascular renal disease' (hypertensive heart and kidney disease) is a distinct disease entity, not this outcome set, and the others are procedure/device-related complications. The concept is a codable clinical outcome type in principle."
+    },
+    {
+     "source": "validator",
+     "code": "TYPE_ERROR",
+     "detail": "has_risk_cardiovascular_kidney_complications is bool but value is 'unassessed'"
+    },
+    {
+     "source": "validator",
+     "code": "OPEN_HOLE",
+     "detail": "'has_gestalt' is an unbound predicate the guideline states but does not define"
+    },
+    {
+     "source": "validator",
+     "code": "OPEN_HOLE",
+     "detail": "'has_risk_cardiovascular_kidney_complications' is an unbound predicate the guideline states but does not define"
+    },
+    {
+     "source": "validator",
+     "code": "NO_ACTION_ATOM",
+     "detail": "the obligation mentions no action variable or event"
+    },
+    {
+     "source": "model",
+     "code": "vague_predicate",
+     "detail": "The recommendation directs clinicians to assess risk using 'gestalt' or an unspecified choice among 'one of several publicly available prognostic models', neither of which has a definable threshold or operationalizable criterion for a care plan check."
+    },
+    {
+     "source": "gate",
+     "code": "GRAMMAR_OFFERED",
+     "detail": "decoder could emit [and, cmp, not, or] over vars [has_cvd] and events [none]"
+    }
+   ]
+  },
+  {
+   "statement_id": "PMC12355350:0082",
+   "statement": "When applying this evidence and related recommendations to an individual, users should consider the proportional effect on weight anticipated and apply this to the individual\u2019s body weight.",
+   "decision": "refuse",
+   "reason_code": "not_patient_level",
+   "confidence": 0.0,
+   "open_holes": [
+    "has_proportional_effect_weight_anticipated"
+   ],
+   "evidence": [
+    {
+     "source": "model",
+     "code": "not_patient_level",
+     "detail": "This is meta-guidance to users about how to interpret and apply the evidence and recommendations (scaling a proportional weight effect to an individual's body weight), not a statement about what care an individual patient should receive. It has no encodable applicability condition or care-plan action."
+    },
+    {
+     "source": "gate",
+     "code": "GRAMMAR_OFFERED",
+     "detail": "decoder could emit [and, between, cmp, not, or] over vars [body_weight] and events [none]"
+    }
+   ]
+  },
+  {
+   "statement_id": "PMC12355350:0098",
+   "statement": "Patients should ideally be involved in shared decision making.",
+   "decision": "refuse",
+   "reason_code": "unbound_concept",
+   "confidence": 0.0,
+   "open_holes": [],
+   "evidence": [
+    {
+     "source": "binder",
+     "code": "NO_BOUND_VOCABULARY",
+     "detail": "no clinical concept in the statement resolved to a code"
+    }
+   ]
+  },
+  {
+   "statement_id": "PMC12355350:0120",
+   "statement": "Adults with established heart failure may favour SGLT-2 inhibitors over alternatives.",
+   "decision": "encode",
+   "reason_code": null,
+   "confidence": 1.0,
+   "open_holes": [],
+   "evidence": [],
+   "rule_id": "PMC12355350:0120",
+   "action": "recommend SGLT-2 inhibitors",
+   "deontic": "permission",
+   "strength": null,
+   "logic": "has_heart_failure = true\n    \u2192  on_sglt_2_inhibitors = true",
+   "variables": [
+    {
+     "name": "has_heart_failure",
+     "type": "bool",
+     "unit": null,
+     "description": "Heart failure",
+     "binding": "http://snomed.info/sct|84114007|20260801",
+     "unbound": false,
+     "codes": 122
+    },
+    {
+     "name": "on_sglt_2_inhibitors",
+     "type": "bool",
+     "unit": null,
+     "description": "SGLT2 Inhibitors",
+     "binding": "http://cts.nlm.nih.gov/fhir/ValueSet|2.16.840.1.113762.1.4.1178.30|20260418",
+     "unbound": false,
+     "codes": 110
+    }
+   ],
+   "english": "IF Heart failure\nTHEN may: SGLT2 Inhibitors",
+   "cql": "patient_checker/cql/bundle.PMC12355350/PMC12355350_0120.cql"
+  },
+  {
+   "statement_id": "PMC12355350:0121",
+   "statement": "SGLT-2 inhibitors and GLP-1 receptor agonists can be combined.",
+   "decision": "encode",
+   "reason_code": null,
+   "confidence": 1.0,
+   "open_holes": [],
+   "evidence": [],
+   "rule_id": "PMC12355350:0121",
+   "action": "recommend GLP-1 receptor agonist in combination with SGLT-2 inhibitor",
+   "deontic": "permission",
+   "strength": null,
+   "logic": "on_sglt_2_inhibitors = true\n    \u2192  on_glp_1_receptor_agonists = true",
+   "variables": [
+    {
+     "name": "on_glp_1_receptor_agonists",
+     "type": "bool",
+     "unit": null,
+     "description": "Glucagon-like peptide 1 receptor agonist-containing product",
+     "binding": "http://snomed.info/sct|416636000|20260801",
+     "unbound": false,
+     "codes": 45
+    },
+    {
+     "name": "on_sglt_2_inhibitors",
+     "type": "bool",
+     "unit": null,
+     "description": "SGLT2 Inhibitors",
+     "binding": "http://cts.nlm.nih.gov/fhir/ValueSet|2.16.840.1.113762.1.4.1178.30|20260418",
+     "unbound": false,
+     "codes": 110
+    }
+   ],
+   "english": "IF SGLT2 Inhibitors\nTHEN may: Glucagon-like peptide 1 receptor agonist-containing product",
+   "cql": "patient_checker/cql/bundle.PMC12355350/PMC12355350_0121.cql"
+  }
+ ]
 }

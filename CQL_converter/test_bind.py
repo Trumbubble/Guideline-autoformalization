@@ -311,6 +311,99 @@ def test_unbindable_concepts_land_in_the_residue():
     assert not any(bd.mention in {"high-risk", "frailty"} for bd in bindings)
 
 
+# ------------------------------- a terminology source that is down (R38)
+
+def test_a_two_letter_abbreviation_is_never_sent_to_vsac():
+    """VSAC 400s on a search string under three characters, and the mention
+    proposer legitimately emits "AP" and "CT". Issuing the request anyway
+    recorded 88 transport failures across PMC13270348 over four phrases, each
+    of which then qualified a refusal as possibly-not-the-guideline's-fault.
+    An invalid request is ours not to make, not a blip to report."""
+    v = b.VsacIndex(api_key="k")
+    sent = []
+    v._get = lambda path, params, timeout=40: sent.append(params) or {}
+    assert v.search("AP", "condition") == []
+    assert v.search("ct", "procedure") == []
+    assert v.search(" a ", "condition") == [], "measured after stripping"
+    assert not sent, "no request should have left the process"
+    assert len(v.failures) == 0, "we did not ask, so nothing failed"
+    v.search("abc", "condition")
+    assert len(sent) == 1, "three characters is a legitimate query"
+
+def test_a_rejected_credential_is_recorded_once_not_once_per_phrase():
+    """A 401 is a fact about our key, not about the phrase. Recording it per
+    lookup is how one expired key became 789 transport failures over 157
+    findings on a single document: accurate, unreadable, and never once saying
+    the sentence that explained all of it."""
+    import urllib.error
+    v = b.VsacIndex(api_key="wrong")
+    sent = []
+    def rejected(path, params, timeout=40):
+        sent.append(params)
+        raise urllib.error.HTTPError("u", 401, "Unauthorized", None, None)
+    v._get = rejected
+    for phrase in ("Biguanide", "Thiazolidinediones", "Meglitinides"):
+        assert v.search(phrase, "drug_class") == []
+    assert len(sent) == 1, "one 401 must stop the whole run asking"
+    assert len(v.failures) == 0, "a bad key is not a per-phrase transport fault"
+    assert not v.available, "a rejected key is in the same state as an absent one"
+    assert len(v.degraded) == 1 and "401" in v.degraded[0]
+
+def test_a_genuine_transport_blip_is_still_recorded_per_phrase():
+    """The 401 path must not swallow the failure mode TransportFailures exists
+    for: a timeout IS about the lookup, and says nothing about the credential."""
+    v = b.VsacIndex(api_key="k")
+    def timed_out(path, params, timeout=40):
+        raise TimeoutError("read timed out")
+    v._get = timed_out
+    assert v.search("Biguanide", "drug_class") == []
+    assert len(v.failures) == 1
+    assert v.available, "a blip does not condemn the key"
+    assert v.degraded == ()
+
+def test_a_degraded_source_is_visible_through_the_index_that_wraps_it():
+    """`degraded_of(index)` must mean the same thing whichever index class the
+    caller was handed -- the same contract `failures` already has."""
+    import urllib.error
+    v = b.VsacIndex(api_key="wrong")
+    v._get = lambda *a, **kw: (_ for _ in ()).throw(
+        urllib.error.HTTPError("u", 401, "Unauthorized", None, None))
+    v.search("Biguanide", "drug_class")
+    remote = b.RemoteIndex(vsac=v)
+    cached = b.CachedIndex(b.SqliteIndex(":memory:"), remote)
+    assert b.degraded_of(v) == b.degraded_of(remote) == b.degraded_of(cached)
+    assert b.degraded_of(b.SqliteIndex(":memory:")) == ()
+    assert b.degraded_of(object()) == (), "an index with no notion of it"
+
+def test_a_stale_exported_key_does_not_shadow_the_env_file():
+    """`setdefault` let an export from a forgotten shell win over the file on
+    disk, and it failed silently: a wrong key looks exactly like a right one
+    until VSAC answers 401 to every lookup in the document."""
+    import os
+    import tempfile
+    fh = tempfile.NamedTemporaryFile("w", suffix=".env", delete=False)
+    fh.write("UMLS_API_KEY=the-key-on-disk\nBLANK_KEY=\n")
+    fh.close()
+    before = os.environ.get("UMLS_API_KEY")
+    try:
+        os.environ["UMLS_API_KEY"] = "stale-key-from-a-forgotten-shell"
+        os.environ["BLANK_KEY"] = "a real value"
+        b.load_env(fh.name)
+        assert os.environ["UMLS_API_KEY"] == "the-key-on-disk"
+        assert os.environ["BLANK_KEY"] == "a real value", (
+            "an empty assignment is not a value and must not blank a real one")
+        os.environ["UMLS_API_KEY"] = "stale-key-from-a-forgotten-shell"
+        b.load_env(fh.name, override=False)
+        assert os.environ["UMLS_API_KEY"] == "stale-key-from-a-forgotten-shell"
+    finally:
+        os.environ.pop("BLANK_KEY", None)
+        if before is None:
+            os.environ.pop("UMLS_API_KEY", None)
+        else:
+            os.environ["UMLS_API_KEY"] = before
+        os.unlink(fh.name)
+
+
 if __name__ == "__main__":
     tests = [(n, f) for n, f in sorted(globals().items())
              if n.startswith("test_") and callable(f)]
