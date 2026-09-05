@@ -376,6 +376,7 @@
     <a class="back-link" id="back-link" href="/">&larr; Dashboard</a>
     <h1 id="guideline-title">Guideline compliance checker</h1>
     <p class="meta" id="guideline-meta">Loading&hellip;</p>
+    <a class="back-link" id="report-link" href="#" target="_blank" rel="noopener">Formalization report &rarr;</a>
   </div>
   <button class="theme-toggle" id="theme-toggle" type="button"
           aria-label="Toggle colour theme" title="Toggle colour theme">
@@ -415,10 +416,17 @@
 
 <script>
 const GUIDELINE_ID = new URLSearchParams(window.location.search).get("guideline") || "fixtures";
+const FROM_DEMO = new URLSearchParams(window.location.search).get("from") === "demo";
+
+// Always present, unlike the residue note's copy of this same link -- that
+// one only appears when refusal_count > 0, so a guideline with a clean
+// (all-encoded) record had no way to reach its own report at all.
+document.getElementById("report-link").href =
+  `/guidelines/${encodeURIComponent(GUIDELINE_ID)}/report` + (FROM_DEMO ? "?from=demo" : "");
 
 // Arriving from the demo should go back to the demo, not to the library the
 // visitor never came from. The demo's links carry ?from=demo for exactly this.
-if (new URLSearchParams(window.location.search).get("from") === "demo") {
+if (FROM_DEMO) {
   const back = document.getElementById("back-link");
   back.href = "/demo";
   back.innerHTML = "&larr; Demo";
