@@ -143,13 +143,29 @@ def minimal_counterexample_core(rule, domain: list, free_names: list) -> dict:
     return {name: value for name, _, value in core}
 
 
+def _is_permissive(rule) -> bool:
+    """The one place that reads deontic force off a rule.
+
+    It was read directly in `check_rule` and nowhere else, so the rule LISTING
+    could not report it -- and the listing's `category` column is derived from
+    `action`, a UI gloss, which labels a permission whose action is `recommend`
+    a "recommendation". A viewer comparing the table against an OPTION-not-taken
+    verdict sees the table contradict the badge. The force is the rule's, not
+    the verdict's, so both must read it from here."""
+    return bool(getattr(rule, "is_permissive", False))
+
+
+def _deontic_of(rule) -> str:
+    return "permission" if _is_permissive(rule) else "obligation"
+
+
 def check_rule(rule, known: dict) -> dict:
     domain, provided, free_names = _pin(rule, known)
     # Deontic force selects the QUESTION, not just the wording of the answer.
     # An obligation is judged by compliance; a permission by applicability. The
     # DSL carries the operator (dsl.Rule.deontic), so this is a dispatch on the
     # rule's declared meaning rather than a guard bolted onto a verdict string.
-    permissive = bool(getattr(rule, "is_permissive", False))
+    permissive = _is_permissive(rule)
     if permissive and rule.applies is not None:
         verdict = classify_option(domain, rule.applies, rule.taken)
     else:
@@ -361,6 +377,7 @@ def guideline_detail(guideline_id):
                     "source_sentence": r.source_sentence,
                     "variables": sorted(r.var_refs.keys()),
                     "partial": bool(getattr(r, "holes", ())),
+                    "deontic": _deontic_of(r),
                 }
                 for r in rules
             ],
@@ -384,6 +401,7 @@ def guideline_rules(guideline_id):
                 "source": getattr(r, "source", ""),
                 "source_sentence": r.source_sentence,
                 "variables": sorted(r.var_refs.keys()),
+                "deontic": _deontic_of(r),
             }
             for r in rules
         ]

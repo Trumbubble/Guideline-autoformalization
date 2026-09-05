@@ -244,6 +244,29 @@
     padding: 3px 8px;
   }
 
+  /* The rules table's `category` column comes from the rule's ACTION -- a UI
+     gloss -- so a permission whose action is `recommend` reads "recommendation"
+     there, which contradicts the OPTION- badge the same rule earns in the
+     result panel. Deontic force gets its own column and its own mark. */
+  .force {
+    font-family: var(--mono);
+    font-size: 10.5px;
+    font-weight: 500;
+    border-radius: 4px;
+    padding: 2px 7px;
+    white-space: nowrap;
+  }
+  .force.permission {
+    color: var(--may);
+    background: var(--may-bg);
+    border: 1px solid var(--may-line);
+  }
+  .force.obligation {
+    color: var(--muted);
+    background: transparent;
+    border: 1px solid var(--border);
+  }
+
   .card h3 {
     margin: 0 0 11px;
     font-size: 17px;
@@ -712,13 +735,15 @@ async function loadRulesTable() {
           <td><code>${r.rule_id}</code></td>
           <td>${r.title}</td>
           <td>${r.category}</td>
+          <td><span class="force ${r.deontic === "permission" ? "permission" : "obligation"}">${
+              r.deontic === "permission" ? "may" : "must"}</span></td>
           <td>${r.variables.map((v) => `<code>${v}</code>`).join(" ")}</td>
         </tr>`
       )
       .join("");
     el.innerHTML = `
       <table>
-        <thead><tr><th>Rule</th><th>Title</th><th>Category</th><th>Variables</th></tr></thead>
+        <thead><tr><th>Rule</th><th>Title</th><th>Category</th><th>Force</th><th>Variables</th></tr></thead>
         <tbody>${rows}</tbody>
       </table>`;
   } catch (err) {
