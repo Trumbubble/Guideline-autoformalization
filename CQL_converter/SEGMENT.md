@@ -6,7 +6,7 @@ each pointing at the exact span of source it came from. One file,
 engineering decisions and gotchas in [`NOTES.md`](NOTES.md).
 
 ```
-python3 test_segment.py      # 33 tests, no pytest, no network, no API key
+python3 tests/test_segment.py      # 33 tests, no pytest, no network, no API key
 ```
 
 ## The one idea

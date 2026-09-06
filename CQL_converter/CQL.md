@@ -5,7 +5,7 @@ repair it against a compiler. One file, [`cql.py`](cql.py); tests in
 [`test_cql.py`](test_cql.py).
 
 ```
-python3 test_cql.py     # 20 tests, offline, no JVM, no key, no network
+python3 tests/test_cql.py     # 20 tests, offline, no JVM, no key, no network
 ```
 
 ## The one idea

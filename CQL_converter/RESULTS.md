@@ -25,7 +25,7 @@ fetched via Europe PMC:
 ## Reproducing
 
 ```bash
-python3 test_dsl.py && python3 test_bind.py && python3 test_segment.py   # 86 tests, offline
+python3 tests/test_dsl.py && python3 tests/test_bind.py && python3 tests/test_segment.py   # 86 tests, offline
 python3 segment.py PMC13276589 --out ash.jsonl                            # fetch + segment
 python3 segment.py --review ash.jsonl --top 20
 python3 bind.py --db tx.db --remote --registry "<a recommendation sentence>"

@@ -1,4 +1,9 @@
 """Regression tests for the M2 clause scorer. Offline."""
+
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import evaluate as ev
 from evaluate import Clause, extract_clauses, score_clauses, score_cql, subject_similarity
 

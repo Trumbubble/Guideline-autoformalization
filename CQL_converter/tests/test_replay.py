@@ -15,6 +15,11 @@ Record one with:
 
     python3 demo.py --live --doc PMC13074134 --max 5 --out /tmp/b.json
 """
+
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import glob
 import json
 import os
@@ -29,7 +34,7 @@ import cql
 import dsl
 import gate
 
-HERE = os.path.dirname(os.path.abspath(__file__))
+HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 TAPES = os.path.join(HERE, "cassettes")
 sys.path.insert(0, os.path.join(os.path.dirname(HERE), "patient_checker"))
 

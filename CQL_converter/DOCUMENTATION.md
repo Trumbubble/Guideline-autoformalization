@@ -476,7 +476,7 @@ Per-stage CLI:
 python3 segment.py PMC13276589 --top 15
 python3 segment.py --search 'PUB_TYPE:"Practice Guideline"'      # find OA guidelines
 python3 bind.py --registry "In CKD with hyperkalemia, avoid an ACE inhibitor."
-python3 test_segment.py / test_bind.py / test_gate.py / test_dsl.py / test_cql.py
+python3 tests/test_segment.py / tests/test_bind.py / tests/test_gate.py / tests/test_dsl.py / tests/test_cql.py
 ```
 
 The full offline suite runs with no API key, and one real run replays

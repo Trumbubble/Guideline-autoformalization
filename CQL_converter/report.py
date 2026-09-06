@@ -11,7 +11,7 @@ have to dig for -- what was REFUSED and why, and which checks fired on a rule
 that compiled anyway. A report that showed only what encoded would let a reader
 conclude the tool had covered the document.
 
-    python3 report.py ../Part\\ B/bundle.PMC13074134.json -o report.html
+    python3 report.py ../patient_checker/bundles/bundle.PMC13074134.json -o report.html
 
 Self-contained: no network, no assets, prints to PDF from any browser.
 """

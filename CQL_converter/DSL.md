@@ -6,7 +6,7 @@ Track B (rules → evidence). One file, [`dsl.py`](dsl.py); tests in
 lowering and degeneracy checks — `validate()` is pure Python.
 
 ```
-python3 test_dsl.py      # 23 tests, no pytest needed
+python3 tests/test_dsl.py      # 23 tests, no pytest needed
 ```
 
 ## Explanation of logic idea 

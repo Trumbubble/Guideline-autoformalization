@@ -5,7 +5,7 @@ Stage 2 of Track A: clinical phrases in, a `dsl.Registry` out. One file,
 gotchas in [`NOTES.md`](NOTES.md).
 
 ```
-python3 test_bind.py     # 22 tests, offline, no network, no UMLS account
+python3 tests/test_bind.py     # 22 tests, offline, no network, no UMLS account
 ```
 
 ## The one idea

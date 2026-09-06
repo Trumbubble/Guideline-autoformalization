@@ -695,7 +695,7 @@ def seed_demo_guidelines() -> None:
     for guideline_id, doc_id, title in _DEMO_SEEDS:
         if guideline_id in existing:
             continue
-        bundle_path = Path(__file__).parent / f"bundle.{doc_id}.json"
+        bundle_path = Path(__file__).parent / "bundles" / f"bundle.{doc_id}.json"
         if not bundle_path.exists():
             continue
         try:

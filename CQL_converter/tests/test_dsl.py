@@ -2,6 +2,11 @@
 
 Run: python3 test_dsl.py    (no pytest dependency; asserts + a summary line)
 """
+
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import json
 
 import z3

@@ -5,7 +5,7 @@ reason and a score. One file, [`gate.py`](gate.py); tests in
 [`test_gate.py`](test_gate.py); measured results in [`RESULTS.md`](RESULTS.md).
 
 ```
-python3 test_gate.py     # 19 tests, offline, no key, no network
+python3 tests/test_gate.py     # 19 tests, offline, no key, no network
 ```
 
 ## The one idea

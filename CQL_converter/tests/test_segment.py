@@ -6,6 +6,11 @@ The PDF fixture is GENERATED inside the test rather than committed, so box
 recovery is exercised deterministically and no copyrighted guideline PDF ever
 enters the repo.
 """
+
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import json
 import os
 import tempfile
@@ -18,7 +23,7 @@ from segment import (Block, Provenance, Text, blocks_to_units, dedupe, is_label_
                      segment as run_segment, split_sentences, statement_from_dict,
                      statement_to_dict, write_jsonl)
 
-FIXTURE = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+FIXTURE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                        "fixtures", "guideline.jats.xml")
 
 def _blocks(): return load_jats(FIXTURE, "ckd")
@@ -757,8 +762,9 @@ def test_no_non_builtin_open_carries_an_encoding_argument():
     import glob
     import os
     import re
-    here = os.path.dirname(os.path.abspath(__file__))
+    here = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     roots = [os.path.join(here, "*.py"),
+             os.path.join(here, "tests", "*.py"),
              os.path.join(os.path.dirname(here), "patient_checker", "*.py"),
              os.path.join(os.path.dirname(here), "demo.py")]
     bad = []

@@ -65,7 +65,7 @@ def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[1])
     ap.add_argument("--live", action="store_true",
                     help="use the real model, compiler and execution engine")
-    ap.add_argument("--out", default=os.path.join(HERE, "patient_checker", "bundle.json"))
+    ap.add_argument("--out", default=os.path.join(HERE, "patient_checker", "bundles", "bundle.json"))
     ap.add_argument("--doc", metavar="PATH_OR_PMCID",
                     help="your own guideline: a .pdf / .xml / .html file, or a "
                          "PubMed Central id like PMC13276589")

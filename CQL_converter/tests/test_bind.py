@@ -6,6 +6,11 @@ Everything runs against `bind.fixture_index()` -- real codes, verified against
 tx.fhir.org / NLM Clinical Tables / RxNav, chosen to include the near-misses
 that make binding dangerous.
 """
+
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import z3
 
 import bind as b
