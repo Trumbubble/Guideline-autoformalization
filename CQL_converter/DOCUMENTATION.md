@@ -16,10 +16,10 @@ Document → **Segment** → **Bind** → **Gate** (which synthesizes a DSL
   `dsl.Registry` of retrieved (never generated) codes out.
 - [`dsl.py`](dsl.py) — the typed intermediate representation every other
   stage reads or writes: `Registry`, `Rule`, `Refusal`, the Z3 lowering. Not
-  a separate sequential stage — Bind produces a `dsl.Registry`, Gate's
-  `triage()` calls an injected `formalize` hook that produces a `dsl.Rule`
-  or `Refusal` directly, and CQL lowers that `Rule`. DSL is the shared
-  substrate everything else is built from, not a fifth stage in a line.
+  a separate sequential stage — Bind produces a `dsl.Registry` and Gate's
+  `triage()` produces a `dsl.Rule`/`Refusal` directly, which CQL then
+  lowers; it's the shared substrate everything else is built from, not a
+  fifth stage in a line.
 - [`gate.py`](gate.py) — per statement, decide encode / partial / refuse,
   aggregating deterministic evidence before ever asking a model.
 - [`cql.py`](cql.py) — a validated `dsl.Rule` in, an HL7 CQL library out, by
@@ -30,9 +30,8 @@ Document → **Segment** → **Bind** → **Gate** (which synthesizes a DSL
 ### 2.1 Segmenter
 
 Finding sentences that look like recommendations is easy; the job is
-producing statements a clinician can point back at the source document,
-because that's what makes every downstream claim checkable. Every
-`Statement` carries a `Provenance` (locator + character offsets) that
+producing statements a clinician can point back at the source document.
+Every `Statement` carries a `Provenance` (locator + character offsets) that
 re-finds and slices out its own source text, verified on 1,086 blocks of
 real publisher markup with zero locator failures.
 
@@ -45,22 +44,20 @@ against source) → assembly (label absorption, cross-references, dedupe).
 
 **Loaders, and why JATS comes first.** PMC Open Access ships XML (JATS)
 where the publisher already tagged `<boxed-text>` and `<table-wrap>` at
-typesetting time — the boxed-callout problem is solved *structurally* for
-most of the corpus, so `load_jats` is the main road and `load_pdf` is the
-fallback, not the other way round. `fetch_pmc(pmcid)` downloads and caches
-it; of 3,129 open-access practice guidelines on Europe PMC, essentially all
-have retrievable XML. But XML *existing* is not the same as XML being
-*complete* — one measured guideline (ESO stroke blood-pressure) renders
-**26 of 26 tables as embedded JPEG images with zero extractable text**; the
-XML route reaches only the narrative restatements of its recommendations,
-never the formal boxed ones. `_table_rows` emits a `figure` block carrying
-the caption in that case, so the gap lands in `manifest["figures_uncovered"]`
-instead of silently vanishing. The real, independently-typeset PDF for that
-same document *does* carry the missing tables as genuine selectable text —
-XML and PDF are not two views of the same content, they can diverge in
-completeness — but `load_pdf`'s box-recovery path is presently broken
-(it calls `page.rect.get_area()`, a method the installed `pymupdf` no
-longer has) and has never executed against a real guideline.
+typesetting time, so the boxed-callout problem is solved *structurally* for
+most of the corpus — `load_jats` (via `fetch_pmc(pmcid)`, which covers
+essentially all of 3,129 open-access practice guidelines on Europe PMC) is
+the main road, `load_pdf` the fallback. But XML *existing* is not the same
+as XML being *complete*: one measured guideline (ESO stroke blood-pressure)
+renders **26 of 26 tables as embedded JPEG images with zero extractable
+text**, so the XML route reaches only the narrative restatements, never the
+formal boxed ones — `_table_rows` emits a `figure` block carrying the
+caption instead, landing the gap in `manifest["figures_uncovered"]` rather
+than letting it vanish silently. The real, independently-typeset PDF for
+that same document *does* carry the missing tables as selectable text — XML
+and PDF can diverge in completeness — but `load_pdf`'s box-recovery path is
+presently broken (`page.rect.get_area()`, a method the installed `pymupdf`
+no longer has) and has never executed against a real guideline.
 
 For table rows specifically: the condition and the action sit in different
 columns, so no contiguous span of the document *is* the rule. Rows are
@@ -72,11 +69,10 @@ not a bug.
 ### 2.2 Binder
 
 It is not a lookup service the compiler calls — it builds the closed
-vocabulary the compiler is then constrained to. Whatever it cannot bind
-never becomes a variable, so it goes to `Refusal(unbound_concept)` instead
-of a hallucinated code. The model is shown a numbered candidate list and
-returns an index (or ABSTAIN) — never a code string — so a hallucinated
-code cannot be expressed at all.
+vocabulary the compiler is then constrained to, so whatever it cannot bind
+never becomes a variable but a `Refusal(unbound_concept)` instead. The
+model is shown a numbered candidate list and returns an index (or ABSTAIN),
+never a code string, so a hallucinated code cannot be expressed at all.
 
 Flow: propose mentions → search (phrase ∪ abbreviation expansion, scoped by
 kind) → rerank by unit (deterministic, before any model) → select (index or
@@ -94,49 +90,45 @@ blocked without it.
 **Why a real vocabulary matters, measured directly.** "eGFR" searched
 against live LOINC returned *only* an EGFR-gene genetics test — epidermal
 growth factor receptor, not kidney function — and being the sole candidate,
-a naive selector called it a "clear lexical win." Being the only candidate
-is not evidence: the selector now requires an exact term match, a unit
-match, or full query-token coverage before binding anything, which alone
-turns that case into a safe refusal instead of a wrong answer. Two more
-deterministic fixes followed the same shape: `NOT_AN_OBSERVATION` demotes
-grouper/value-set codes that win on token overlap against a real result
-code, and units run *before* any model — LOINC 9318-7 (mg/g) and 14585-4
-(mg/mmol) are the same threshold ~8.84 apart, and the sentence states which
-one, so `rerank_by_unit` settles it with no judgement required.
+a naive selector called it a "clear lexical win"; being the only candidate
+is not evidence, so the selector now requires an exact term match, a unit
+match, or full query-token coverage before binding, turning that case into
+a safe refusal instead of a wrong answer. Two more deterministic fixes
+followed the same shape: `NOT_AN_OBSERVATION` demotes grouper/value-set
+codes that win on token overlap against a real result code, and units run
+*before* any model — LOINC 9318-7 (mg/g) and 14585-4 (mg/mmol) are the same
+threshold ~8.84 apart, so `rerank_by_unit` settles it with no judgement
+required.
 
-**Lexical retrieval has a hard ceiling, and semantic retrieval exists to
-close it.** Guideline prose and terminology vocabularies are written by
-different communities: "kidney function"/"Renal function" and "epidural
-analgesia"/"Epidural anaesthesia" share zero or one token, and an inverted
-index cannot retrieve a document sharing no term with the query — that is a
-property of the index, not a tuning problem. `semantic.py` (a separate
-module, so `torch` never enters `bind.py`'s import path) embeds terms into
-a meaning vector and searches nearest-neighbour, **as a reserved fallback
-slot, never merged into the lexical ranking** — a cosine similarity and a
-BM25 score are not comparable, and interleaving them buried a 0.954-similarity
-correct answer below eight wrong lexical matches in testing. Measured
-effect on the fixable-failure set: lexical alone found 3/10, lexical ∪
-semantic found 5/10. **This layer needs a local index built and cached to
-disk before it does anything** (`python3 semantic.py --build --fast`); if
-that hasn't been run, `bind.semantic_index()` returns `None` and every
-lexical-only miss stays a miss — this is a real, live-observed gap in this
-environment, not a hypothetical one.
+**Lexical retrieval has a hard ceiling, and semantic retrieval exists to close it.** 
+Guideline prose and terminology vocabularies come from different
+communities — "kidney function"/"Renal function" share zero or one token
+with each other, and an inverted index cannot retrieve a document sharing
+no term with the query, a property of the index, not a tuning problem.
+`semantic.py` (a separate module, so `torch` never enters `bind.py`'s import
+path) embeds terms into a meaning vector and searches nearest-neighbour, **as
+a reserved fallback slot, never merged into the lexical ranking** — a cosine
+similarity and a BM25 score aren't comparable, and interleaving them buried
+a 0.954-similarity correct answer below eight wrong lexical matches in
+testing. Measured on the fixable-failure set: lexical alone found 3/10,
+lexical ∪ semantic found 5/10 — but **this layer needs a local index built
+and cached to disk first** (`python3 semantic.py --build --fast`); without
+it, `bind.semantic_index()` returns `None` and every lexical-only miss
+stays a miss, a real gap in this environment, not a hypothetical one.
 
-**Terminology retrieval starves silently if kind/system filters aren't
-inside the SQL.** Fetching the top-N BM25 rows across every kind and then
+**Terminology retrieval starves silently if kind/system filters aren't inside the SQL.** 
+Fetching the top-N BM25 rows across every kind and then
 filtering in Python means a common word like "insulin" can fill every slot
-with the wrong kind before the real candidate is ever seen — measured: 1
+with the wrong kind before the real candidate is seen — measured: 1
 candidate returned out of 171,231 real drug rows, with the correct SNOMED
-concept sitting in the table the whole time. Filtering inside the query
-fixed it. Separately, `drug`-kind and `drug_class`-kind searches are
-restricted to specific terminology systems (RxNorm/VSAC and ATC/RxNorm/VSAC
-respectively) as a matter of design — SNOMED's own drug hierarchy exists in
-a real, loaded terminology database but is deliberately never searched for
-those kinds, which is correct architecture but means a concept that only
-has a SNOMED-sourced entry can be genuinely unreachable until the "real"
-system for that kind (chiefly ATC for drug *classes*) is populated — and
-there is currently no bulk loader anywhere in this codebase for that
-system, unlike SNOMED/LOINC/RxNorm, which do have one each.
+concept sitting in the table the whole time; filtering inside the query
+fixed it. Separately, `drug`- and `drug_class`-kind searches are restricted
+by design to specific terminology systems (RxNorm/VSAC and ATC/RxNorm/VSAC
+respectively) — SNOMED's own drug hierarchy is loaded but deliberately
+never searched for those kinds, which is correct architecture but means a
+SNOMED-only concept can be unreachable until the "real" system for that
+kind (chiefly ATC for drug *classes*) is populated, and there is currently
+no bulk loader in this codebase for that system, unlike SNOMED/LOINC/RxNorm.
 
 ### 2.3 DSL
 
@@ -158,8 +150,8 @@ fixed set of legal comparison operators and a specific Z3 lowering (`bool`
 → `z3.Bool`, `code` → `z3.String` equality-only, `date` → ISO-8601 in the
 DSL but `z3.Int` ordinals in the solver, `int` → `z3.Int` never `Real`, or
 the solver hands back `days = 14.5`). `role` is `observation` (patient
-state) or `action` (something a care plan decides); `validate_rule` rejects
-an obligation naming no action atom, and Track B reads `reg.actions()` to
+state) or `action` (a care-plan decision); `validate_rule` rejects an
+obligation naming no action atom, and Track B reads `reg.actions()` to
 write frame axioms over actions a plan never mentions. `plausible` is a
 hand-curated physiological range asserted at solve time so a counterexample
 can't land at eGFR = 2.0, and it doubles as a validator warning on
@@ -182,12 +174,11 @@ flag is load-bearing: without it, a bare day-count is satisfiable for a
 patient who was *never checked* — the solver just picks a small number —
 and "never checked at all" is the commonest real monitoring violation.
 Multi-visit predicates ("on two occasions ≥90 days apart" — the actual
-definition of CKD) need more than one timepoint and are genuinely out of
-this fragment; they refuse as `unsupported_temporal`. Moving to
-time-indexed variables (`var[t]` over a horizon) is additive — no
-already-written rule would need to change — but it changes the headline
-formalizability number, so it's an explicit measurement decision that
-hasn't been made, not an oversight.
+definition of CKD) need more than one timepoint, genuinely out of this
+fragment, and refuse as `unsupported_temporal`. Moving to time-indexed
+variables (`var[t]` over a horizon) is additive — no existing rule would
+need to change — but it changes the headline formalizability number, so
+that's an explicit measurement decision not yet made, not an oversight.
 
 **`Rule.deontic` is an operator, not a label.**
 ```
@@ -195,53 +186,54 @@ obligation   O(then | when)    violation = when AND NOT then
 permission   P(then | when)    violation = FALSE, unconditionally
 ```
 *"We recommend anticoagulant prophylaxis"* is an obligation — a patient
-meeting `when` without `then` is a real deviation. *"Epidural analgesia may
-be considered"* is a permission — that same patient has violated nothing.
-GRADE-conditional wording ("we suggest X") is **not** treated as
-permission — the weakness there is in the evidence, not the obligation;
-only explicit permission language counts, or treating every weak
-recommendation as optional would silence most of a guideline. Prohibition
-isn't a third case: `F(p) = O(NOT p)`, already written as `action="avoid"`
-with a negated consequent. `deontic` is a *required* field in the decoding
-schema specifically so a default can't silently promote a permission into
-an obligation, and `deontic_of()` only ever promotes obligation→permission
-from wording, never the reverse — guessing permission wrongly silences an
-alert (recoverable), guessing obligation wrongly accuses a clinician (not).
-A permission gets its own four-outcome verdict lattice (`OPTION-taken` /
-`OPTION-not-taken` / `OPTION-not-applicable` / `OPTION-available`); none of
-them is an accusation. Measured: dropping this operator and falling back to
-a wording-only guard flips the verdict on 4 of 5 permissive/obligation
-pairs — the largest single effect measured across the whole ablation study.
+meeting `when` without `then` is a real deviation — while *"Epidural
+analgesia may be considered"* is a permission, where that same patient has
+violated nothing. GRADE-conditional wording ("we suggest X") is **not**
+treated as permission, since the weakness there is in the evidence, not the
+obligation — only explicit permission language counts, or treating every
+weak recommendation as optional would silence most of a guideline.
+Prohibition isn't a third case: `F(p) = O(NOT p)`, already written as
+`action="avoid"` with a negated consequent. `deontic` is a *required* field
+in the decoding schema so a default can't silently promote a permission
+into an obligation, and `deontic_of()` only ever promotes
+obligation→permission from wording, never the reverse — guessing permission
+wrongly silences an alert (recoverable), guessing obligation wrongly accuses
+a clinician (not). A permission gets its own four-outcome verdict lattice
+(`OPTION-taken` / `OPTION-not-taken` / `OPTION-not-applicable` /
+`OPTION-available`), none of them an accusation. Measured: dropping this
+operator for a wording-only guard flips the verdict on 4 of 5
+permissive/obligation pairs — the largest single effect measured across the
+whole ablation study.
 
 **Canonical form: two names can be one concept.** A model-generated
 registry can bind the same real concept under two different variable names
-in a way a person never would. Measured, on a real guideline: the
-formalizer wrote both `pca` and `patient_controlled_intravenous_analgesia`
-— both bound to the identical SNOMED code — into one rule, producing
+in a way a person never would — measured on a real guideline, the
+formalizer wrote both `pca` and `patient_controlled_intravenous_analgesia`,
+both bound to the identical SNOMED code, into one rule, producing
 `(has_ap AND pca) -> patient_controlled_intravenous_analgesia`, i.e.
 `(A AND B) -> B`. That's valid under every interpretation, so it certifies
 every patient and can never fail — it doesn't look like a bug, it looks
 like a rule that works. Only two signals are trusted to merge two names:
 the same terminology `system|code|version`, or a hole that's a `has_`-
-prefixed restatement of an already-bound variable. Never a similarity
-judgement — a model asked whether "acute pancreatitis" and "severe acute
-pancreatitis" are the same concept will say yes, and that distinction is
-the entire clinical content of some recommendations. Canonicalization runs
-automatically before the vacuity check (below), and the bundle format
+prefixed restatement of an already-bound variable — never a similarity
+judgement, since a model asked whether "acute pancreatitis" and "severe
+acute pancreatitis" are the same concept will say yes, and that distinction
+is the entire clinical content of some recommendations. Canonicalization
+runs automatically before the vacuity check below, and the bundle format
 records every merge under `merged_concepts` rather than silently
-collapsing it — a merge is a claim about the guideline, so it's reported.
+collapsing it, since a merge is a claim about the guideline.
 
 **Modal predicates are a closed word class, and they get refused, not
 turned into holes.** *"Epidural analgesia may be considered"* correctly
-filled `Rule.strength` with `"suggest (conditional)"` — and also put the
-modal itself into the antecedent as `has_may`. That rule can never run: no
-FHIR resource populates "has may". `modal_only()` is a fixed list (English
-modals are a genuinely closed class, unlike abbreviations) requiring *every*
-token in a candidate hole to be modal, so a hedged-but-real predicate like
-`has_appropriate_acupoints` still survives as a legitimate hole.
-`validate_rule` reports a bare modal as the `MODAL_PREDICATE` error, and the
-gate refuses the statement as `defeasible` rather than shipping a hole
-nothing will ever populate.
+filled `Rule.strength` with `"suggest (conditional)"`, but also put the
+modal itself into the antecedent as `has_may` — a rule that can never run,
+since no FHIR resource populates "has may". `modal_only()` is a fixed list
+(English modals are a genuinely closed class, unlike abbreviations)
+requiring *every* token in a candidate hole to be modal, so a
+hedged-but-real predicate like `has_appropriate_acupoints` still survives
+as a legitimate hole. `validate_rule` reports a bare modal as the
+`MODAL_PREDICATE` error, and the gate refuses the statement as `defeasible`
+rather than shipping a hole nothing will ever populate.
 
 **`VACUOUS_RULE` is the check a type system cannot do for you.** A spec no
 patient can ever violate passes every syntactic gate and typechecks
@@ -321,12 +313,8 @@ Be precise about how much that buys, though: of the six refusal codes, only
 | `vague_predicate` | **model** | the formalizer declining |
 | `unsupported_temporal` | **model** | the formalizer declining. No deterministic check produces it — there is no fragment test for "needs a second timepoint", only the model recognising one. |
 
-An earlier version of this table claimed four of six were deterministic
-("obligation names no action" for `not_patient_level`,
-"multi-visit predicate" as a deterministic trigger for
-`unsupported_temporal") — both wrong, and the error propagated into
-anything drawn from it, since prose in a codebase is itself an artifact
-nothing tests. The tests now pin exactly which codes are reachable with no
+An earlier version of this table wrongly claimed four of six were
+deterministic; the tests now pin exactly which codes are reachable with no
 model at all, so the claim can't drift silently again.
 
 **One deliberate non-inference**: an empty binding is *never* labelled
@@ -352,10 +340,10 @@ measured on a patient with eGFR 45, not on an ACEi, stubbing `false`
 returns `CERTIFIED-compliant` — silently clearing a patient the guideline
 was merely silent about — while leaving the hole free returns `MAY-violate`
 with a witness naming exactly the missing assumption
-(`has_at_high_risk=True`). A hole is `VarDef(unbound=True)`: no binding, no
-domain axiom (constraining it would be a claim the guideline never made).
-A retrieval failure is *never* turned into a hole — "refer to nephrology"
-is perfectly bindable, and if the index misses it that's a coverage bug to
+(`has_at_high_risk=True`). A hole is `VarDef(unbound=True)` — no binding, no
+domain axiom, since constraining it would be a claim the guideline never
+made — but a retrieval failure is *never* turned into one: "refer to
+nephrology" is perfectly bindable, and a missed index is a coverage bug to
 fix, not a finding to launder into a free variable.
 
 **Sample count (`samples=k`) is a confidence estimator, not an ambiguity
@@ -363,19 +351,18 @@ detector — and that took a real measurement to establish.** The original
 idea (from arXiv:2605.13817) was that k repeated calls on a vague statement
 should *disagree*, giving a vagueness signal without needing ground truth.
 Measured on 20 hand-labelled statements (10 precise, 10 vague) at K=8 real
-calls: the model doesn't produce 8 different encodings for a vague
-statement, it produces 8 *refusals*. All 80 vague-statement samples were
-refused; 0 of the encoded statements produced more than one semantic
-reading (semantic equivalence decided by Z3 over the domain axioms, not
-string comparison — 9 of 10 precise statements produced textually different
-encodings, up to 6 distinct strings for one meaning, that the solver
-correctly collapsed to one class). So there was nothing to disagree about:
-separation comes from refusal, not from sampling variance, and one
-constrained decode does what an 8-sample estimator was built to do, at an
-eighth of the cost. `confidence = 1 - (refusals / k)` is a graded score,
+calls, the model doesn't produce 8 different encodings for a vague
+statement, it produces 8 *refusals*: all 80 vague-statement samples were
+refused, and 0 of the encoded statements produced more than one semantic
+reading (decided by Z3 over the domain axioms, not string comparison — 9 of
+10 precise statements produced textually different encodings, up to 6
+distinct strings for one meaning, that the solver correctly collapsed to
+one class). So separation comes from refusal, not sampling variance, and
+one constrained decode does what an 8-sample estimator was built to do, at
+an eighth of the cost. `confidence = 1 - (refusals / k)` is a graded score,
 not just bimodal — a deliberately borderline statement ("Monitor serum
-potassium at least annually") came back 6/8. `samples=1` is the production
-default; `k>1` is worth paying for only when building an evaluation curve.
+potassium at least annually") came back 6/8; `samples=1` is the production
+default, `k>1` worth paying for only when building an evaluation curve.
 
 **Reporting.** `Triage.evidence` is a tuple of `Evidence(source, code,
 detail)` tagged by where it came from (`binder`/`validator`/`solver`/
@@ -403,13 +390,13 @@ general; arXiv:2502.12065).
 **An unbound predicate lowers to CQL's native `null`, not `true`/`false`.**
 CQL is natively three-valued (`true and null` is `null`, `false and null`
 is `false`), so an unbound hole propagates exactly the uncertainty it
-should — a rule's `"Compliant"` define evaluates to `null` rather than to a
-verdict, and that null is visible in the library header, not buried in
-pipeline metadata. Stubbing to `false` silently narrows a rule so it stops
-firing for the exact patients the missing predicate was about; stubbing to
-`true` over-fires. Leaving it `null` is not an invention — the target
-language already has three-valued logic, so the honest option is also the
-native one.
+should — a rule's `"Compliant"` define evaluates to `null` rather than a
+verdict, visible in the library header, not buried in pipeline metadata.
+Stubbing to `false` silently narrows a rule so it stops firing for the exact
+patients the missing predicate was about, while stubbing to `true`
+over-fires; leaving it `null` isn't an invention, since the target language
+already has three-valued logic, so the honest option is also the native
+one.
 
 **Time is kept in CQL, not flattened the way Z3 needs it.** The DSL has two
 different lowerings of the same `Since` node: for Z3 (no notion of a
@@ -427,14 +414,14 @@ value sets named "Diabetes" in VSAC can differ by nine years, and that
 pinned version is what a reviewer actually resolves against.
 
 **`check_cql()` is structural only** — brackets balance and quoted names
-resolve — and is explicitly *not* a compiler. The real gate is
-`cql-to-elm` (from `cqframework/clinical_quality_language`, Java, published
-on Maven Central), wired in as an injected `compiler` callable; without it,
-`COMPILER_UNAVAILABLE` is raised at warn severity with text saying plainly
-that only structural checks ran. Nothing has been run against a real
-`cql-to-elm` translation or a FHIR bundle as of this writing — every
-library that exists has passed the structural checks only, which is a much
-weaker claim than "compiles."
+resolve — and is explicitly *not* a compiler. The real gate is `cql-to-elm`
+(from `cqframework/clinical_quality_language`, Java, published on Maven
+Central), wired in as an injected `compiler` callable; without it,
+`COMPILER_UNAVAILABLE` is raised at warn severity, saying plainly that only
+structural checks ran — and as of this writing nothing has been run against
+a real `cql-to-elm` translation or a FHIR bundle, so every library that
+exists has passed structural checks only, a much weaker claim than
+"compiles."
 
 ## 3. How To Use It
 

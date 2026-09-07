@@ -3,7 +3,7 @@
 Turns clinical guideline text into checkable rules, then checks a patient +
 care plan against them and gives a real answer: definitely violates,
 definitely compliant, or genuinely undetermined (with the exact missing
-fact named). 
+fact named).
 
 ## The problem
 
@@ -21,53 +21,24 @@ minimize: every run reports the rule set *and* a per-statement account of
 what it declined to encode, with a reason and the source sentence. Three
 things make that possible, and each is also why this differs from the
 obvious alternatives (substituting a default, or asking a model if it's
-unsure): terminology codes are always **retrieved**, never generated, so a
-hallucinated code isn't possible; an undefined predicate stays a **named
-free variable** instead of a silent stub; and **deontic force is an
-operator** in the rule language itself, so a permission has no violating
-patient by construction. Every rule is also checked twice -- on write, and
-again independently on load -- and a patient check returns one of three
-verdicts (violates, compliant, genuinely undetermined) rather than a plain
-yes/no.
-
-## Setup
-
-```sh
-python3 -m venv .venv
-.venv/bin/python3 -m pip install -r requirements.txt
-
-cp .env.example .env
-# edit .env, add your ANTHROPIC_API_KEY (only needed for uploading your own
-# guideline live -- the ten example rules work with no key at all)
-```
-
-Optional, and only for the CQL half: the checker and the demo need none of
-it, but compiling a rule to ELM and executing it against a FHIR bundle uses
-HL7's Java translator and a Node engine.
-
-```sh
-bash patient_checker/engine/setup.sh
-```
-
-That fetches coursier, resolves the `cql-to-elm` jars, compiles the Java
-driver, and installs the two npm packages (`cql-execution`, `cql-exec-fhir`)
-that execute the resulting ELM -- `npm ci` alone only does the last of those
-four and leaves `toolchain.available()` false.
-
-Without it, `toolchain.available()` is False, `test_toolchain.py`'s two
-execution tests fail, and an upload records `compiler_available: false`
-rather than reporting its CQL as compiled -- an absent toolchain is never
-counted as a pass.
+unsure): terminology codes are always **retrieved** instead of generated, 
+so it doesn't hallucinated code; an undefined predicate stays a **named free variable** 
+instead of a silent stub; and **deontic force is an operator** in the rule language itself, 
+so a permission has no violating patient by construction. 
+Every rule is also checked twice -- on write, and 
+independently on load -- and a patient check returns one of three
+verdicts (violates, compliant, genuinely undetermined), giving more information
+than a simple yes/no.
 
 ## Run it
 
 **Live, no setup:** [guidelineforge.fly.dev](https://guidelineforge.fly.dev/) --
-the same app, already running. New here? Its
-[demo page](https://guidelineforge.fly.dev/demo) is a 30-second live example,
-no setup. No server-side API key is configured on this deployment, so
+the same app, already running. Its
+[demo page](https://guidelineforge.fly.dev/demo) is a pre-loaded live example
+requiring no setup. No server-side Anthropic API key is configured on this deployment, so
 formalizing your own document live there asks you to paste one -- used for
-that one upload only, never stored (see `_temporary_api_key` in
-`patient_checker/guidelines.py`); the dashboard, the demo page and the
+that one upload only and is never stored (see `_temporary_api_key` in
+`patient_checker/guidelines.py`). The dashboard, the demo page and the
 built-in fixtures all need no key at all.
 
 **Locally:**
@@ -79,8 +50,19 @@ cd "patient_checker"
 ```
 
 That's a dashboard of guidelines -- click one to check a patient against it,
-or use "+ Upload guideline" to formalize your own document. New here? Open
-`http://localhost:8000/demo` first for a 30-second live example, no setup.
+or use "+ Upload guideline" to formalize your own document. Open
+`http://localhost:8000/demo` first for an example without setup.
+
+## Setup
+
+```sh
+python3 -m venv .venv
+.venv/bin/python3 -m pip install -r requirements.txt
+
+cp .env.example .env
+# edit .env, add your ANTHROPIC_API_KEY (only needed for uploading your own
+# guideline live -- the ten example rules work with no key at all)
+```
 
 ## Checking it works
 
@@ -100,7 +82,7 @@ verdict, including the undetermined case and what it is waiting on.
 - **Formalization pipeline** (`CQL_converter/`) -- Python. Anthropic's Claude
   models propose candidate concept mentions, select a terminology code among
   retrieved candidates, and formalize a statement into the rule language --
-  codes are always retrieved, never invented by the model.
+  codes are always retrieved, and not invented by the model.
 - **Terminology** -- SNOMED CT, LOINC, RxNorm and ATC/VSAC, cached locally in
   a SQLite index (`terms.db`) built once from licensed releases, with the
   free NIH Clinical Tables, RxNav, tx.fhir.org and VSAC FHIR endpoints as a
