@@ -1,26 +1,12 @@
 """
 The model hooks, wired to Claude.
 
-Every stage of Track A takes its model as an injected callable so the pipeline
-runs offline on heuristics and the tests need no key. This module supplies the
-real implementations of those callables and nothing else -- no stage imports
-it, and importing it never makes a network call.
-
-    import llm, segment, bind
-    stmts, man = segment.segment(blocks, doc, llm=llm.classify_block)
-    bs, rs = bind.bind_statement(text, ix, llm.propose_mentions, llm.select_candidate)
-
-Design notes:
-  * Structured outputs, not prose parsing. `output_config.format` constrains
-    generation to the JSON schema each stage already declares, so the model
-    cannot emit a variable outside the registry or a field the validator does
-    not know. That is the "constrained decoding" step the plan assumes.
-  * Instructions go in a CACHED system block. The prefix is identical across
-    every call in a run, so a document's 600+ classifier calls pay for it once.
-  * TEMPERATURE IS NOT AVAILABLE. Claude Opus 5 / Sonnet 5 / Opus 4.8 / 4.7
-    reject `temperature`, `top_p` and `top_k` with a 400; only Sonnet 4.6 and
-    Haiku 4.5 still accept them. `sample()` therefore varies by re-calling, not
-    by dialling temperature -- which is also what a real deployment would see.
+Every stage takes its model as an injected callable so the pipeline runs
+offline on heuristics and the tests need no key -- this module supplies the
+real implementations, and no stage imports it by default. Outputs are
+constrained to each stage's JSON schema rather than parsed from prose, and
+since the current Claude models reject `temperature`/`top_p`/`top_k`,
+`sample()` gets variance by re-calling instead of dialling temperature.
 """
 from __future__ import annotations
 

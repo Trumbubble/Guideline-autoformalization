@@ -1,84 +1,14 @@
 """
 Refusal gate: can this statement be faithfully encoded, partly, or not at all?
 
-Stage 3 of Track A, and the one with an asymmetric cost. A false REFUSE costs
-coverage and shows up honestly in the residue report. A false ENCODE produces a
-silently wrong checker -- so the gate is thresholded for precision on `encode`,
-and whatever recall that buys is what it buys.
-
-WHAT THIS IS NOT. It is not an LLM asked "is this vague?". That is circular
-(arXiv:2607.04655 puts purpose-built diagnostic models at ~0.71 F1 on error
-categorisation). The gate AGGREGATES deterministic evidence first -- what the
-binder could not resolve, what the validator rejects, what the solver shows to
-be degenerate -- and asks a model to encode only after that, then checks what
-comes back.
-
-But be precise about how much that buys, because the earlier claim here ("most
-of the decision is already made by machinery stages 1-2 produce") was not true.
-Of the six refusal codes, ONE is deterministic evidence from stages 1-2
-(`unbound_concept`) and one more is deterministic from this stage's validator
-(`defeasible`). The rest need the model, either to decline or -- for
-`not_patient_level` -- to have classified the statement upstream. The
-deterministic machinery is a GATE ON the model's answer, not a replacement for
-it.
-
-  reason_code            who decides           what actually sets it
-  ---------------------- --------------------- -----------------------------
-  unbound_concept        DETERMINISTIC         `bind.bind()` when the selector
-                         (binder)              returns -1, no candidate
-                                               survives, or a value set
-                                               expands to no codes; and the
-                                               fallback here when a statement
-                                               refuses with binder refusals
-                                               outstanding.
-  defeasible             DETERMINISTIC         MODAL_PREDICATE among the
-                         (validator)           blocking codes -- the guideline
-                                               hedged, so the "predicate" is
-                                               its deontic force wearing a
-                                               patient fact's clothes.
-                                               The model may also name it.
-  beyond_dsl             MIXED                 VACUOUS_RULE deterministically;
-                                               otherwise the model's own
-                                               refusal code, or the fallback
-                                               when nothing bound-specific
-                                               applies.
-  not_patient_level      MODEL                 `is_patient_level is False`,
-                         (segmenter's          which is the SEGMENTER'S
-                          classifier)          CLASSIFIER -- an LLM call on a
-                                               live run, heuristic only when
-                                               it errors or its quote is not
-                                               verbatim. Never derived here.
-  vague_predicate        MODEL                 the formalizer declining.
-  unsupported_temporal   MODEL                 the formalizer declining. NO
-                                               deterministic check produces
-                                               it: there is no fragment test
-                                               for "multi-visit", only the
-                                               model recognising one. Seen
-                                               twice across the real bundles,
-                                               both model-authored.
-
-THIS TABLE WAS WRONG FOR A LONG TIME, and being wrong here is expensive: it is
-what an architecture diagram gets drawn from, so the error propagates into
-anything describing the system. It claimed `not_patient_level` came from
-"obligation names no action" (it does not -- NO_ACTION_ATOM is a validator
-error that causes rejection, and never sets this code) and that
-`unsupported_temporal` was deterministic (nothing assigns it). Both read as
-guarantees the pipeline does not make. `test_gate.py` now pins which codes are
-reachable without a model, so the claim cannot drift again.
-
-MEASURED, AND IT SHAPED THIS FILE. On 20 statements x K=8 real samples, all 80
-vague samples were REFUSED and 0 of the encoded statements produced more than
-one semantic reading. So separation comes from refusal, not from disagreement:
-one constrained decode does what a K-sample ambiguity estimator was supposed
-to, at an eighth of the cost. K>1 is kept only as the CONFIDENCE estimator
-(`refusal_rate`), because a risk-coverage curve needs a score.
-
-PARTIAL is the interesting verdict. "Refer if eGFR < 30 or the patient is high
-risk" has one clause that binds and one that does not. Stubbing the second as
-`false` (what PathWISE does) silently stops the rule firing for high-risk
-patients; `true` over-fires. Instead the hole becomes a genuinely free variable
-(`VarDef.unbound`), so the three-valued verdict returns MAY-violate and NAMES
-the assumption. That is the comparison E3 is built on.
+It is not an LLM asked "is this vague?" -- that's circular -- so the gate
+aggregates deterministic evidence from the binder, validator, and solver
+first, and asks a model to encode only after that; of the six refusal codes,
+though, only two (`unbound_concept`, `defeasible`) are actually deterministic,
+and the rest need the model. `partial` is the verdict that matters most: an
+unresolved clause becomes a genuinely free variable rather than being stubbed
+to `false`/`true`, so the three-valued verdict returns `MAY-violate` and
+names exactly the missing assumption.
 """
 from __future__ import annotations
 

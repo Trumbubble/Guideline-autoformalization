@@ -1,30 +1,13 @@
 """
 Stage 4b: lower the typed DSL to HL7 CQL, and repair against a compiler.
 
-The lowering is DETERMINISTIC. The model's only job was to produce a validated
-`dsl.Rule`; turning that into CQL is a total function with no judgement in it,
-which is the point -- it is the step a governance committee can re-run and get
-the same artifact.
-
-TWO LOWERINGS OF THE SAME DSL, and this is deliberate:
-
-    dsl.to_z3    flattens time -- `Since(e, n)` becomes `e_occurred and
-                 days_since_e <= n` at a single instant, because Z3 has no
-                 notion of a patient timeline.
-    cql.to_cql   keeps time -- the same node becomes a real retrieve with a
-                 temporal `where`, because a CQL engine evaluates over the
-                 record and does the existential itself.
-
-So the DSL does NOT need time-indexed variables for CQL to be faithful: CQL's
-`[Observation: X] O where O.effective during Interval[...]` IS the bounded
-existential. That is what makes the earlier decision to defer time-indexing
-safe rather than merely convenient.
-
-HOLES BECOME `null`, NOT `false`. CQL is natively three-valued -- `true and
-null` is null, `false and null` is false -- so an unbound predicate propagates
-exactly the uncertainty it should, and the engine returns null rather than a
-verdict. PathWISE stubs uncomputable nodes as `false`, which is a two-valued
-choice that throws away information the language already carries.
+The lowering is a deterministic total function with no judgement in it, so
+it's the step a governance committee can re-run and get the same artifact;
+unlike `dsl.to_z3`, which flattens time to a single instant, `cql.to_cql`
+keeps time as a genuine temporal retrieve, which is why deferring
+time-indexing in the DSL was safe rather than merely convenient. An unbound
+hole lowers to CQL's native `null` rather than `false`, since three-valued
+logic is already how the language expresses "unknown."
 """
 from __future__ import annotations
 

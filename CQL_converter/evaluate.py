@@ -1,22 +1,12 @@
 """
 Clause-level scoring of generated CQL against a hand-authored reference (M2).
 
-The experiment M2 asks: does the determinism machinery buy MEANING, or only
-compilation? Scoring is therefore per CLAUSE and per FIELD -- predicate,
-comparator, threshold, unit, value set -- not per library and not by string
-similarity. A library that compiles and gets the threshold wrong scores zero on
-the threshold field, which is the distinction the whole paper rests on.
-
-ONE EXTRACTOR, BOTH SIDES. The reference is CQL and our output is CQL, so the
-same parser reads both. That removes a whole class of scoring artifact: a
-difference in the score cannot come from having parsed the two sides
-differently.
-
-WHAT IT IS NOT. This is a structural comparison, not a semantic one. Two
-clauses that mean the same thing written differently (`>= 140` vs `not < 140`)
-score as a mismatch. `dsl.equivalent` is the semantic oracle and needs both
-sides in the DSL; this works on CQL text, which is what a reference artifact
-actually gives you.
+Scoring is per clause and per field -- predicate, comparator, threshold,
+unit, value set -- rather than per library or by string similarity, so a
+library that compiles but gets the threshold wrong scores zero on that field.
+This is a structural comparison, not a semantic one: two clauses that mean
+the same thing but are written differently score as a mismatch, since only
+`dsl.equivalent` (which needs both sides in the DSL) is the semantic oracle.
 """
 from __future__ import annotations
 

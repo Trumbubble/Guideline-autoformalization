@@ -1,36 +1,13 @@
 """
 Segmenter: guideline document -> recommendation Statements with provenance.
 
-Stage 1 of Track A. Feeds the refusal gate and the synthesizer, which read
-`Statement.text` and must be able to point a clinician at the exact sentence it
-came from.
-
-Three loaders, one output type:
-  load_jats  -- PMC Open Access XML. THE MAIN PATH: the publisher already
-                tagged <boxed-text> and <table-wrap> at typesetting time, so
-                the "boxed callout" problem is solved structurally.
-  load_html  -- USPSTF and similar web-published guidelines.
-  load_pdf   -- fallback. Layout model (optional) + a deterministic geometric
-                pass that recovers boxes from PDF drawing primitives.
-
-Two rules the whole file is built around:
-
-  RECALL OVER PRECISION. A false positive becomes a `not_patient_level`
-  refusal downstream: visible, cheap, and reported in the residue. A false
-  negative is invisible and silently corrupts the formalizability denominator.
-  Tune the prefilter LOW.
-
-  NEVER SYNTHESIZE. Every Statement's text must be a verbatim substring of its
-  source block, and every Statement carries the offsets to prove it. A
-  paraphrase has no source span and cannot be adjudicated by a clinician.
-
-  The ONE deliberate exception is `kind == "table_row"`, whose text is a
-  rendering of the row's cells with the header names folded in ("Finding: eGFR
-  below 30; Action: refer to nephrology"). A recommendation table splits the
-  condition and the action across columns, so no contiguous span of the
-  document is the rule. Provenance still points at the <tr>, every cell value
-  is verbatim, and the kind field says the text was assembled -- but a
-  clinician adjudicating one of these is shown the row, not a character span.
+It's tuned for recall over precision, since a false positive becomes a
+cheap, visible `not_patient_level` refusal downstream while a false negative
+silently corrupts the formalizability denominator. Every `Statement`'s text
+must be a verbatim substring of its source block with offsets to prove it --
+the one deliberate exception is a `table_row`, whose text is an assembled,
+header-folded rendering of a row split across columns, with provenance still
+pointing at the `<tr>`.
 """
 from __future__ import annotations
 

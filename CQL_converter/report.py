@@ -1,19 +1,12 @@
 """A bundle as a page a person can read.
 
-The pipeline's outputs were a JSON bundle (an interface artifact, for Track B)
-and terminal scrollback (ephemeral). Neither is something you can hand to a
-clinician or a governance committee, and the committee is the audience: the
-unit of review is one guideline sentence beside the rule it became, and the
-question is whether the rule says what the sentence said.
-
-So this renders exactly that comparison, plus the things a reviewer must not
-have to dig for -- what was REFUSED and why, and which checks fired on a rule
-that compiled anyway. A report that showed only what encoded would let a reader
-conclude the tool had covered the document.
-
-    python3 report.py ../patient_checker/bundles/bundle.PMC13074134.json -o report.html
-
-Self-contained: no network, no assets, prints to PDF from any browser.
+The pipeline's raw outputs -- a JSON bundle and terminal scrollback -- aren't
+something you can hand to a clinician or governance committee, so this
+renders the actual unit of review: one guideline sentence beside the rule it
+became. It also surfaces what a reader must not have to dig for -- what was
+refused and why, and which checks fired on a rule that compiled anyway --
+since a report showing only what encoded would let a reader assume full
+coverage.
 """
 from __future__ import annotations
 
