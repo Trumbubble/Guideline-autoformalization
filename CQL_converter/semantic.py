@@ -1,30 +1,11 @@
 """Semantic terminology retrieval: matching on MEANING, not on letters.
 
-Keyword search cannot bridge the vocabulary gap between guideline prose and a
-clinical terminology. Measured on the binding benchmark (RESULTS.md R23), 10 of
-22 lookup failures are pairs with no shared words at all:
-
-    guideline says            SNOMED calls it
-    ----------------------    -----------------------
-    kidney function           Renal function
-    volume optimisation       Fluid management
-    BP lowering               Antihypertensive therapy
-    CGM readings              Glucose measurement
-
-No query rewriting fixes that -- "kidney" and "renal" share no letters, and a
-prefix index has nothing to match on. Every one of those is a refused statement.
-
-This module embeds every term into a vector that encodes what it MEANS, does the
-same to the query, and returns the nearest. `kidney function` and `Renal
-function` score 0.93 with no token in common.
-
-Deliberately a separate module so `torch` never enters `bind.py`'s import path
--- the same reason Docling is lazy-imported in `segment.py`. `bind` imports it
-only when a lexical search has already failed, and degrades with a message if
-the dependencies or the model are unavailable.
-
-    python3 semantic.py --build            # one-time, cached to disk
-    python3 semantic.py --search "kidney function" --kind lab
+Keyword search can't bridge guideline prose and clinical terminology when a
+pair shares no letters at all ("kidney function" vs. "Renal function" score
+0.93 with no common token), so this module embeds terms into a meaning
+vector and searches nearest-neighbour instead. It's a separate module so
+`torch` never enters `bind.py`'s import path, and `bind` only imports it as
+a fallback once lexical search has already failed.
 """
 from __future__ import annotations
 

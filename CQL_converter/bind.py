@@ -1,31 +1,11 @@
 """
 Terminology binder: clinical phrase -> registry variable with a bound code.
 
-Stage 2 of Track A. It does NOT look codes up on demand for the compiler; it
-BUILDS the closed vocabulary (`dsl.Registry`) that the compiler is then
-constrained to. Anything it cannot bind becomes a `Refusal(unbound_concept)`
-and is part of the measured residue, not an error log.
-
-    statement text
-      -> propose_mentions   verbatim spans + a kind guess
-      -> index.search       candidates from a real terminology
-      -> select             the model returns an INDEX or ABSTAIN, never a code
-      -> verify             the chosen code must exist in the index
-      -> Binding | Refusal
-      -> registry_from_bindings -> dsl.Registry
-
-THE MODEL NEVER TYPES A CODE. Asked for "the SNOMED code for albuminuria" a
-model returns a well-formed, plausible, sometimes-wrong number, and nothing
-downstream can catch it: the CQL compiles, the solver runs, the verdict is
-confidently wrong. Here the selector's output space is `0..k` plus ABSTAIN, so
-a hallucinated code cannot be expressed. (Measured while writing this file:
-SNOMED 29738008 is *Proteinuria*, not *Albuminuria* -- a mapping I had wrong
-from memory and the lookup corrected.)
-
-RETRIEVAL IS LEXICAL AND THAT IS NOT ENOUGH. Clinical terminology is full of
-minimal pairs where one morpheme flips the meaning. Measured with SQLite FTS5:
-the query "kalemia" ranks *Hypokalemia* ABOVE *Hyperkalemia*. So retrieval
-proposes and the selector -- which sees the whole guideline sentence -- decides.
+It builds the closed vocabulary (`dsl.Registry`) the compiler is then
+constrained to, rather than looking codes up on demand -- anything it cannot
+bind becomes a `Refusal(unbound_concept)`, not an error. The model never
+types a code: it only selects an index into a retrieved candidate list (or
+ABSTAINs), so a hallucinated code cannot be expressed.
 """
 from __future__ import annotations
 

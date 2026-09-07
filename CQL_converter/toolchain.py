@@ -1,17 +1,11 @@
 """
 The real CQL toolchain, as injectable callables (DEV_PLAN P6).
 
-`cql.synthesize(..., compiler=...)` and Track B's checker both take their
-external tools as parameters so the pipeline runs offline. This module supplies
-the real implementations: the official HL7 cql-to-elm translator, and
-cql-execution over a FHIR bundle.
-
-    import cql, toolchain
-    out = cql.synthesize(stmt, reg, formalize, compiler=toolchain.cql_to_elm)
-
-Nothing here is imported by any pipeline stage, and importing it starts no
-process. `available()` says whether the toolchain is built; if it is not,
-`cql_to_elm` RAISES rather than returning "no errors" -- a missing compiler
+`cql.synthesize` and Track B's checker take their external tools as
+parameters so the pipeline runs offline by default; this module supplies the
+real ones -- HL7's `cql-to-elm` translator and `cql-execution` -- and
+importing it starts no process. `cql_to_elm` raises rather than returning an
+empty error list when the toolchain isn't built, since a missing compiler
 must never be indistinguishable from a clean compile.
 """
 from __future__ import annotations

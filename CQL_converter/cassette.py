@@ -1,30 +1,12 @@
 """Record every model response once; replay them offline forever after.
 
-WHY. Every defect in the `Delta` work reached a live run before anything
-noticed, because the only way to exercise the live path was to spend an API
-call on a real document -- so the user found each one, one run at a time, and
-each looked like a fresh unrelated bug. The unit tests could not help: they
-exercise objects built by hand, which is to say they test what their author
-already understood.
-
-A cassette closes that gap. Record one real run; afterwards the same document,
-the same statements and the same model outputs replay deterministically, for
-free, in a test. Every subsequent code change is then checked against a real
-guideline before anyone runs anything.
-
-The K samples matter. `gate` calls the formalizer K times with an IDENTICAL
-prompt and relies on the answers DIFFERING -- that spread is the vagueness
-signal. So responses are stored as a LIST per key and handed back in order;
-collapsing them to one value would silently turn every statement into
-agreement 1.00 and make the calibration sweep meaningless.
-
-    GUIDELINE_CASSETTE=path/to/tape.jsonl GUIDELINE_CASSETTE_MODE=record  ...
-    GUIDELINE_CASSETTE=path/to/tape.jsonl GUIDELINE_CASSETTE_MODE=replay  ...
-
-In `replay`, a prompt that was never recorded raises `CassetteMiss` rather
-than falling through to the network: a silent fallthrough would make a stale
-tape look like a passing test, which is the exact failure shape -- a failure
-that returns a usable value -- that this whole codebase keeps tripping over.
+A cassette records one real run so the same document, statements, and model
+outputs replay deterministically and for free in tests, catching regressions
+before anyone spends another API call. Because `gate` relies on K
+identical-prompt calls actually disagreeing, responses are stored as a list
+per key rather than collapsed to one value, and a prompt with no recorded
+response raises `CassetteMiss` in replay mode instead of silently falling
+through to the network.
 """
 from __future__ import annotations
 

@@ -1,37 +1,13 @@
 """
 GuidelineForge intermediate DSL - the Track A / Track B interface.
 
-Design constraints, each traceable to a preliminary result:
-  P3: an expression language without disjunction FORCED a wrong encoding
-      (AND-for-OR, wrong referral verdict for 69.5% of the patient space).
-      => boolean structure (and/or/not) is mandatory, not optional.
-  P1: a typechecker cannot see a semantically wrong rule, so the validator's
-      job is to be STRICT about what it CAN see and to emit machine-readable
-      errors the repair loop can act on.
-  P0: statements that cannot be faithfully encoded must ABSTAIN with a reason
-      rather than be approximated. Refusal is a first-class value, not a failure.
-
-A Rule is a CHECKABLE FORMULA, not a label. `when` is the applicability
-condition and `then` is the obligation, both expressions over the same closed
-registry; the rule denotes phi = (when -> then). Track B verifies phi. The
-`action`/`target` fields are the human-readable gloss for the UI and for
-provenance review, and carry no semantics.
-
-TIME. The registry declares EVENTS as well as variables, and `Since(event, n)`
-means "the event occurred within the last n days". It is compiled here to
-`<event>_occurred AND days_since_<event> <= n` over a single visit - i.e. the
-metric-temporal layer is flattened to derived state, which is bounded
-unrolling at T=1. Two consequences the paper must state:
-  * flattening is CONTAINED: `days_since_*` is produced by this lowering, not
-    hand-written by the model, so there is exactly one place it can be wrong;
-  * flattening is VISIBLE: `fragment_of` still reports MTL for any rule
-    containing a Since node, so the M1 spectrum does not silently reclassify
-    monitoring rules as plain linear arithmetic.
-Genuinely multi-visit operators - "on two occasions >= 90 days apart",
-"sustained for 3 months" - are NOT expressible and must route to the
-`unsupported_temporal` refusal. Moving to a real time-indexed semantics is a
-strictly additive change: Since nodes get a new lowering, written rules do not
-change.
+A `Rule` is a checkable formula, not a label: `when`/`then` denote
+`phi = when -> then`, which Track B verifies, while `action`/`target` are a
+human-readable gloss with no semantics. Time is flattened to derived state
+(`Since(event, n)` becomes an occurrence flag plus a day count) rather than
+indexed, which is contained and stays visible in the fragment spectrum but
+cannot express genuinely multi-visit predicates, which must refuse as
+`unsupported_temporal`.
 """
 from __future__ import annotations
 from dataclasses import dataclass, field, replace

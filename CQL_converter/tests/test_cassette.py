@@ -1,4 +1,9 @@
 """The tape has to be trustworthy, or a green suite means nothing."""
+
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import json
 import os
 

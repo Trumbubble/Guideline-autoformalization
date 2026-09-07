@@ -1,25 +1,12 @@
 """
 Differential check between the DSL's two lowerings.
 
-One `dsl.Rule` is lowered twice, by independent code paths that share nothing
-below the DSL:
-
-    dsl.rule_to_z3    -> a Z3 formula      (time flattened; holes range free)
-    cql.rule_to_cql   -> a CQL library     (real temporal retrieves; holes null)
-
-They are then asked about the SAME patient. A disagreement means one of the two
-lowerings is wrong -- and this needs no ground truth, no clinician and no
-reference artifact, which is what makes it worth running.
-
-The verdicts correspond like this, for a patient whose every variable is known:
-
-    Z3 MUST-violate         <->  CQL Violated = true
-    Z3 CERTIFIED-compliant  <->  CQL Violated = false
-    Z3 MAY-violate          <->  CQL Violated = null      (a hole decides it)
-
-MAY/null is the interesting row: Z3 reaches it by finding the free variable can
-go either way, CQL by propagating a null. Two different mechanisms, and they
-should still land in the same place.
+One `dsl.Rule` is lowered independently to a Z3 formula and a CQL library and
+both are asked about the same patient; a disagreement means one lowering is
+wrong, which needs no ground truth, clinician, or reference artifact to
+detect. The interesting case is Z3's MAY-violate against CQL's null
+Violated -- two different mechanisms (a free variable vs. a propagated null)
+that should still land in the same place.
 """
 from __future__ import annotations
 

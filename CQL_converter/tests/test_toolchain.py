@@ -4,6 +4,11 @@ SKIPPED, LOUDLY, when the toolchain is not built -- these shell out to a JVM
 and Node, so they cannot be part of the offline suite. Build with
 `bash "patient_checker/engine/setup.sh"`.
 """
+
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import json
 import os
 import tempfile

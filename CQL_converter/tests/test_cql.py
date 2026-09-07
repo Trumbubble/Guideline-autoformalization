@@ -3,6 +3,11 @@
 Offline: the lowering is deterministic and the compiler is injected, so none of
 this needs a JVM, a key, or a network.
 """
+
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import dsl
 import cql
 from cql import (check_cql, compile_cql, event_term, expr_to_cql, parse_binding,

@@ -4,6 +4,11 @@ The model is injected, so `formalize` here is a lookup table keyed on the
 statement -- which makes every decision path deterministic and lets the tests
 assert on the gate's LOGIC rather than on a model's mood.
 """
+
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import pytest
 import z3
 

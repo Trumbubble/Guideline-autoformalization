@@ -24,6 +24,11 @@ walker is covered the moment it is written, and adding a node to the DSL breaks
 the suite until every consumer has been updated. Deliberate omissions are
 listed below WITH THEIR REASON; an omission with no entry here is a bug.
 """
+
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import glob
 import os
 import re
@@ -53,7 +58,7 @@ _ISINSTANCE = re.compile(r"isinstance\(\s*\w+\s*,\s*\(?([A-Za-z_\.,\s]+?)\)?\s*\
 def _walkers():
     """{(basename, qualified name): (variants named, line)} for every function
     in the codebase that dispatches on the expression union."""
-    root = os.path.dirname(os.path.abspath(__file__))
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     files = (glob.glob(os.path.join(root, "*.py"))
              + glob.glob(os.path.join(root, "..", "patient_checker", "*.py")))
     found = {}
