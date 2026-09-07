@@ -53,8 +53,13 @@ it, but compiling a rule to ELM and executing it against a FHIR bundle uses
 HL7's Java translator and a Node engine.
 
 ```sh
-cd patient_checker/engine && npm ci && cd ../..
+bash patient_checker/engine/setup.sh
 ```
+
+That fetches coursier, resolves the `cql-to-elm` jars, compiles the Java
+driver, and installs the two npm packages (`cql-execution`, `cql-exec-fhir`)
+that execute the resulting ELM -- `npm ci` alone only does the last of those
+four and leaves `toolchain.available()` false.
 
 Without it, `toolchain.available()` is False, `test_toolchain.py`'s two
 execution tests fail, and an upload records `compiler_available: false`
@@ -96,6 +101,8 @@ each button posts a real patient to `/guidelines/<id>/check` and shows the
 verdict, including the undetermined case and what it is waiting on.
 
 ## Tech stack
+
+![Tech stack overview](media/Tech_Stack.svg)
 
 - **Formalization pipeline** (`CQL_converter/`) -- Python. Anthropic's Claude
   models propose candidate concept mentions, select a terminology code among
