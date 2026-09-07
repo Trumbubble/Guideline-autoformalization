@@ -1,0 +1,8 @@
+# Ignore generated guideline run folders in this directory.
+# Keep only the curated bundle folders tracked.
+*
+!.gitignore
+!bundle.PMC12355350/
+!bundle.PMC13270348/
+!bundle.PMC12355350/**
+!bundle.PMC13270348/**
