@@ -9,11 +9,27 @@
 # lexical retrieval via SemanticUnavailable when it is absent.
 CQL_converter/semantic/
 # engine/ is the JVM+Node CQL toolchain (89MB of node_modules and classes).
-# The paper's Limitations already state cql-to-elm has never been run.
+# Excluded for SIZE, not because it is unused -- guidelines._lower_and_compile
+# puts every lowered rule through cql-to-elm whenever the toolchain is present,
+# and test_toolchain.py executes a compiled library against FHIR bundles. What
+# a container without it loses is the compile gate: toolchain.available() is
+# False, so CQL is written but not compiled, and the run records
+# `compiler_available: false` rather than counting an uncompiled rule as a pass.
+# Ship engine/ (and drop this line) if the hosted build must compile too.
 patient_checker/engine/
 # loinc.db is a leftover staging artifact -- nothing in the codebase reads it.
 CQL_converter/loinc.db
 CQL_converter/demo.db
+
+# --- runtime data, not source -------------------------------------------
+# The guideline store is whatever this machine happened to upload; .gitignore
+# already excludes it for the same reason. Copying it into the image ships a
+# developer's scratch uploads as pre-loaded library entries on the deployed
+# site -- an entry with no `owner` is visible to every visitor (_visible_to).
+# api.py calls seed_demo_guidelines() on import, which rebuilds the two /demo
+# guidelines from the committed bundle.PMC*.json, so a container that starts
+# with no store is the intended state, not a degraded one.
+patient_checker/guidelines/
 
 # --- source releases: build-time input only, already baked into terms.db --
 Loinc_2.83/

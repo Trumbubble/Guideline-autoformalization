@@ -29,9 +29,20 @@ primary_region = 'lhr'
 [http_service]
   internal_port = 8080
   force_https = true
-  auto_stop_machines = 'suspend'
+  # DO NOT re-enable autosuspend while live ingest is a background thread.
+  # A live upload is one model call chain per statement -- minutes of work in
+  # a thread `guidelines.ingest_document` starts and returns from. Fly's proxy
+  # counts REQUESTS, not threads, so an in-flight ingest is invisible to it:
+  # it sees an idle machine and suspends. Observed 2026-09-05 -- an upload was
+  # suspended mid-run, `_PROGRESS` (in-memory) went with the machine, no bundle
+  # was ever written, and the dashboard reported "could not follow this upload"
+  # for a run that was not running. Health checks do not count as traffic, so
+  # nothing but the poller keeps the machine up, and the poller gives up after
+  # ~18s. Surviving suspend would mean moving progress and the ingest off the
+  # process -- until then the machine stays up.
+  auto_stop_machines = 'off'
   auto_start_machines = true
-  min_machines_running = 0
+  min_machines_running = 1
 
   [http_service.concurrency]
     type = 'requests'
