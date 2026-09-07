@@ -3,14 +3,7 @@
 Turns clinical guideline text into checkable rules, then checks a patient +
 care plan against them and gives a real answer: definitely violates,
 definitely compliant, or genuinely undetermined (with the exact missing
-fact named) -- never a silent guess.
-
-- **CQL_converter** -- formalizes a guideline document into typed rules.
-- **patient_checker** -- the checker: runs a patient/plan against those rules
-  (or a set of ten hand-authored example rules, no upload needed).
-
-This README covers running patient_checker, the part with a UI. See
-[`patient_checker/CHECKER.md`](patient_checker/CHECKER.md) for how it works in detail.
+fact named). 
 
 ## The problem
 
