@@ -258,3 +258,17 @@ patient_checker/tests/explanation_*.csv
 # summaries ARE tracked: small, and they are what the paper quotes
 !patient_checker/tests/*.summary.txt
 patient_checker/tests/may_actionability.csv
+
+# Working/internal docs -- README.md and the two DOCUMENTATION.md files are
+# the only markdown meant for a reader outside the project.
+CQL_converter/BACKLOG.md
+CQL_converter/BIND.md
+CQL_converter/CQL.md
+CQL_converter/DSL.md
+CQL_converter/GATE.md
+CQL_converter/NOTES.md
+CQL_converter/RESULTS.md
+CQL_converter/SEGMENT.md
+DEPLOY.md
+paper/README.md
+patient_checker/CHECKER.md

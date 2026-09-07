@@ -68,7 +68,7 @@ not a bug.
 
 ### 2.2 Binder
 
-It is not a lookup service the compiler calls — it builds the closed
+It is not a lookup service the compiler calls -- it builds the closed
 vocabulary the compiler is then constrained to, so whatever it cannot bind
 never becomes a variable but a `Refusal(unbound_concept)` instead. The
 model is shown a numbered candidate list and returns an index (or ABSTAIN),
@@ -138,8 +138,8 @@ them, and a Z3 counterexample is a model of `NOT phi`. `action` / `target`
 are a human-readable gloss with no semantics — branching on `rule.action` in
 verification code is a sign something has gone wrong.
 
-**The registry variables are a symbolic patient, not an index over real
-patients.** `egfr` is not "some particular person's eGFR", it stands for
+**The registry variables are a symbolic patient, not an index over real patients.** 
+`egfr` is not "some particular person's eGFR", it stands for
 *any* patient's eGFR; when Z3 returns `sat`, the model it hands back **is**
 a concrete patient (`egfr=29, has_diabetes=True, on_acei_arb=False, ...`).
 One solver query is one patient — many patients is a loop, not a bigger
@@ -158,8 +158,7 @@ can't land at eGFR = 2.0, and it doubles as a validator warning on
 unit-slip thresholds (the mg/g-vs-mg/mmol factor of ~8.84 above compiles
 cleanly and silently without it).
 
-**Expression nodes**: `Cmp(var, op, value)`, `Between(var, lo, hi,
-lo_inclusive, hi_inclusive)` — inclusivity is explicit and required, because
+**Expression nodes**: `Cmp(var, op, value)`, `Between(var, lo, hi, lo_inclusive, hi_inclusive)` — inclusivity is explicit and required, because
 boundary slips (eGFR 29 vs 30) compile cleanly and are the single most
 common silent bug — `Since(event, days, inclusive)`, and `Not`/`And`/`Or`
 (junctions need ≥2 operands). `And`/`Or` are first-class rather than derived
@@ -223,8 +222,8 @@ runs automatically before the vacuity check below, and the bundle format
 records every merge under `merged_concepts` rather than silently
 collapsing it, since a merge is a claim about the guideline.
 
-**Modal predicates are a closed word class, and they get refused, not
-turned into holes.** *"Epidural analgesia may be considered"* correctly
+**Modal predicates are a closed word class, and they get refused, not turned into holes.** 
+*"Epidural analgesia may be considered"* correctly
 filled `Rule.strength` with `"suggest (conditional)"`, but also put the
 modal itself into the antecedent as `has_may` — a rule that can never run,
 since no FHIR resource populates "has may". `modal_only()` is a fixed list
@@ -346,8 +345,8 @@ made — but a retrieval failure is *never* turned into one: "refer to
 nephrology" is perfectly bindable, and a missed index is a coverage bug to
 fix, not a finding to launder into a free variable.
 
-**Sample count (`samples=k`) is a confidence estimator, not an ambiguity
-detector — and that took a real measurement to establish.** The original
+**Sample count (`samples=k`) is a confidence estimator, not an ambiguity detector — and that took a real measurement to establish.** 
+The original
 idea (from arXiv:2605.13817) was that k repeated calls on a vague statement
 should *disagree*, giving a vagueness signal without needing ground truth.
 Measured on 20 hand-labelled statements (10 precise, 10 vague) at K=8 real
@@ -364,8 +363,7 @@ not just bimodal — a deliberately borderline statement ("Monitor serum
 potassium at least annually") came back 6/8; `samples=1` is the production
 default, `k>1` worth paying for only when building an evaluation curve.
 
-**Reporting.** `Triage.evidence` is a tuple of `Evidence(source, code,
-detail)` tagged by where it came from (`binder`/`validator`/`solver`/
+**Reporting.** `Triage.evidence` is a tuple of `Evidence(source, code, detail)` tagged by where it came from (`binder`/`validator`/`solver`/
 `model`) — a clinician asking "why was this refused" gets those, not a
 score. `spectrum(triages)` computes the six-bucket formalizability table
 (`PROP`/`LIA`/`MTL` for what encoded, the six reason codes for what didn't)
@@ -402,13 +400,11 @@ one.
 different lowerings of the same `Since` node: for Z3 (no notion of a
 patient timeline) it flattens to an occurrence flag plus a day count; for
 CQL (which evaluates over the actual record) it becomes a genuine bounded
-existential — `exists ([Observation: X] O where O.effective during
-Interval[Today() - 14 days, Today()])`. This is why deferring the
+existential — `exists ([Observation: X] O where O.effective during Interval[Today() - 14 days, Today()])`. This is why deferring the
 time-indexing decision was safe rather than merely convenient: the DSL
 doesn't need time-indexed variables for the CQL to already be faithful.
 
-**Units and version-pinned terminology survive into the emitted CQL
-verbatim** — `"urine ACR" >= 30 'mg/g'`, never a bare `30`, and
+**Units and version-pinned terminology survive into the emitted CQL verbatim** — `"urine ACR" >= 30 'mg/g'`, never a bare `30`, and
 `valueset "Diabetes codes": 'urn:oid:...' version '20241228'`, because two
 value sets named "Diabetes" in VSAC can differ by nine years, and that
 pinned version is what a reviewer actually resolves against.

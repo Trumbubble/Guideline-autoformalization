@@ -1,7 +1,7 @@
 """
 Terminology binder: clinical phrase -> registry variable with a bound code.
 
-Stage 2 of Track A. It does NOT look codes up on demand for the compiler; it
+Stage 2 of CQL_converter. It does NOT look codes up on demand for the compiler; it
 BUILDS the closed vocabulary (`dsl.Registry`) that the compiler is then
 constrained to. Anything it cannot bind becomes a `Refusal(unbound_concept)`
 and is part of the measured residue, not an error log.

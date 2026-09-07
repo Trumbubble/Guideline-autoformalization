@@ -32,8 +32,8 @@ than a simple yes/no.
 
 ## Run it
 
-**Live, no setup:** [guidelineforge.fly.dev](https://guidelineforge.fly.dev/) --
-the same app, already running. Its
+**Live, no setup:** [guidelineforge.fly.dev](https://guidelineforge.fly.dev/).
+Its
 [demo page](https://guidelineforge.fly.dev/demo) is a pre-loaded live example
 requiring no setup. No server-side Anthropic API key is configured on this deployment, so
 formalizing your own document live there asks you to paste one -- used for
@@ -43,17 +43,7 @@ built-in fixtures all need no key at all.
 
 **Locally:**
 
-```sh
-cd "patient_checker"
-../.venv/bin/python3 api.py
-# open http://localhost:8000/
-```
-
-That's a dashboard of guidelines -- click one to check a patient against it,
-or use "+ Upload guideline" to formalize your own document. Open
-`http://localhost:8000/demo` first for an example without setup.
-
-## Setup
+***Setup***
 
 ```sh
 python3 -m venv .venv
@@ -64,7 +54,20 @@ cp .env.example .env
 # guideline live -- the ten example rules work with no key at all)
 ```
 
-## Checking it works
+***Running***
+
+```sh
+cd "patient_checker"
+../.venv/bin/python3 api.py
+# open http://localhost:8000/
+```
+
+That's a dashboard of guidelines -- click one to check a patient against it,
+or use "+ Upload guideline" to formalize your own document.
+`http://localhost:8000/demo` has a working example with no guideline to
+pick.
+
+## Tests
 
 ```sh
 cd CQL_converter
@@ -106,8 +109,7 @@ verdict, including the undetermined case and what it is waiting on.
 
 ## More detail
 
-- [`patient_checker/CHECKER.md`](patient_checker/CHECKER.md) -- how the checker and its
-  pages work, the three-valued verdict, uploading guidelines.
-- [`CQL_converter/DSL.md`](CQL_converter/DSL.md) -- the rule language guideline text
-  gets formalized into.
-- [`CQL_converter/BACKLOG.md`](CQL_converter/BACKLOG.md) -- known open issues.
+- [`patient_checker/DOCUMENTATION.md`](patient_checker/DOCUMENTATION.md) -- how the
+  checker and its pages work, the three-valued verdict, uploading guidelines.
+- [`CQL_converter/DOCUMENTATION.md`](CQL_converter/DOCUMENTATION.md) -- the
+  formalization pipeline in detail: segmenting, binding, the DSL, the gate, CQL.
