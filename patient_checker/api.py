@@ -1,6 +1,4 @@
-"""Flask API for the Track B checker: dashboard + per-guideline check.
-See CHECKER.md for the endpoints, the verdict semantics, and how the
-counterexample is minimized."""
+"""Flask API for the patient checker: dashboard + per-guideline check."""
 
 from pathlib import Path
 from urllib.parse import quote
@@ -62,7 +60,7 @@ def _coerce(ref, value):
 
 
 def _pin(rule, known: dict) -> tuple:
-    # Track A rules bring their own per-rule axioms (their own registry's
+    # CQL_converter rules bring their own per-rule axioms (their own registry's
     # plausible ranges); fixtures fall back to the fixture module's shared
     # DOMAIN_AXIOMS, since a SpecClause carries no `.domain` of its own.
     domain = list(getattr(rule, "domain", None) or FIXTURE_DOMAIN_AXIOMS)

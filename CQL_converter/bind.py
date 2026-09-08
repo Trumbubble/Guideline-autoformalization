@@ -23,20 +23,7 @@ import dsl
 # ---------------------------------------------------------------- systems
 
 def load_env(path: str | None = None, *, override: bool = True) -> None:
-    """Read a .env into os.environ. No dependency.
-
-    The file WINS over an inherited environment variable, which is the opposite
-    of the usual `setdefault` convention and deliberate. Measured (R38): a stale
-    exported `UMLS_API_KEY` shadowed the key on disk for a whole run, VSAC
-    answered 401 to every lookup, and 48 of that document's 55
-    `unbound_concept` refusals were published qualified by a fault the file
-    would have avoided. A `.env` is the value the operator most recently chose;
-    an export is usually left over from a shell they have forgotten about, and
-    it fails SILENTLY -- the wrong key looks exactly like the right one.
-
-    A container is unaffected: it ships no `.env` (see DEPLOY.md), so this
-    returns early and platform secrets stand. Pass override=False for the old
-    precedence."""
+    """Read a .env into os.environ. No dependency."""
     if path is None:
         here = os.path.dirname(os.path.abspath(__file__))
         path = os.path.join(os.path.dirname(here), ".env")
@@ -210,18 +197,7 @@ def _stems(s: str) -> list[str]:
 
 class TransportFailures:
     """Terminology lookups that failed for a TRANSPORT reason rather than
-    because the concept is absent.
-
-    Silently swallowing them was the most dangerous instance of the
-    "advisory output used as a result" class: `except Exception: pass` around a
-    remote search makes a timed-out server indistinguishable from an empty
-    vocabulary. The binder then refuses, the refusal is labelled
-    `unbound_concept`, and the residue report attributes it to the GUIDELINE --
-    so a network blip is published as a finding about clinical prose.
-
-    Recorded on the index rather than raised, because one failed lookup should
-    not abort a run: the failure is real but recoverable. What must not happen
-    is it being invisible."""
+    because the concept is absent."""
 
     def __init__(self):
         self._items: list[tuple[str, str, str]] = []
@@ -505,24 +481,6 @@ def expand_query(phrase: str, doc_abbrevs: dict[str, str] | None = None) -> list
         out.append(head)
     return out
 
-# A multi-word phrase can retrieve ONLY over-specific descendants, leaving the
-# generic concept -- the one the guideline actually means -- unreachable.
-# Measured: "mechanical thrombectomy" returns eight fluoroscopy-guided variants
-# of the wrong vessel (dialysis fistula, pulmonary artery, hepatic vein), every
-# one of which the selector correctly rejects, while `Thrombectomy` (SNOMED
-# 43810009) and `Intracranial thrombectomy` (21710002) sit in the same index
-# and are never offered. The selector was right and the retrieval was wrong,
-# which reads downstream as `unbound_unselected` residue attributable to the
-# guideline. It is not; it is ours.
-#
-# Searching the head noun alone returns both at ranks 1 and 2. This is a union
-# like every other expansion, so it can only ADD candidates -- the reranker and
-# the selector still decide.
-
-# Heads too generic to discriminate. Hand-written, and defensibly so: unlike
-# clinical vocabulary these are a small closed set of English nouns that name a
-# category rather than a thing. Searching them returns an arbitrary eight of
-# hundreds, which is noise in the selector's prompt rather than a candidate.
 _GENERIC_HEADS = {
     "device", "agent", "agents", "therapy", "therapies", "treatment",
     "management", "care", "procedure", "test", "tests", "level", "levels",
@@ -576,13 +534,7 @@ KIND_FALLBACK: dict[Kind, tuple[Kind, ...]] = {
     "lab": ("condition", "procedure"),
 }
 
-# Semantic retrieval is a FALLBACK, never a replacement. Measured on the
-# benchmark's fixable failures, lexical finds 3 of 10 and semantic finds 4 --
-# but they are different threes and fours. Lexical alone catches `APLA` (an
-# abbreviation the glossary expands); semantic alone catches `kidney function`
-# -> `Renal function` (0.95) and `epidural analgesia` -> `Epidural anaesthesia`
-# (0.86), which share no useful tokens with their targets. The union is 5.
-#
+# Semantic retrieval is a FALLBACK, never a replacement.
 # Running it only when lexical has produced nothing worth selecting keeps the
 # cost off the common path and means a semantic near-miss can never displace a
 # lexical exact match.
@@ -595,13 +547,7 @@ def semantic_index(db_path: str | None = None):
     Built once per process. `None` here means "unavailable", and the reason is
     kept rather than discarded -- an absent index and an absent concept must
     never look the same (R27)."""
-    # Under the thread pool the binder runs in, an unlocked `tried` flag is a
-    # race with a SILENT consequence: thread A sets it and starts loading,
-    # thread B sees tried=True with index still None, concludes "unavailable"
-    # and skips semantic retrieval for the rest of the run. No error, no log,
-    # just quietly worse retrieval -- the exact failure shape this project
-    # keeps finding. The lock makes the first caller do the work and the rest
-    # wait for its answer.
+
     with _SEMANTIC_LOCK:
         if _SEMANTIC["tried"]:
             return _SEMANTIC["index"]
@@ -616,12 +562,6 @@ def _semantic_index_locked(db_path: str | None):
         if not os.path.exists(path):
             _SEMANTIC["why"] = f"no local terminology db at {path}"
             return None
-        # BOTH models, chosen per kind at search time. Picking one globally
-        # meant a half-finished biomedical build shadowed a complete general
-        # one and every lookup returned nothing -- an absent index reading as
-        # an absent concept, the same failure class again. Biomedical first
-        # where it exists, because it scores materially higher on domain
-        # synonymy (BP-lowering/antihypertensive 0.53 vs 0.36).
         cands = [semantic.SemanticIndex(path),
                  semantic.SemanticIndex(path, semantic.FAST_MODEL)]
         usable = [c for c in cands if any(c.available(kd) for kd in KIND_SYSTEMS)]
@@ -647,14 +587,6 @@ def semantic_candidates(mention: Mention, k: int) -> list[Candidate]:
         ix = next((c for c in indices if c.available(kind)), None)
         if ix is None:
             continue
-        # The same penalty the lexical path applies. Without it a neighbouring
-        # kind outranks the RIGHT kind on raw cosine and evicts it: "basal
-        # insulin" put SNOMED `Insulin` (drug, 0.78) above ATC `Insulin,
-        # Long-Acting` (drug_class, 0.61) and filled all eight slots before the
-        # drug-CLASS concept -- the only candidate that actually denotes a
-        # class -- could appear. The selector then abstained, correctly, on
-        # three statements across one document, and bound on the two where the
-        # model happened to guess the synonym "long-acting insulin" itself.
         penalty = 0.0 if kind == mention.kind else FALLBACK_KIND_PENALTY
         for q in queries:
             try:
@@ -733,7 +665,7 @@ def search_all(index: TerminologyIndex, mention: Mention, k: int,
     qtokens = set()
     for q in queries:
         qtokens |= set(_stems(q))
-    # CONTENT tokens only. Overlap on a category word is not overlap on a
+    # Overlap on a category word is not overlap on a
     # concept: "Basal insulin regimen" and "Transfeminine Regimens, All" share
     # "regimen" and nothing else, and because BM25 rewards a rare token --
     # "regimens" occurs in 6 concepts here, "insulin" in 1,638 -- the gender
@@ -780,10 +712,7 @@ def search_all(index: TerminologyIndex, mention: Mention, k: int,
         # and a lexical score (0..12) are not comparable, and sorting them
         # together buried every semantic hit below the lexical noise it was
         # meant to rescue -- `Renal function` came back at 0.954 and fell off
-        # the end of a list of eight wrong `kidney function` matches. Faking a
-        # score to interleave them would be inventing a comparison that does
-        # not exist; taking a fixed share of the list is honest about there
-        # being two rankings.
+        # the end of a list of eight wrong `kidney function` matches.
         share = max(2, k // 3)
         # Ask for more than the share and spend it on candidates the lexical
         # list does NOT already contain. Truncating to the share first wasted
@@ -795,7 +724,7 @@ def search_all(index: TerminologyIndex, mention: Mention, k: int,
         # exist to add information, so they are filled with information.
         sem = semantic_candidates(mention, max(4 * share, k))
         if sem:
-            # APPEND -- never evict. Reserving slots by truncating the lexical
+            # APPEND. Reserving slots by truncating the lexical
             # list to `k - len(sem)` dropped a correct candidate sitting at
             # position 7: `anticoagulant prophylaxis` regressed from hit to
             # miss, caught by the ablation that was measuring the feature. The
@@ -863,18 +792,7 @@ def units_comparable(a: str | None, b: str | None) -> bool:
 
 def rerank_stewards(cands: list[Candidate]) -> list[Candidate]:
     """Break ties between value sets that different stewards publish under the
-    same name.
-
-    Measured (R6b): VSAC carries 40 value sets titled exactly "Diabetes", from
-    at least two steward roots, spanning 2017-2026. Name alone does not choose
-    between them, and the selector correctly refused -- but refusing every
-    common concept is not a usable pipeline either.
-
-    The policy, which is deterministic and reportable rather than a guess:
-    prefer an exact title match, then the most recently versioned set. The
-    alternatives stay in `Binding.candidates`, so the choice is auditable and a
-    clinician can see what was passed over. This is a POLICY, not a clinical
-    judgement, and the paper should say so."""
+    same name."""
     def rank(c: Candidate):
         exact = "exact_term" in c.why
         version = c.concept.version or ""
@@ -886,12 +804,7 @@ def _version_key(v: str) -> int:
     return int(digits) if digits else 0
 
 def rerank_by_unit(cands: list[Candidate], mention: Mention) -> list[Candidate]:
-    """Deterministic disambiguation before the model is asked anything.
-
-    "ACR of 30 mg/g" and "ACR of 3.4 mg/mmol" are the same clinical threshold
-    under different LOINC concepts (9318-7 mass ratio, 14585-4 MOLAR ratio,
-    a factor of ~8.84 apart). The sentence states the unit, so the unit settles
-    it -- no judgement required, and the reason is recorded either way."""
+    """Deterministic disambiguation before the model is asked anything."""
     if not mention.unit:
         return cands
     want, out = mention.unit, []
@@ -1157,12 +1070,6 @@ def select(mention: Mention, sentence: str, cands: list[Candidate],
         v["reason"] = f"llm error, fell back to heuristic: {exc}"
         return v, "heuristic:llm_error"
     choice = v.get("choice")
-    # `isinstance(True, int)` is True and `-1 <= True < len(cands)` is True, so
-    # a model returning `true` for `choice` silently selected candidate 1 --
-    # a wrong CODE, chosen by a type confusion, with a plausible reason string
-    # attached. Third appearance of this trap in the codebase (VarDef
-    # typechecking, the probe mock, here), hence the shared `dsl._is_number`
-    # discipline: bool is never a number.
     if isinstance(choice, bool) or not isinstance(choice, int) \
             or not (-1 <= choice < len(cands)):
         v = _heuristic_select(mention, cands)
@@ -1200,9 +1107,6 @@ def bind(mention: Mention, sentence: str, index: TerminologyIndex,
     shown = tuple(f"{c.concept.term} ({c.concept.curie})" for c in cands)
     verdict, selector = select(mention, sentence, cands, llm)
     choice, reason = verdict.get("choice", -1), verdict.get("reason", "")
-    # Carried straight from select(), which saw the full sentence -- not
-    # re-derived later from the bare phrase alone. See SELECT_SCHEMA's
-    # docstring and BACKLOG.md item 5.
     data_capturable = bool(verdict.get("data_capturable", bool(cands)))
 
     if choice == -1 or not cands:
@@ -1214,11 +1118,6 @@ def bind(mention: Mention, sentence: str, index: TerminologyIndex,
             evidence=(f"data_capturable={data_capturable}",))
 
     c = cands[choice].concept
-    # A value set that expands to NOTHING is not a usable binding: every
-    # retrieve against it matches no resource, so the rule silently never
-    # fires. Measured on a live run -- a steward's "Diabetes" set expanded to 0
-    # codes and the whole library evaluated to null, which is indistinguishable
-    # from a patient who simply does not qualify.
     if mention.kind in SET_VALUED_KINDS and c.system == VSAC:
         if not index.expand(c.system, c.code):
             if len(cands) > 1:
@@ -1496,14 +1395,6 @@ class RemoteIndex:
 
 VSAC_FHIR = "https://cts.nlm.nih.gov/fhir"
 
-# VSAC's `title:contains` rejects a search string shorter than three characters
-# with a 400. The mention proposer legitimately emits two-letter abbreviations
-# -- "AP" for acute pancreatitis, "CT" for the scan -- so without this guard
-# every one of them is issued, rejected, and recorded as a TRANSPORT failure,
-# which then qualifies the statement's refusal as possibly not the
-# guideline's fault. Measured on PMC13270348: 88 such failures over four distinct phrases
-# ('AP', 'ap', 'CT', 'ct'), not one of them a network fault. A request the API
-# defines as invalid is ours not to make, not a blip to report.
 VSAC_MIN_QUERY = 3
 
 class VsacIndex:
@@ -1907,7 +1798,7 @@ def load_snomed(index: SqliteIndex, path: str | None = None, *,
     index.set_version(SNOMED, version)
     return n
 
-# ------------------------------------------------------------- RxNorm load
+# RxNorm load
 
 # RxNorm term types worth indexing. IN/PIN are ingredients (what a guideline
 # names), BN a brand, SCD/SBD a dispensable product. Everything else is
@@ -1967,7 +1858,7 @@ def load_rxnorm(index: SqliteIndex, path: str | None = None) -> int:
     index.set_version(RXNORM, version)
     return n
 
-# ---------------------------------------------------------------- fixture
+# fixture
 
 # Real codes, verified against tx.fhir.org / NLM Clinical Tables / RxNav while
 # writing this file. Deliberately contains the near-misses that make binding
@@ -2044,7 +1935,7 @@ def fixture_index(path: str = ":memory:") -> SqliteIndex:
     ix.set_version(RXNORM, "20250203")
     return ix
 
-# ---------------------------------------------------------------- cli
+# cli
 
 def _print_binding(b: Binding, issues: list[dsl.Issue]) -> None:
     print(f"  {b.mention!r}  [{b.kind}]")

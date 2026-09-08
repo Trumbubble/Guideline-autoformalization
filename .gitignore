@@ -272,3 +272,15 @@ CQL_converter/SEGMENT.md
 DEPLOY.md
 paper/README.md
 patient_checker/CHECKER.md
+
+# Page-drift regression tests: they parse demo.html/demo-toy.html/ui.html and
+# assert the copy still matches the data, so they need a live Flask test client
+# and the local guideline store. Nothing imports them, no CI runs them, and the
+# paper does not cite them -- they are a local guard against hand-edited HTML
+# drifting from regenerated bundles, not part of the reported artefact.
+patient_checker/test_demo_consistency.py
+patient_checker/test_demo_scenarios.py
+
+# Merged into the root DOCUMENTATION.md; kept on disk only as the merge source.
+CQL_converter/DOCUMENTATION.md
+patient_checker/DOCUMENTATION.md

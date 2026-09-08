@@ -150,23 +150,6 @@ class Since:
 class Delta:
     """A RELATIVE change in `var` from its value at `baseline`.
 
-    `Cmp` compares a patient to a fixed number. Whole classes of medication
-    guidance compare a patient to their OWN EARLIER STATE:
-
-        "Reduce basal insulin by 50% at the start of the liver reduction diet"
-        "Reduce basal insulin dose by 35%-50% of the pre-LRD dose"
-
-    There is no number to compare against -- 50% of whatever this patient was
-    already on. Without this node every such statement is `beyond_dsl`, and
-    measured on PMC13074134 (perioperative diabetes) that was three of five
-    statements and the reason the document scored zero. Dose titration is a
-    large fraction of perioperative, oncology, anticoagulation and insulin
-    guidance, so the gap is a whole category rather than a few sentences.
-
-    `lo_pct` is the SMALLEST change the recommendation requires and `hi_pct` the
-    largest, both as fractions of the baseline. "reduce by 35%-50%" is
-    lo_pct=0.35, hi_pct=0.50; "reduce by 50%" is lo_pct=hi_pct=0.50.
-
     The baseline is an EventDef -- the point in time the comparison is against
     -- which lowers to a variable `<var>_at_<baseline>`. That variable is a free
     one unless the caller supplies it, exactly like a hole: the statement is now
@@ -208,25 +191,7 @@ Deontic = Literal["obligation", "permission"]
 @dataclass
 class Rule:
     """Denotes phi = (when -> then) under a DEONTIC FORCE. `action`/`target`
-    are the gloss only.
-
-    `deontic` is the operator, not a label:
-
-      obligation  O(then | when)  -- the guideline requires the action. A
-                                     patient meeting `when` without `then` is
-                                     a real deviation.
-      permission  P(then | when)  -- the guideline OFFERS the action. The same
-                                     patient violates nothing; the option was
-                                     simply not taken.
-
-    Prohibition is not a third case: F(p) = O(NOT p), which this DSL already
-    writes as `action="avoid"` with a negated consequent.
-
-    The distinction is load-bearing rather than cosmetic. Without it a
-    permissive statement lowers to the same formula as an obligation, and the
-    checker accuses a clinician of a violation for declining an option --
-    which is the false-alarm class that gets decision support switched off.
-    See RESULTS.md R17b."""
+    are the gloss only."""
     rule_id: str
     when: Expr
     then: Expr
@@ -266,8 +231,7 @@ class Refusal:
 FRAGMENTS = ("PROP", "LIA", "MTL")
 
 def fragment_of(*exprs: Expr) -> str:
-    """The weakest fragment that contains these expressions. This is what M1's
-    spectrum is computed from, so it must not be inferred from variable names."""
+    """The weakest fragment that contains these expressions."""
     rank = 0
     def walk(e):
         nonlocal rank
@@ -422,17 +386,6 @@ def validate(expr: Expr, reg: Registry, path: str = "when") -> list[Issue]:
                              "the baseline is the point in time the change is "
                              "measured from; declare it as an event"))
         elif expr.var == expr.baseline or expr.var.startswith(expr.baseline + "_"):
-            # The baseline is the SAME CONCEPT as the variable being changed:
-            # "the basal insulin dose as it stood at the time the patient was
-            # on basal insulin". That is circular -- it names no point in time,
-            # so the rule is satisfied by any dose at all.
-            #
-            # It happens because the only events on offer are the drug
-            # bindings themselves (`datable_events`), while the anchor the
-            # sentence actually names -- "at start LRD" -- has no event to be,
-            # and is declared as a plain boolean hole instead. The encoding
-            # typechecks, compiles, and is clinically wrong, which is precisely
-            # the class this project exists to make visible.
             out.append(Issue(path, "CIRCULAR_BASELINE",
                              f"the change in {expr.var!r} is measured from "
                              f"{expr.baseline!r}, which is the same concept",
@@ -489,18 +442,7 @@ def _action_atoms(expr: Expr, reg: Registry, action: str | None = None,
                   no_action_dropped: bool = False) -> set[str]:
     """Atoms in an obligation that a care plan can actually decide. A Since
     node counts: in a `then`, "potassium checked within 14 days" is a demand
-    that the plan order the test, not an observation of patient state.
-
-    `no_action_dropped` is precomputed by the caller, which alone has both
-    `when` and `then`: True only when EVERY action-role variable in the
-    registry is referenced somewhere in the rule (as a decision atom OR as a
-    Since/Delta anchor). An action-role var bound but referenced NOWHERE is
-    the PMC13270348:0143 shape this check exists to catch (the real action
-    dropped, a precondition promoted in its place -- see
-    test_the_recommended_action_going_missing_is_flagged), and must keep
-    failing. One bound ONLY as a Since baseline (like `mechanical_thrombectomy`
-    in "avoid lowering BP < 140 in the 24h after thrombectomy") is accounted
-    for, not dropped -- it was never the action this rule is about."""
+    that the plan order the test, not an observation of patient state."""
     if isinstance(expr, (Cmp, Between)):
         if expr.var in reg and reg.role_of(expr.var) == "action":
             return {expr.var}
@@ -655,21 +597,6 @@ def dropped_quantities(rule: "Rule") -> list[tuple[float, str]]:
     24 h" and `Since(event, days=1)` are the same window, and flagging that
     would be a false alarm on a correct encoding."""
     have = rule_quantities(rule)
-    # A DOSE belongs to the ACTION, not to the applicability condition, and it
-    # lives in `target`. Measured on a hand-written fixture rule: "Reduce the
-    # apixaban dose to 2.5 mg twice daily if at least two of ..." correctly
-    # encodes the three criteria as numeric comparisons and the action as a
-    # boolean, with the dose recorded in
-    # `target="reduced apixaban dose (2.5 mg twice daily)"`. The 2.5 is not
-    # lost, so flagging it is a false alarm on a correct rule.
-    #
-    # Restricted to DOSE units, because the first version accepted any quantity
-    # in the target and a real rule immediately exploited it: the model wrote
-    # `target="intensive lowering of systolic BP < 140 mmHg in the first 24 h
-    # after successful mechanical thrombectomy"` -- the whole sentence restated
-    # -- which made the check pass on the very rule it was written to catch.
-    # A threshold (mmHg, mmol/L) and a window (h, days) are CONDITIONS and must
-    # be in the logic; only a dose is discharged by naming it.
     for alts, unit in source_quantities(rule.target):
         if unit.rstrip("s.") in _DOSE_UNITS:
             have |= set(alts)
@@ -736,7 +663,7 @@ def delta_baselines(rule: Rule) -> set[tuple[str, str]]:
 def events_in(rule: Rule) -> tuple[str, ...]:
     """Every event the rule anchors to -- `Since` AND `Delta`.
 
-    Whoever assembles a bundle registry has to declare these or Track B
+    Whoever assembles a bundle registry has to declare these or patient_checker
     rejects the rule as UNKNOWN_EVENT. The walker in demo.py handled `Since`
     only, so the first `Delta` we ever produced shipped with `events: []` and
     was rejected at load. Defined here so there is one walker, not one per
@@ -758,16 +685,7 @@ def events_in(rule: Rule) -> tuple[str, ...]:
 
 def hole_defs(reg: Registry, holes: Iterable[str],
               rule: Rule | None = None) -> list[VarDef]:
-    """VarDefs for the holes a registry does not already declare.
-
-    Callers used to write `VarDef(h, "bool", ...)` inline, which broke a
-    `Delta` two ways at once. A baseline (`<var>_at_<event>`) is a DERIVED
-    name that `rule_to_cql` already emits as a named null, so declaring it
-    again produced `Identifier "..." is already in use` and the library would
-    not translate at all. And it holds the prior value of a REAL variable, so
-    typing it bool made `dose <= baseline * 0.5` compare a number to a
-    boolean. Skipped here: a derived name is the lowering's to declare, not
-    the registry's."""
+    """VarDefs for the holes a registry does not already declare."""
     derived = {baseline_var(v, e) for v, e in delta_baselines(rule)} if rule else set()
     return [VarDef(h, "bool", None, h, unbound=True)
             for h in holes if h not in reg and h not in derived]
@@ -904,12 +822,6 @@ def rule_to_english(rule: Rule, reg: Registry) -> str:
 @_z3_guarded
 def validate_rule(rule: Rule, reg: Registry) -> list[Issue]:
     issues = validate(rule.when, reg, "when") + validate(rule.then, reg, "then")
-    # Provenance means a POINTER BACK TO THE SOURCE, and what that pointer is
-    # depends on the source. For XML/HTML it is the locator (an XPath) plus
-    # offsets; a page number does not exist. Requiring `source_page` made every
-    # rule extracted from a JATS document fail a hard error, so `encode` was
-    # unreachable on any XML source -- an entire guideline came back 14/14
-    # refused before this was spotted.
     if not rule.source_span:
         issues.append(Issue("provenance", "MISSING_PROVENANCE",
                             "every rule must cite the span it came from",
@@ -938,19 +850,6 @@ def validate_rule(rule: Rule, reg: Registry) -> list[Issue]:
                                 "deontic force belongs in Rule.strength; a statement "
                                 "whose condition reduces to a modal is discretionary "
                                 "and should be refused as `defeasible`"))
-    # The action the sentence is ABOUT has to survive into `then`. Measured on
-    # PMC13270348: "epidural analgesia may be considered when expertise is
-    # available, and strict aseptic techniques and close monitoring are
-    # essential" encoded as
-    #     has_expertise_available -> strict_aseptic_techniques AND close_monitoring
-    # -- the epidural is absent entirely, and what survives is the PRECONDITION
-    # for doing it, promoted to be the recommendation. NO_ACTION_ATOM passed on
-    # a technicality, because aseptic technique is itself an action variable.
-    #
-    # A WARNING, not an error. The match is lexical, and `target` may name the
-    # action in a different vocabulary than the variable does
-    # ("thromboprophylaxis" vs `on_lmwh`), so a hard rejection here would
-    # discard good rules. It belongs in the report, where a human decides.
     _referenced = _vars_in(rule.when) | _vars_in(rule.then) | set(events_in(rule))
     _no_action_dropped = all(n in _referenced for n in reg.actions())
     acts = _action_atoms(rule.then, reg, rule.action, _no_action_dropped)
@@ -962,11 +861,7 @@ def validate_rule(rule: Rule, reg: Registry) -> list[Issue]:
             have |= set(re.findall(r"[a-z]+", n.lower()))
             if n in reg:
                 have |= set(re.findall(r"[a-z]+", (reg[n].description or "").lower()))
-        # Prefix matching, not equality: a `target` gloss abbreviates
-        # ("ACEi" for `on_ace_inhibitor`), and requiring exact tokens made this
-        # fire on a correct rule -- caught by test_bind, which is what that
-        # test is for. Loose on purpose; this is a warning, and a missed
-        # mismatch costs less than a false one.
+                
         def _related(w: str, h: str) -> bool:
             return len(w) >= 3 and len(h) >= 3 and (w.startswith(h) or h.startswith(w))
         if want and not any(_related(w, h) for w in want for h in have):

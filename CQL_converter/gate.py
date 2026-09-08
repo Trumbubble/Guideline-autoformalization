@@ -1,14 +1,5 @@
 """
 Refusal gate: can this statement be faithfully encoded, partly, or not at all?
-
-It is not an LLM asked "is this vague?" -- that's circular -- so the gate
-aggregates deterministic evidence from the binder, validator, and solver
-first, and asks a model to encode only after that; of the six refusal codes,
-though, only two (`unbound_concept`, `defeasible`) are actually deterministic,
-and the rest need the model. `partial` is the verdict that matters most: an
-unresolved clause becomes a genuinely free variable rather than being stubbed
-to `false`/`true`, so the three-valued verdict returns `MAY-violate` and
-names exactly the missing assumption.
 """
 from __future__ import annotations
 
@@ -51,15 +42,6 @@ class Triage:
     refusal: dsl.Refusal | None = None
     samples: int = 1
     refusal_rate: float = 0.0
-    # The registry the rule was ACTUALLY WRITTEN AGAINST. Carried rather than
-    # re-derived: binding goes through a model selector, so re-binding the same
-    # statement can return a different answer, and a caller that rebuilds the
-    # vocabulary for the bundle can drop a variable the rule still references.
-    # Measured on PMC13270348: `close_monitoring` bound during triage, did not
-    # bind on the rebuild, and the shipped rule referenced a variable the
-    # shipped registry did not contain -- so the artifact delivered was not the
-    # artifact verified. Track B caught it as UNKNOWN_VAR, which is the net
-    # working, not the pipeline working.
     registry: dsl.Registry | None = None
 
     @property
@@ -101,19 +83,6 @@ def is_vague(phrase: str) -> bool:
 def holes_from(statement: str, refusals, declined,
                unbound_kinds: list[str] | None = None) -> tuple[dsl.VarDef, ...]:
     """Which unbindable things deserve to become free variables.
-
-    Three sources, and the distinction matters. A predicate the model NAMES as
-    undefined ("at high risk") is a genuine hole. A concept the binder failed
-    to retrieve with NO candidates at all is a COVERAGE GAP -- a fixable
-    index problem -- and turning it into a hole would launder a bug into a
-    finding, so it stays excluded. A concept where candidates DID exist and
-    the one-shot selector just didn't commit to one
-    (`classify_unbound(...) == "unbound_unselected"`) is closer to the
-    model-named case than to a coverage gap: the concept is real, only the
-    single call was unlucky, so it qualifies too -- refusing the whole
-    statement over one unlucky pick (measured on PMC13074134: "at start LRD",
-    and drug brand names like "Abasaglar") was the actual bug.
-
     Named predicates are checked verbatim against the statement, the same
     anti-synthesis rule the segmenter and binder use."""
     out, seen = [], set()
@@ -145,18 +114,7 @@ def holes_from(statement: str, refusals, declined,
 def classify_unbound(refusal, index) -> str:
     """`index_gap` when the concept isn't the kind of thing a data source
     would capture (or nothing was even found); `unselected` when it is, and
-    a single-shot select() call just didn't commit to a candidate.
-
-    Prefers `refusal.evidence`'s `data_capturable` flag when present --
-    carried straight from `select()`, which judged this WITH the full
-    sentence in view (see `bind.py`'s SELECT_SCHEMA and BACKLOG.md item 5:
-    "did any candidate exist at all" was measured to NOT distinguish a
-    genuine coverage gap from a lexically-similar-but-wrong candidate the
-    model correctly rejected -- "at start LRD" and "Exhaling" both had
-    candidates; only the sentence-aware judgment tells them apart). Falls
-    back to the old blind re-search only for refusals that never went
-    through that path (e.g. a code rejected by `index.validate` after
-    selection)."""
+    a single-shot select() call just didn't commit to a candidate."""
     for e in refusal.evidence or ():
         if e == "data_capturable=True":
             return "unbound_unselected"
@@ -207,16 +165,6 @@ _DATABLE_KINDS = {"procedure", "drug", "drug_class"}
 
 def datable_events(bindings) -> list:
     """EventDefs for the bound concepts a temporal node can measure from.
-
-    Nothing ever created one. `registry_from_bindings` takes `events` and every
-    caller left it None, so `reg.event_names()` was empty for every real
-    statement -- and BOTH temporal nodes are gated on it in
-    `dsl.decoding_schema`. `Since` and `Delta` were therefore never offered to
-    the model on a real guideline, in this entire project. It shows up as
-    `unsupported_temporal` refusals, as "the first 24 h" silently dropped from
-    PMC13151662:0002, and as PMC13074134 refusing dose titration for
-    `beyond_dsl` the day after `Delta` was built for exactly that sentence.
-
     A procedure or a medication is datable: it has a moment it was done or
     started. A finding is not -- "has diabetes" has no single timestamp a
     guideline means. Restricting to those kinds also keeps the decoding grammar
@@ -284,25 +232,7 @@ def anchor_events(holes) -> list:
         seen.add(name)
         out.append(dsl.EventDef(name, phrase.strip(), None, unbound=True))
     return out
-# A stated RANGE ("150-240 min", "450-720 MET-min"), not a bare number. A
-# single number ("the dose was 5 mg") is reporting a fact, not asking for a
-# quantity target -- requiring two numbers joined by a dash/"to" is what
-# keeps this from firing on that case (see
-# test_the_dose_cue_needs_a_verb_and_a_quantity). Catches statements like
-# "engaging in 150-240 min of aerobic exercise per week", which have no
-# change verb for `_DOSE_CHANGE` to match at all.
-#
-# But "wait 6-12 weeks AFTER BGT placement" is the same regex shape with a
-# different meaning: a window relative to a prior EVENT (Since's domain),
-# not a quantity of the bound action itself (Delta/Between's domain, which
-# is what this companion variable exists to feed). Measured on
-# PMC13169229's replacement-timing statement -- it declared `bgt_dose`,
-# `bgt_placement_dose` on a statement with no dose anywhere in it, purely
-# because "weeks" is an accepted unit and nothing distinguished "6-12 weeks
-# of X" from "6-12 weeks after X". The lookahead excludes the latter shape;
-# checked against every gold.csv statement, none currently rely on a range
-# immediately followed by one of these words, so this is a pure precision
-# gain, not a measured tradeoff.
+
 _QUANTITY_RANGE = re.compile(
     r"\d+(?:\.\d+)?\s*(?:-|–|\bto\b)\s*\d+(?:\.\d+)?\s*"
     r"(min(?:ute)?s?|hours?|days?|weeks?|mg|kg|mmHg|mmol\S*|%|units?|MET-?min\w*)\b"
@@ -311,29 +241,7 @@ _QUANTITY_RANGE = re.compile(
 
 def dose_companions(bindings, statement: str) -> list:
     """A numeric companion variable for each bound drug/procedure, when the
-    sentence asks for a dose change OR states a numeric target range.
-
-    `Delta`/`between` need something numeric to change or bound. A medication
-    or procedure binds as a BOOLEAN -- `on_basal_insulin`, is it prescribed --
-    so a registry built from bindings alone has no quantity, and
-    `dsl.decoding_schema` will not offer either node however many events are
-    declared. That is why "Reduce basal insulin by 50%" still refused as
-    `beyond_dsl` after both were added, and why "engaging in 150-240 min of
-    aerobic exercise per week" still failed `between`'s TYPE_ERROR after
-    `terms.db` was fixed: the min/max range had nothing numeric to attach to,
-    because "aerobic exercise" is a `procedure`, which this used to exclude
-    outright, and the sentence has no dose-change verb for `_DOSE_CHANGE` to
-    match.
-
-    Declared only when the statement contains a relative-change cue OR a
-    stated numeric range, because every extra variable enlarges the decoding
-    grammar and R8 showed that is a hard ceiling: a 13-variable registry
-    compiles only at depth 1. The cues are closed patterns; which variable
-    actually gets the quantity is the model's choice.
-
-    Parallel to how `Since` derives `<event>_occurred` and
-    `days_since_<event>`: a companion the DSL needs, named rather than
-    implicit, so a report can say which quantity it wants."""
+    sentence asks for a dose change OR states a numeric target range."""
     if not (_DOSE_CHANGE.search(statement or "") or _QUANTITY_RANGE.search(statement or "")):
         return []
     out = []
@@ -361,19 +269,7 @@ _AGE_THRESHOLD = re.compile(
 
 def age_companion(statement: str) -> list:
     """A numeric `age` variable, declared whenever the statement states an
-    age threshold.
-
-    Age is a structural patient attribute, not a terminology-coded concept:
-    no SNOMED/LOINC search was ever going to bind it -- there is no generic
-    "patient age" code to look up -- so it fell through to a boolean hole
-    the same way a dose or duration did before its own companion existed.
-    Measured on PMC12948374:0000 ("ABPM from age 5 is strongly
-    recommended"): encoded with `has_age_5` (a boolean) instead of a real
-    `age >= 5` comparison. Reuses the exact `age` VarDef already declared
-    once, by hand, in `CKD_REGISTRY` -- one real variable, not a
-    document-specific invention.
-
-    Declared only when the statement states a threshold, for the same
+    age threshold. Declared only when the statement states a threshold, for the same
     reason `dose_companions` is conditional: every extra variable enlarges
     the decoding grammar (R8)."""
     if not _AGE_THRESHOLD.search(statement or ""):
@@ -408,37 +304,9 @@ def triage(statement: str, index, *, statement_id: str = "s",
     _failed = len(getattr(index, "failures", ())) - _failed_before
     unbound_kinds = []
     for r in refusals:
-        # Attribute the failure. An `unbound_concept` that is really an INDEX
-        # GAP is a bug in our retrieval; one where no candidate exists at all
-        # may be genuine residue. Reporting them in one bucket makes the
-        # formalizability number uninterpretable -- measured on a real
-        # guideline, 8 of 14 refusals were index gaps for concepts (CVAD,
-        # solid tumors, noncardiac surgery) that DO exist in SNOMED and VSAC.
-        #
-        # Reused below by holes_from(): an "unselected" refusal (candidates
-        # existed, the one-shot pick just missed) is hole-eligible the same
-        # way a model-named vague predicate is, instead of discarding the
-        # whole statement over one unlucky selector call.
         kind = classify_unbound(r, index)
         unbound_kinds.append(kind)
         ev.append(Evidence("binder", kind, r.reason_text))
-
-    # Appended AFTER the per-concept evidence on purpose. `as_refusal` builds
-    # the refusal's reason_text by joining evidence in order, so putting this
-    # first made a transport warning displace the actual reason -- a real
-    # regression: "no terminology binding for 'oral feeding'" became
-    # "4 terminology lookup(s) failed...". A meta-warning must trail the finding
-    # it qualifies.
-    #
-    # Two channels, because they qualify a refusal differently. A per-lookup
-    # failure is counted by DELTA -- it says this binding attempt hit a blip.
-    # A degraded SOURCE is true for the whole document and does not decay: once
-    # VSAC has rejected our credential no further request is made, so the delta
-    # is zero from the second statement on and every later refusal would go out
-    # unqualified. That is the bug this channel exists to prevent, and it is
-    # the same bug in a subtler dress than the one TransportFailures fixed.
-    # Only attached where there is something to qualify: a statement that bound
-    # cleanly needs no footnote about a source it did not need.
     _detail = []
     if _failed > 0:
         _detail.append(f"{_failed} terminology lookup(s) failed (transport or "
@@ -505,37 +373,13 @@ def triage(statement: str, index, *, statement_id: str = "s",
         ev += [Evidence("validator", i.code, i.message) for i in iss]
         blocking = [i for i in iss if i.severity == "error"]
         blocked_codes |= {i.code for i in blocking}
-
-        # A strict encode is UNSAFE when the binder refused something. The
-        # strict registry does not contain that concept, so a rule it produces
-        # has either dropped the concept or mis-encoded it -- and dropping is
-        # invisible, because what remains still typechecks.
-        #
-        # Measured, and this is the failure the whole gate exists to prevent:
-        # "In pediatric patients with persistently positive APLA without a
-        # history of thrombosis, suggest no primary prophylaxis" encoded as
-        # `has_thrombosis == false -> no prophylaxis`. APLA would not bind, so
-        # the entire population restriction was silently dropped and the rule
-        # became "anyone without a thrombosis history". It passed as ENCODE.
-        #
-        # So: any binder refusal forces the partial path, where the dropped
-        # concept is available as a declared hole. If the model still does not
-        # use it, that is a refusal, not an encoding.
         if refusals and not blocking:
             ev.append(Evidence("gate", "DROPPED_CONCEPT_RISK",
                                f"{len(refusals)} concept(s) did not bind, so a strict "
                                f"encoding may have silently omitted them; retrying "
                                f"with them declared as holes"))
             blocking = list(iss) or [Evidence]      # force the partial path below
-        # A concept that BOUND and then went unused. Not an error: an outcome
-        # is legitimately absent from `when` -- "acupuncture may be effective in
-        # relieving abdominal pain in patients with AP" has AP as the
-        # population and pain as the EFFECT, so encoding pain as a condition
-        # would be wrong. But a dropped population restriction looks identical
-        # from here, and that one changes who the rule applies to. So: surface
-        # it, name it, and let a reviewer decide. DROPPED_CONCEPT_RISK covers
-        # only the case where the BINDER failed; this covers the case where the
-        # binder succeeded and the model simply did not use the result.
+    
         used = dsl._vars_in(rule.when) | dsl._vars_in(rule.then)
         unused = sorted(n for n in reg.names() if n not in used)
         if unused:
@@ -554,8 +398,7 @@ def triage(statement: str, index, *, statement_id: str = "s",
                                f"encoding failed validation: "
                                f"{[i.code for i in iss if i.severity == 'error']}"))
 
-    # -- attempt 2: partial. Declare the unbindable predicates as HOLES. --
-    # The model names the predicates that defeated it; those are the holes.
+
     holes = holes_from(statement, refusals, decls, unbound_kinds) or holes
     pdecls: list = []
     if allow_partial and holes:
@@ -597,10 +440,7 @@ def triage(statement: str, index, *, statement_id: str = "s",
                           source_page, source_span, max(1, samples))
         prules = [o for o in outs if isinstance(o, dsl.Rule)]
         pdecls = [o for o in outs if isinstance(o, dsl.Refusal)]
-        # Confidence must describe the attempt the DECISION came from. Measured:
-        # a statement refused 8/8 strictly but encoded cleanly once its hole was
-        # declared was being reported at confidence 0.00, which would sort a
-        # perfectly good PARTIAL to the bottom of the risk-coverage curve.
+        # Confidence must describe the attempt the DECISION came from. 
         prate = sum(1 for o in outs if isinstance(o, dsl.Refusal)) / len(outs)
         if prules:
             rule, iss = _best(prules, wide)
@@ -642,20 +482,6 @@ def triage(statement: str, index, *, statement_id: str = "s",
     best = _best_refusal(decls + pdecls)
     if best:
         ev.append(Evidence("model", best.reason_code, best.reason_text))
-    # The validator's diagnosis outranks the fallback, and outranks the model's
-    # own reason when the model did not decline at all. A statement rejected
-    # for MODAL_PREDICATE is discretionary -- the guideline hedged -- which is
-    # `defeasible`, not the "unbound_concept" the fallback would have reported.
-    # A VACUOUS_RULE means no non-vacuous obligation could be extracted; that
-    # is reported as `beyond_dsl` with the vacuity named in the evidence, so a
-    # governance reader is never told a rule certifies patients when it cannot.
-    #
-    # `is_patient_level` outranks all of that. It was only ever consulted in
-    # the nothing-bound branch above -- the moment ANY concept binds, this
-    # known fact got dropped and whatever formalize() self-declared (e.g.
-    # `vague_predicate`) won instead, even though "not about an individual
-    # patient at all" is the more fundamental reason the statement can't
-    # become a Track-B rule, no matter what else also went wrong encoding it.
     if is_patient_level is False:
         code = "not_patient_level"
     elif "MODAL_PREDICATE" in blocked_codes:
@@ -665,13 +491,7 @@ def triage(statement: str, index, *, statement_id: str = "s",
     else:
         code = (best.reason_code if best else
                 "unbound_concept" if refusals else "beyond_dsl")
-    # What the decoder was ACTUALLY offered. A model that says "this DSL has no
-    # delta construct" is reporting its menu, not the DSL: three times running,
-    # a titration sentence refused because the node was gated off upstream (no
-    # events declared; then the leaf required an event; then it also required a
-    # numeric variable, and medications bind as booleans). Recording the menu
-    # next to the refusal makes that distinguishable from the outside instead
-    # of costing a live run each time.
+
     ev.append(Evidence("gate", "GRAMMAR_OFFERED",
                        f"decoder could emit [{', '.join(dsl.offered_leaves(reg))}] "
                        f"over vars [{', '.join(reg.names())}] and events "
@@ -722,13 +542,6 @@ def _attempt(statement, reg, formalize, sid, page, span):
         # is too big, not the depth. Recognized by message, not by class:
         # gate.py stays decoupled from llm.py so it can be tested offline
         # with a fake `formalize` and no model. One shrink-and-retry.
-        #
-        # Both give-ups below are LABELLED, not the plain "beyond_dsl:
-        # encoding attempt failed" this used to read. That message is
-        # indistinguishable from the DSL genuinely lacking a construct, so an
-        # auth failure, a rate limit or a malformed JSON body all inflated the
-        # formalizability residue with our own outages. That number is a
-        # headline result; it cannot quietly include our downtime.
         if "will not compile at any depth" in str(exc):
             shrunk = _shrink_registry(reg)
             if shrunk.names() != reg.names() or shrunk.event_names() != reg.event_names():
@@ -818,15 +631,6 @@ def spectrum(triages: Iterable[Triage]) -> dict:
         "in_fragment_rate": round(len(enc) / len(t), 3) if t else 0.0,
         "buckets": dict(sorted(buckets.items())),
         "open_holes": sum(len(x.open_holes) for x in t),
-        # Statements lost to OUR retrieval rather than to the guideline. A
-        # formalizability fraction reported without this number is not
-        # interpretable.
-        # Only an `unbound_concept` refusal can be attributable to retrieval.
-        # This counted ANY statement carrying a binder miss, so a statement
-        # refused for `beyond_dsl` -- dose titration, which no retrieval fix
-        # could ever encode -- was reported as our bug because some incidental
-        # concept in it also failed to bind. Measured on PMC13074134: 5 of 5
-        # refusals attributed to retrieval when only 2 were.
         "retrieval_attributable": sum(
             1 for x in t if not x.encodable
             and x.reason_code == "unbound_concept"

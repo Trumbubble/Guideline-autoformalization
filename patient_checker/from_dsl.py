@@ -1,7 +1,7 @@
-"""Load a Track A bundle and expose it in the shape the checker already uses.
+"""Load a CQL_converter bundle and expose it in the shape the checker already uses.
 
-THE INTERFACE. Track A writes a JSON bundle -- registry + rules + refusals --
-and Track B reads it. Neither side imports the other's internals; the contract
+THE INTERFACE. CQL_converter writes a JSON bundle -- registry + rules + refusals --
+and patient_checker reads it. Neither side imports the other's internals; the contract
 is the file. That is what the DEV_PLAN meant by "the tracks share one
 interface, the typed intermediate DSL and its JSON serialization".
 
@@ -31,7 +31,7 @@ import dsl  # noqa: E402
 
 @dataclass
 class LoadedRule:
-    """A Track A rule, wearing the same attributes `api.check_rule` reads off a
+    """A CQL_converter rule, wearing the same attributes `api.check_rule` reads off a
     fixture `SpecClause`. Duck-typed on purpose: the checker does not need to
     know where a rule came from."""
     rule_id: str
@@ -79,20 +79,7 @@ ACTION_CATEGORY = {
 
 
 def load_bundle(path: str) -> tuple[list[LoadedRule], list, "dsl.Registry", list]:
-    """bundle.json -> (rules the checker can run, refusals, registry, rejected).
-
-    Track B re-verifies before it loads. A bundle is a file: it can be written
-    by an older Track A, hand-edited, or produced by a formalizer whose checks
-    have since been strengthened, so trusting it because it parsed is the same
-    mistake as trusting a rule because it typechecked.
-
-    The rejection that matters is VACUOUS_RULE. A rule that no patient can
-    violate does not fail loudly -- it reports CERTIFIED-compliant for
-    everyone, which is indistinguishable from a rule that is working. Measured
-    on PMC13270348, one of two shipped rules was of this kind (RESULTS.md R14).
-    Rejected rules are returned SEPARATELY from the guideline's refusals: they
-    are our defect, not the document's residue, and folding them together
-    would corrupt the one number the residue report exists to make readable."""
+    """bundle.json -> (rules the checker can run, refusals, registry, rejected)."""
     reg, rules, refusals = dsl.read_bundle(path)
     env = dsl.make_env(reg)
     axioms = dsl.domain_axioms(reg, env)

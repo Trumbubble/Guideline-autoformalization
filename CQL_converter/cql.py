@@ -328,7 +328,7 @@ def rule_to_cql(rule: dsl.Rule, reg: dsl.Registry, *,
     # means the same thing whether the source required the action or merely
     # offered it. The distinction therefore CANNOT live in the lowering -- it
     # can only live at the verdict layer, which is a property of the target
-    # language rather than a shortcut taken here (RESULTS.md R17d).
+    # language rather than a shortcut taken here.
     #
     # What the library can do is carry the operator so a consumer is not left
     # to infer it: `Deontic` is emitted as a literal, and for a permission

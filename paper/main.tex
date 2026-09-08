@@ -158,15 +158,17 @@ rule beside the sentence it came from, and check a patient record against it.
 \label{sec:intro}
 \budget{1.5 pp}
 
-Clinical practice guidelines specify, in natural language, the conditions under which a given action should or should not be taken. A growing body of work translates guideline text into a machine-checkable representation that can be run against structured patient data. PathWISE uses a five-stage LLM pipeline separating knowledge extraction from executable clinical logic \citep{pathwise}; Xie and Du use a SAT solver to detect logical inconsistencies between recommendations that standalone LLMs miss \citep{xiedu}; MedGuideX compiles guidelines into executable decision functions and uses them as a training oracle \citep{medguidex}; Leonardi et al. derive rules from guideline text and score conformance across an event log of patient traces \citep{leonardi}.
+Clinical practice guidelines specify, in natural language, the conditions under which a given action should or should not be taken. A growing body of work translates guideline text into a machine-checkable representation that can be run against structured patient data \citep{guidelinesurvey}. PathWISE uses a five-stage LLM pipeline separating knowledge extraction from executable clinical logic \citep{pathwise}; Xie and Du use a SAT solver to detect logical inconsistencies between recommendations that standalone LLMs miss \citep{xiedu}; MedGuideX compiles guidelines into executable decision functions and uses them as a training oracle \citep{medguidex}; Leonardi et al. derive rules from guideline text and score conformance across an event log of patient traces \citep{leonardi}.
 
 Systems of this kind are almost universally evaluated, and in practice optimised, for \emph{coverage}: the fraction of guideline statements successfully translated into a rule. Coverage is cheap to compute and rises monotonically as a system is made more permissive, but it does not distinguish a rule faithful to its source from one that is not. This motivates our solution: a system that reports it could not encode a statement makes a true claim about its own limits; one that silently fills the gap makes a false claim about the patient. We therefore treat refusal as a measured output rather than a failure to minimise, and present a system built on that principle.
 
-Three approaches to the underlying problem each fail to prevent this class of error, for specific and demonstrable reasons. The first is \textbf{substituting a default}. Faced with a guideline stating that a drug should be started ``if eGFR is below 30 or the patient is at high risk'' without defining high risk, other solutions often substitute \texttt{false} for nodes its audit marks uncomputable, preserving compilability while surfacing the node for human review \citep{pathwise}. Substituting \texttt{false} in a conjunctive position removes the branch, so a patient qualifying only via that criterion is never routed down it. Section~\ref{sec:necessity} quantifies how often such a default changes a verdict.
+Three approaches to the underlying problem each fail to prevent this class of error, for specific and demonstrable reasons. The first is \textbf{substituting a default}. Consider a guideline stating that a drug should be started ``if eGFR is below 30 or the patient is at high risk'' without defining high risk. PathWISE substitutes \texttt{false} for nodes its own audit marks uncomputable, preserving compilability while surfacing the node for human review \citep{pathwise}. Substituting \texttt{false} in a conjunctive position removes the branch, so a patient qualifying only via that criterion is never routed down it. Section~\ref{sec:necessity} quantifies how often such a default changes a verdict.
 
 The second is \textbf{detecting vagueness by sampling for disagreement} \citep{ksample}: an ambiguous statement admits multiple readings, so repeated formalisation attempts should disagree, yielding a signal that needs no labelled data. This assumes a model facing ambiguity guesses differently each time rather than settling on one answer --- or one refusal. Given ``eGFR below 45 and the patient is frail,'' our runs recognised the same gap on every attempt and declined consistently, leaving no disagreement to detect even though the statement is underspecified. Our gate instead makes refusal an explicit branch of a single constrained decode, so the signal comes from one call.
 
-The third is \textbf{asking a model directly whether a statement is too vague to formalise}. This is circular — the model that struggles with vague language adjudicates its own vagueness — and empirically weak even when purpose-built, reaching around 0.71 F1 \citep{errorcat}. 
+The third is \textbf{asking a model directly whether a statement is too vague to formalise}. Even a classifier purpose-built and trained specifically for this task tops out around 0.71 F1 \citep{errorcat} --- suggesting the judgment itself is hard, independent of who or what is making it.
+
+
 
 \section{Demonstration}
 \label{sec:demo}
@@ -189,7 +191,7 @@ to bound codes (c).}
 \budget{1.25 pp}
 \subsection{Pipeline architecture}
 
-Details of the 4 stages of the pipeline: extraction, grounding, formalization, and checking are outlined below (Figure~\ref{fig:arch}). Extraction takes a guideline document and produces a \emph{statement}: text that is verbatim and locatable, carrying a locator and character offsets that let it be re-found in the source. Grounding produces a \emph{registry}: a closed vocabulary in which every name has been resolved to a version-pinned clinical code, or, when it could not be resolved, is declared absent. Formalization takes a statement and a registry and produces a \emph{rule} $\Phi_R = \mathit{when} \rightarrow \mathit{then}$ under a deontic operator, decoded against a grammar whose variable and event names are the registry's to ensure an unknown name is a symbol the grammar does not contain. Checking takes a rule and a partial patient record and produces: 1) one of the three-valued verdicts of Proposition ~\ref{prop:exhaustive} (\textsc{must-violate}, \textsc{certified-compliant}, and \textsc{may-violate}), and 2) a minimized witness when the verdict is undetermined (\S\ref{sec:may}). Interpretation is the only with no deterministic algorithm, but research has shown LLMs are sufficiently capable at this task \citep{dsp}. Concrete technology -- terminology APIs, the LLM, and a separate CQL runtime, storage, etc. -- are outlined in Figure~\ref{fig:tech_stack}. 
+Details of the 4 stages of the pipeline: extraction, grounding, formalization, and checking are outlined below (Figure~\ref{fig:arch}). Extraction takes a guideline document and produces a \emph{statement}: text that is verbatim and locatable, carrying a locator and character offsets that let it be re-found in the source. Grounding produces a \emph{registry}: a closed vocabulary in which every name has been resolved to a version-pinned clinical code, or, when it could not be resolved, is declared absent. Formalization takes a statement and a registry and produces a \emph{rule} $\Phi_R = \mathit{when} \rightarrow \mathit{then}$ under a deontic operator, decoded against a grammar whose variable and event names are the registry's to ensure an unknown name is a symbol the grammar does not contain. Checking takes a rule and a partial patient record and produces: 1) one of the three-valued verdicts of Proposition ~\ref{prop:exhaustive} (\textsc{must-violate}, \textsc{certified-compliant}, and \textsc{may-violate}), and 2) a minimized witness when the verdict is undetermined (\S\ref{sec:may}). Interpretation is the only stage with no deterministic algorithm, so it is done by an LLM, an established approach for formalizing informal text \citep{dsp}. Concrete technology -- terminology APIs, the LLM, and a separate CQL runtime, storage, etc. -- are outlined in Figure~\ref{fig:tech_stack}. 
 
 Only four components call an LLM, and each has an output space too small to contain the pipeline's characteristic failure mode: the mention proposer returns exact substrings, the terminology selector returns an index into a candidate list or abstains --- a hallucinated code is not a value its output type can express --- and the rule decoder's enumerations come from the registry that statement produced, so a concept that failed to bind cannot appear in a rule. Everything else, including the lowering to CQL, is deterministic. Every rule is compiled by HL7's \texttt{cql-to-elm} translator before it ships; one the translator rejects is recorded as rejected rather than counted as encoded, and an absent toolchain is reported as absent, never as a pass.
 
@@ -240,8 +242,7 @@ The rules are generated. Measured over the rules the system happens to have prod
   \end{tabular}
 \end{table}
 
-Row 1 is PathWISE's stated default -- stubbing uncomputable nodes as
-\textsf{false} to preserve compilability \citep{pathwise}. Every guideline in
+Row 1 reimplements PathWISE's stubbing rule --- \textsf{false} for uncomputable nodes --- rather than running their system \citep{pathwise}. Every guideline in
 the corpus states predicates it never defines, and substituting a value for
 one is unsafe in both directions, by position:
 \textsf{false} in the \emph{antecedent} narrows applicability and clears
@@ -313,23 +314,12 @@ Finally, no clinician has yet adjudicated the system's output. Clinical review o
 % neurips_2026 loads natbib, so use a natbib-aware style.
 \bibliographystyle{plainnat}
 \bibliography{refs}
-\note{refs.bib needs: PathWISE (the false-stub baseline); the K-sample /
-disagreement method; the $\sim$0.71 F1 error-categorisation result; the
-self-correction-is-unreliable result that justifies the bounded repair loop;
-HL7 CQL; GRADE; and one or two guideline-formalisation surveys.
-BE PRECISE ABOUT THE BASELINE: you did not run PathWISE. You reimplemented its
-stubbing rule. Say so in one clause --- a reviewer who knows the paper will
-check, and the honest phrasing costs you nothing.}
 
 
 %==============================================================================
 \appendix
 \section{Additional results and figures}
 \label{app:extra}
-
-\note{Still to add here: the full residue log, per-document statement counts,
-and the DSL grammar. The hole-position split and the two benchmarks below are
-done, and their numbers come from the commands in Appendix~\ref{app:repro}.}
 
 
 \begin{figure}[H]
@@ -543,7 +533,7 @@ at seed $0$ the first pass draws $5{,}764$ records and the second $5{,}760$,
 which is exactly the gap between the record counts \texttt{explanation\_size.py}
 and \texttt{ablation.py} report. The cause is below our code --- Z3 carries global state
 that constructing a fresh solver does not reset, so the second pass draws
-different models. Two consequences. Each script must be
+different models. Each script must be
 invoked separately, which is how the commands above are written. And two scripts
 at the same seed do not see an identical record set, so figures from
 \texttt{ablation.py} and \texttt{may\_actionability.py} are two samples from one
@@ -652,47 +642,6 @@ strips the plausible ranges from the generated vocabulary, drawing $5{,}800$
 pairs rather than $5{,}760$ since the sampler explores a wider space.
 Substituting \textsf{false} clears $4.8\%$ of applicable pairs with the ranges
 and $4.9\%$ without; the single-query row reads $30.8\%$ against $30.6\%$.
- 
-\section{Engineering log}
-
-\paragraph{Engineering log.} 
-\texttt{CQL\_converter/RESULTS.md} in the anonymised repository records the full engineering log behind this pipeline: 36 dated entries, each a defect found by running real documents, with its fix and what changed as a result. It is cited here rather than reproduced -- compressing thirty-six entries into an appendix would either drown the table below or gut the entries into unverifiable one-liners. What is worth extracting is the shape common to the back half of the log: a recurring class of defect, and the structural check now in the codebase that catches every future instance of it, not only the one instance that was originally found by hand. 
-
-\begin{table}[h]
-\centering
-\caption{Defect class and the structural check that now catches it, cited against \texttt{CQL\_converter/RESULTS.md} entry numbers.}
-\label{tab:defect-classes}
-\footnotesize
-\renewcommand{\arraystretch}{1.05}
-\setlength{\aboverulesep}{0.3ex}
-\setlength{\belowrulesep}{0.3ex}
-\begin{tabular}{p{0.32\textwidth} p{0.53\textwidth} p{0.09\textwidth}}
-\toprule
-\textbf{Defect class} & \textbf{Structural check now in place} & \textbf{Log} \\
-\midrule
-A rule compiles clean but is logically vacuous or tautological & Non-degeneracy check re-applied on every load, not only at write time -- an artefact that shipped clean can still fail on read & R14, R16, R17a \\
-\midrule
-A new DSL node is added; some walker's dispatch does not name it and silently treats it as absent & \texttt{test\_exhaustive.py} reads the source, enumerates every dispatch over the expression union, and fails if one omits a variant without a written reason & R34, R34a, R34c \\
-\midrule
-Python's \texttt{bool} is an \texttt{int}, and any non-empty string is truthy, so type-confused code silently misreads a boolean & \texttt{dsl.\_is\_number} is a codebase rule, not a one-off fix -- \texttt{bool} is never treated as a number, strings are parsed explicitly & R33b, R33c \\
-\midrule
-An infrastructure failure (compiler crash, auth error, empty terminology fetch) returns a value indistinguishable from a genuine negative result & Failures are labelled explicitly: a non-zero exit and a clean exit with nothing written both now raise; ``inconclusive'' is reported separately from a real disagreement & R33a, R33d, R34b \\
-\midrule
-A permission is encoded with the same operator as an obligation, so ``may'' reads as ``must'' & Deontic force is a dedicated operator on the rule, not a flag on a shared one, so the two cannot be conflated at decode time & R17b, R18 \\
-\midrule
-The partial encoding path silently drops validator evidence that the strict path keeps & Both paths now record identical validator evidence; the same discrepancy had been independently rediscovered three times before this fix stuck & R28a, R34 \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-
-\note{One paragraph pointing at \texttt{CQL\_converter/RESULTS.md} in the anonymised
-repo. Do NOT try to compress 36 log entries into the appendix --- cite it as an
-artefact. But DO extract one table: ``defect class $\rightarrow$ the structural
-check that now catches it'', with 5--6 rows. That table is the strongest thing in
-the log, because it shows you can enumerate the failure classes precisely
-BECAUSE you built detectors for them. Presented as a closed arc it reads as
-rigour; presented as a list of past bugs it reads as a confession.}
 
 \input{logic}
 

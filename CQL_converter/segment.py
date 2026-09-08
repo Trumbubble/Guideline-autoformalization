@@ -181,17 +181,6 @@ def split_sentences(s: str) -> list[tuple[int, int]]:
         spans.append((start, len(s)))
     return [(a, b) for a, b in spans if s[a:b].strip()]
 
-# One sentence can carry two recommendations, joined by a semicolon. Measured on
-# PMC12355350: "...weak recommendation in favour of SGLT-2 inhibitors or GLP-1
-# receptor agonists; AND a weak recommendation against finerenone in adults with
-# CKD" was formalized as ONE rule -- the first clause encoded, the second
-# silently discarded, with `on_finerenone` bound and sitting unused in the
-# registry.
-#
-# Splitting is deliberately narrow. Only seams where the guideline restarts its
-# own recommendation grammar count; a semicolon between two conditions
-# ("...without established CVD or CKD; or established CVD...") is part of ONE
-# rule and splitting it would destroy the population.
 _CLAUSE_SEAM = re.compile(
     r";\s+(?=and\s+(a|an)\s+(weak|strong|conditional|ungraded|good\s+practice)\b)"
     r"|;\s+(?=(and\s+)?we\s+(also\s+)?(recommend|suggest|advise)\b)"
@@ -324,11 +313,7 @@ def is_label_only(text: str) -> bool:
         return False
     if any(p.search(t) for n, _w, p in PREFILTER_PATTERNS if n.startswith("deontic")):
         return False
-    # A label grades a recommendation; it does not CONTAIN one. Measured on
-    # PMC12355350: "and a weak recommendation against finerenone in adults with
-    # CKD" was absorbed as a label and vanished, taking a whole recommendation
-    # with it -- the drug bound, reached the registry, and was never used.
-    # Strip the grading vocabulary and see whether clinical content is left.
+
     residue = t
     for pats in (_LABEL_PATTERNS, _EVIDENCE_PATTERNS):
         for p in pats:
@@ -348,21 +333,7 @@ def _first_match(pats, *texts) -> str | None:
     return None
 
 # ---------------------------------------------------------------- glossary
-# Guidelines define their abbreviations once, on first use, in a fixed shape:
-# "Long form (SHORT)". Collecting those in one sweep is what stops the
-# formalizer minting two variables for one concept -- PMC13270348 wrote both
-# `pca` and `patient_controlled_intravenous_analgesia` into a single rule,
-# which made it the tautology (A and B) -> B. See NOTES.md.
-#
-# This is Schwartz & Hearst (2003), the standard biomedical abbreviation
-# matcher: deterministic, ~60 lines, no model. It is deliberately NOT an LLM
-# synonym pass -- merging "acute pancreatitis" with "severe acute
-# pancreatitis" would be a clinical error, and a model asked "do these mean
-# the same thing?" will make it. Only two signals are trusted to merge
-# concepts: a definition stated in the document (here) and a shared
-# terminology code (bind.py). Both are ground truth; judgement is not.
 
-# Sections whose acronyms are bibliographic or organisational, not clinical.
 _GLOSSARY_SKIP = re.compile(
     r"reference|acknowledg|competing|conflict|funding|contribut|appendix|"
     r"supplement|author information", re.I)
@@ -476,20 +447,6 @@ def expand_abbreviations(text: str, abbrevs: dict[str, str]) -> str:
     return text
 
 # ------------------------------------------------------- deterministic vetoes
-# The prefilter scores directive VOCABULARY, and a sentence can carry that
-# vocabulary while talking ABOUT a recommendation rather than making one:
-# "this result should be interpreted with caution" is about a confidence
-# interval. Measured on the gold set, 12 of 45 extracted spans were not
-# recommendations at all (RESULTS.md R20).
-#
-# The model classifier catches 11 of those 12, but it costs a call per
-# candidate. These three rules catch most of them for free and with certainty,
-# so the model only sees what actually needs judgement. Every one is guarded by
-# `_DIRECTIVE`: a sentence that also states a real obligation is never vetoed,
-# because table rows fold the recommendation together with its evidence grading
-# ("We recommend epidural analgesia ...; Certainty of evidence: Weak") and a
-# rule keyed on the grading alone would delete the recommendation with it.
-
 _DIRECTIVE = re.compile(
     r"\b(we recommend|we suggest|is recommended|are recommended|is not recommended|"
     r"recommends?|suggests?|advises?|should|must|shall|is indicated|are indicated|"
@@ -505,30 +462,13 @@ _EVIDENCE_MARKERS = re.compile(
 
 # "recommendation" used to REFER to one -- "a strong recommendation", "this
 # conditional recommendation", "recommendation 6" -- rather than to make one.
-# A leading "Recommendation 12:" is a LABEL on a real recommendation and is
-# exempt: numbered guidelines write their statements that way.
-# Only the two constructions that cannot introduce a clinical action:
-# "recommendations THAT <someone does something>" reports one, and
-# "recommendation 6" names one. The looser "a/the/this <adjective>
-# recommendation" was tried and vetoed a real statement -- "Although the panel
-# made a conditional recommendation for no primary anticoagulant prophylaxis
-# for persistently positive APLA, panel members emphasised ..." -- which
-# belongs in the residue report as a `defeasible` refusal, not deleted. A
-# vetoed span vanishes; a refused one is still counted and explained. Losing it
-# understates the residue, so the rule gives up yield for safety.
+
 _RECOMMENDATION_NOUN = re.compile(
     r"\brecommendations?\s+that\b|\brecommendation\s+\d", re.I)
-# "Recommendation 12:" but also "Recommendation 12\nIn pediatric patients ..."
-# -- a heading on its own line, which is how ASH/ISTH prints them and how the
-# extractor delivers them. Requiring punctuation after the number vetoed the
-# actual numbered recommendations of an entire guideline.
+
 _RECOMMENDATION_LABEL = re.compile(
     r"^\s*recommendations?\s*\d*\s*([:.\u2013-]|$|\n|\s+[A-Z])", re.I | re.M)
 
-# A sentence that OPENS by reporting research is describing evidence, not
-# issuing a recommendation. Kept to sentence-initial position and to a closed
-# set of research verbs, because that is what makes it decisive rather than a
-# guess about the middle of a clause.
 _REPORTING_FRAME = re.compile(
     r"^\s*(results?|findings?|data|evidence|studies|trials?|analys[ei]s|"
     r"observational stud\w+|in randomi[sz]ed|a (survey|systematic review|"
@@ -536,9 +476,6 @@ _REPORTING_FRAME = re.compile(
     r"(indicat\w+|show\w+|suggest\w+|report\w+|found|demonstrat\w+|"
     r"reveal\w+|were|was|is|are|includ\w+)\b", re.I)
 
-# The guideline speaking in its own voice. A sentence that reports research AND
-# then issues a recommendation keeps one of these, so the frame veto below can
-# be decisive without swallowing "Studies show X; we therefore recommend Y".
 _GUIDELINE_VOICE = re.compile(
     r"\b(we (recommend|suggest|advise|do not recommend)|is recommended|"
     r"are recommended|is not recommended|is indicated|are indicated|"
@@ -578,8 +515,6 @@ CLASSIFIER_SCHEMA = {
     "required": ["quote", "is_recommendation", "is_patient_level", "reason"],
     "additionalProperties": False,
     "properties": {
-        # The model must QUOTE, never rewrite. The caller verifies this is a
-        # substring of the source block and rejects the result if it is not.
         "quote": {"type": "string"},
         "is_recommendation": {"type": "boolean"},
         "is_patient_level": {"type": "boolean"},
@@ -779,7 +714,7 @@ def segment(blocks: list[Block], doc_id: str,
         candidates.append((u, sc, f))
 
     # A model classifier costs one call per candidate, and a guideline has
-    # hundreds: PMC13270348 has 286. A caller that wants five recommendations
+    # hundreds. A caller that wants five recommendations
     # should not pay to judge 281 it will discard. With `limit` set, candidates
     # are judged in descending prefilter order and judging stops once enough
     # have been found -- which yields the SAME top-N, because that is the order
@@ -1155,12 +1090,6 @@ def _pymupdf_blocks(doc, doc_id: str) -> list[Block]:
         try:
             for t in page.find_tables().tables:
                 rows = t.extract()
-                # `find_tables` over-detects: on a text-heavy PDF it reads
-                # aligned prose as a table and chops one sentence across seven
-                # "rows". Measured on a real supplement: 64 fake table_rows,
-                # each a fragment of "CPET refers to a testing method that
-                # measures:". A real table has ROWS WITH SEVERAL CELLS -- if
-                # most rows hold a single cell, it is a column of prose.
                 multi = sum(1 for r in rows
                             if sum(1 for c in r if (c or "").strip()) >= 2)
                 if not rows or multi < max(2, len(rows) * 0.5):
@@ -1260,8 +1189,6 @@ def fetch_pmc(pmcid: str, cache_dir: str = "corpus") -> str:
             headers={"User-Agent": "GuidelineForge/0.1 (research; segmenter)"})
         with urllib.request.urlopen(req, timeout=60) as r:
             data = r.read()
-        # Parse rather than sniff: real PMC JATS may open with <?xml, with a
-        # <!DOCTYPE article ...> declaration, or with <article> directly.
         from lxml import etree
         try:
             root = etree.fromstring(

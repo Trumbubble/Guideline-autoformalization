@@ -89,7 +89,6 @@ pick.
 
 ## Documentation
 
-- [`patient_checker/DOCUMENTATION.md`](patient_checker/DOCUMENTATION.md) -- how the
-  checker and its pages work, the three-valued verdict, uploading guidelines.
-- [`CQL_converter/DOCUMENTATION.md`](CQL_converter/DOCUMENTATION.md) -- the
-  formalization pipeline in detail: segmenting, binding, the DSL, the gate, CQL.
+- [`DOCUMENTATION.md`](DOCUMENTATION.md) -- the whole system in detail: the
+  formalization pipeline (segmenting, binding, the DSL, the gate, CQL) and the
+  checker (the three-valued verdict, its pages, uploading guidelines).
