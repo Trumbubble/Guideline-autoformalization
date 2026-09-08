@@ -67,7 +67,7 @@ pick.
 
 ## Tech stack
 
-![Tech stack overview](media/Tech_Stack.pdf)
+![Tech stack overview](media/Tech_Stack.png)
 
 - **Formalization pipeline** (`CQL_converter/`) -- Python. Anthropic's Claude
   models propose candidate concept mentions, select a terminology code among

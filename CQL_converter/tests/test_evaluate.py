@@ -99,11 +99,9 @@ def test_clauses_of_different_kinds_never_match():
 
 def test_the_real_expert_artifact_parses():
     import os
-    p = ("/private/tmp/claude-501/-Users-kaavya-Downloads-Guideline-autoformalization/"
-         "148ab5e8-72fb-4631-8ccb-84a29e88a3a2/scratchpad/ecqm/"
-         "CMS165FHIRControllingHighBloodPressure-0.5.000.cql")
-    if not os.path.exists(p):
-        return                                  # corpus not fetched; skip
+    p = os.environ.get("GF_REAL_CQL_FIXTURE", "")
+    if not p or not os.path.exists(p):
+        return                                  # fixture not available; skip
     cs = extract_clauses(open(p, encoding="utf-8").read())
     assert any(c.value == "140" and c.unit == "mmhg" for c in cs)
     assert any(c.value == "90" and c.unit == "mmhg" for c in cs)
