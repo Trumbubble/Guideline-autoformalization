@@ -13,7 +13,7 @@ from real_rules import DOMAIN_AXIOMS as FIXTURE_DOMAIN_AXIOMS
 # one entry in guidelines.py's library (whichever bundle a browser upload
 # produced) -- every route below is scoped to a guideline_id instead of one
 # process-global bundle. `_pin` reading `rule.domain` before falling back to
-# the fixtures' shared axioms is the same idea, generalized: a Track A rule
+# the fixtures' shared axioms is the same idea, generalized: a CQL_converter rule
 # carries its own bundle's domain axioms; a fixture SpecClause has none of
 # its own, so it falls back to FIXTURE_DOMAIN_AXIOMS.
 
@@ -116,7 +116,7 @@ def minimal_counterexample_core(rule, domain: list, free_names: list) -> dict:
 
     Same assumption-dropping minimization as `tests/benchmark.py`'s function
     of the same name, generalized from generic drug/monitor indices to named
-    fixture (or Track A) variables.
+    fixture (or CQL_converter) variables.
     """
     witness_solver = Solver()
     witness_solver.add(*domain, Not(rule.predicate))
@@ -408,7 +408,7 @@ def guideline_rules(guideline_id):
 
 @app.get("/guidelines/<guideline_id>/residue")
 def guideline_residue(guideline_id):
-    """What Track A REFUSED to encode for this guideline, and why.
+    """What CQL_converter REFUSED to encode for this guideline, and why.
 
     A checker that serves only the rules that compiled tells a governance
     reader the tool covered everything. This route is the other half of the
@@ -473,7 +473,7 @@ def guideline_report(guideline_id):
             bundle = _json.load(fh)
     else:
         # The built-in fixture library has no stored bundle -- its rules are
-        # hand-written SpecClauses, not a Track A artifact. It is also the ONLY
+        # hand-written SpecClauses, not a CQL_converter artifact. It is also the ONLY
         # guideline on a fresh dashboard, so 404ing here made the report link
         # broken for every first-time visitor. Render what these rules do
         # carry: the source sentence, what the rule is for, and its holes.

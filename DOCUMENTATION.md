@@ -176,7 +176,7 @@ fixed set of legal comparison operators and a specific Z3 lowering (`bool`
 DSL but `z3.Int` ordinals in the solver, `int` → `z3.Int` never `Real`, or
 the solver hands back `days = 14.5`). `role` is `observation` (patient
 state) or `action` (a care-plan decision); `validate_rule` rejects an
-obligation naming no action atom, and Track B reads `reg.actions()` to
+obligation naming no action atom, and patient_checker reads `reg.actions()` to
 write frame axioms over actions a plan never mentions. `plausible` is a
 hand-curated physiological range asserted at solve time so a counterexample
 can't land at eGFR = 2.0, and it doubles as a validator warning on

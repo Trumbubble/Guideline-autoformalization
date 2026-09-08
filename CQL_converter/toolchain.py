@@ -1,7 +1,7 @@
 """
 The real CQL toolchain, as injectable callables (DEV_PLAN P6).
 
-`cql.synthesize` and Track B's checker take their external tools as
+`cql.synthesize` and patient_checker's checker take their external tools as
 parameters so the pipeline runs offline by default; this module supplies the
 real ones -- HL7's `cql-to-elm` translator and `cql-execution` -- and
 importing it starts no process. `cql_to_elm` raises rather than returning an
@@ -152,7 +152,7 @@ def synthetic_bundle(elm_path: str, valuesets_path: str, out_path: str, *,
     patients silently stop matching the moment the binder picks a different
     code -- which it does, because binding is a model decision.
 
-    This is the small, honest version of Track B's coverage-directed test
+    This is the small, honest version of patient_checker's coverage-directed test
     synthesis; the real one walks branch conditions and solves for boundary
     values."""
     with open(elm_path, encoding="utf-8") as fh:
@@ -246,7 +246,7 @@ def thresholds(elm_path: str) -> list[dict]:
 
     Read off the compiled ELM rather than the DSL, because the ELM is what
     actually executes -- if a lowering bug changed the comparison, this sees the
-    changed one. It is the small honest version of Track B's coverage-directed
+    changed one. It is the small honest version of patient_checker's coverage-directed
     test synthesis: the branch conditions come from the artifact, so a test
     cannot drift from the rule it is testing."""
     with open(elm_path, encoding="utf-8") as fh:

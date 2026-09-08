@@ -284,3 +284,5 @@ patient_checker/test_demo_scenarios.py
 # Merged into the root DOCUMENTATION.md; kept on disk only as the merge source.
 CQL_converter/DOCUMENTATION.md
 patient_checker/DOCUMENTATION.md
+
+CQL_converter/tests/

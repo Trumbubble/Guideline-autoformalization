@@ -174,12 +174,11 @@ def main(argv=None):
                 refusals.append(t.as_refusal())
             continue
         # The registry the rule was WRITTEN AGAINST -- never a fresh binding.
-        # This was the second site of the R17a bug: re-binding here produced a
-        # different vocabulary than triage had used, so the rule referenced a
-        # variable the registry did not contain and cql-to-elm reported
-        # "Could not resolve identifier on_bp_lowering". `bind_statement` is not
-        # idempotent (it consults a model selector), so any re-derivation of a
-        # registry is a bug waiting to surface three stages downstream.
+        # `bind_statement` is not idempotent (it consults a model selector), so
+        # re-binding here would produce a different vocabulary than triage
+        # used: the rule would reference a variable the registry does not
+        # contain, surfacing three stages downstream as cql-to-elm reporting
+        # "Could not resolve identifier on_bp_lowering".
         reg = t.registry
         if reg is None:
             bs, _ = bind.bind_statement(t.text, index, mention_llm, select_llm,
@@ -221,7 +220,7 @@ def main(argv=None):
     findings = [_rep.finding(t, reg_all, cql_files) for t in triages]
     dsl.write_bundle(a.out, reg_all, rules, refusals, findings)
     print(f"  wrote {a.out}")
-    # The readable half. The bundle is an interface artifact for Track B; this
+    # The readable half. The bundle is an interface artifact for patient_checker; this
     # is the one a clinician or a governance committee can actually read, with
     # each source sentence beside the rule it became.
     try:
@@ -234,7 +233,7 @@ def main(argv=None):
                 title=f"{a.doc or 'demo'} — formalization report",
                 cql_root=os.path.join(os.path.dirname(a.out) or ".", "cql", _stem)))
         print(f"    report: {os.path.relpath(_html, HERE)}  (open in a browser)")
-        # Put it in the library the web UI serves. demo.py and Track B's upload
+        # Put it in the library the web UI serves. demo.py and patient_checker's upload
         # both produce bundles, but only the upload's landed in the store -- so
         # a document formalized from the CLI never appeared on the dashboard,
         # and the report route the UI has could not reach it. Re-running a
@@ -271,7 +270,7 @@ def main(argv=None):
     from from_dsl import load_bundle
     loaded, loaded_refusals, _, loaded_rejected = load_bundle(a.out)
     if loaded_rejected:
-        # Track B re-verifies what Track A wrote. A rule that reaches here and
+        # patient_checker re-verifies what CQL_converter wrote. A rule that reaches here and
         # fails is OUR defect, not the guideline's residue -- report it as such
         # and do not run it against a patient.
         print(f"  {len(loaded_rejected)} rule(s) REJECTED BY VERIFICATION and not "
@@ -346,7 +345,7 @@ def _demo_patients(elm_path, vs_path, tmpdir):
 
     The thresholds come out of the ELM, so the values sit exactly AT the
     boundary -- `>= 30` and `> 30` differ only at 30, and an inclusivity slip
-    compiles cleanly. This is the small honest version of Track B's
+    compiles cleanly. This is the small honest version of patient_checker's
     coverage-directed test synthesis; the real one walks every branch."""
     import toolchain, json as _json
     with open(elm_path, encoding="utf-8") as fh:
@@ -483,15 +482,14 @@ def _first_quantity_unit(lib):
     return found[0] if found else None
 
 def _merge_registries(triages, index, mention_llm, select_llm):
-    """Union of the registries the rules were WRITTEN AGAINST.
-
-    This used to re-bind each statement from scratch. That is wrong, and it
-    shipped a broken bundle: binding runs through a model selector, so the
-    second call can disagree with the first. On PMC13270348 "close monitoring"
-    bound during triage and did not bind on the rebuild, so the delivered rule
-    referenced a variable the delivered registry did not contain -- the
-    artifact shipped was not the artifact verified. Track B rejected it as
-    UNKNOWN_VAR, which is the safety net working, not the pipeline working.
+    """Union of the registries the rules were WRITTEN AGAINST, never a fresh
+    re-binding: binding runs through a model selector, so a second call can
+    disagree with the first, and re-binding from scratch risks a delivered
+    rule referencing a variable the delivered registry does not contain --
+    the artifact shipped would not be the artifact verified. (On PMC13270348,
+    "close monitoring" is a concrete case: it binds during triage but not on
+    a rebuild.) patient_checker rejecting that as UNKNOWN_VAR is the safety
+    net working, not the pipeline working.
 
     Re-binding is kept only as the fallback for a Triage from an older run that
     has no registry attached."""
@@ -541,12 +539,12 @@ def _patients_for(lr):
     """A pinned compliant patient, a pinned violating one, and a partial one --
     the third is the case the two-valued check gets wrong.
 
-    The patients are SOLVED FOR, not guessed. This used to decide a variable's
-    type by substring-matching its name (`"acr" not in n and "egfr" not in n`)
-    and pin everything else to True, which worked only for the hand-picked
-    demo statements. The first real registry containing a dose handed the
-    boolean True to a real-valued variable and Track B refused it -- correctly,
-    since True is a category error, not the number 1 -- and stage 4 crashed.
+    The patients are SOLVED FOR, not guessed. Deciding a variable's type by
+    substring-matching its name (`"acr" not in n and "egfr" not in n`) and
+    pinning everything else to True only works for hand-picked demo
+    statements -- a real registry containing a dose would hand the boolean
+    True to a real-valued variable, and patient_checker correctly refuses it,
+    since True is a category error, not the number 1, crashing stage 4.
 
     z3 already knows every sort and every constraint, so ask it: a model of
     `domain and phi` is a genuinely compliant patient and a model of

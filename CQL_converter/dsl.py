@@ -1,8 +1,8 @@
 """
-GuidelineForge intermediate DSL - the Track A / Track B interface.
+GuidelineForge intermediate DSL - the CQL_converter / patient_checker interface.
 
 A `Rule` is a checkable formula, not a label: `when`/`then` denote
-`phi = when -> then`, which Track B verifies, while `action`/`target` are a
+`phi = when -> then`, which patient_checker verifies, while `action`/`target` are a
 human-readable gloss with no semantics. Time is flattened to derived state
 (`Since(event, n)` becomes an occurrence flag plus a day count) rather than
 indexed, which is contained and stays visible in the fragment spectrum but
@@ -50,7 +50,7 @@ NUMERIC = {"real", "int"}
 ORDERED = {"real", "int", "date"}      # types on which <, <=, >, >= are defined
 
 # An `action` variable is something a care plan can decide (a drug is on, a
-# referral is placed); an `observation` is patient state. Track B needs the
+# referral is placed); an `observation` is patient state. patient_checker needs the
 # split to write frame axioms that close the world over unmentioned actions.
 Role = Literal["observation", "action"]
 
@@ -64,7 +64,7 @@ class VarDef:
     binding: str | None = None
     role: Role = "observation"
     # Physiological range. Serves twice: the validator flags a threshold
-    # outside it (the mg/g-vs-mg/mmol unit-slip class), and Track B asserts it
+    # outside it (the mg/g-vs-mg/mmol unit-slip class), and patient_checker asserts it
     # as a domain axiom so the solver stops returning eGFR = 2.0.
     plausible: tuple[float, float] | None = None
     # For `code` vars: the retrieved value set. A code outside it is a
@@ -829,7 +829,7 @@ def validate_rule(rule: Rule, reg: Registry) -> list[Issue]:
                             "committee reviews. Use the XPath locator for XML/HTML "
                             "and the page plus span for PDFs."))
     # The obligation has to be about something the care plan can decide,
-    # otherwise the rule constrains nobody and Track B has no atom to frame.
+    # otherwise the rule constrains nobody and patient_checker has no atom to frame.
     for h in open_holes(rule, reg):
         issues.append(Issue(h, "OPEN_HOLE",
                             f"{h!r} is an unbound predicate the guideline states but "
@@ -957,7 +957,7 @@ def domain_axioms(reg: Registry, env: dict) -> list:
 
 @_z3_guarded
 def to_z3(expr: Expr, env: dict):
-    """Lower to z3. This is the Track B interface for the solver work."""
+    """Lower to z3. This is the patient_checker interface for the solver work."""
     import z3
     if isinstance(expr, Cmp):
         x, v = env[expr.var], expr.value
@@ -1011,7 +1011,7 @@ def to_z3(expr: Expr, env: dict):
 
 @_z3_guarded
 def rule_to_z3(rule: Rule, env: dict):
-    """phi = when -> then. THIS is the object Track B verifies."""
+    """phi = when -> then. THIS is the object patient_checker verifies."""
     import z3
     return z3.Implies(to_z3(rule.when, env), to_z3(rule.then, env))
 
@@ -1139,10 +1139,6 @@ def canonicalize(reg: Registry, rules: Iterable[Rule]
 # merely declined an option. False alarms are the main reason clinical decision
 # support gets switched off, so this is the expensive kind of wrong.
 #
-# Until the DSL can express permission, the honest mitigation is to make the
-# VERDICT respect what `strength` already records: a permissive rule may inform,
-# but it may never accuse. See RESULTS.md R17b.
-#
 # GRADE "conditional"/"weak" is deliberately NOT treated as permission. "We
 # suggest anticoagulant prophylaxis" still recommends the action -- the
 # weakness is in the evidence, not in the obligation. Only explicit permission
@@ -1171,7 +1167,7 @@ def deontic_of(rule: "Rule") -> str:
 
 @_z3_guarded
 def violation_condition(rule: "Rule", env: dict):
-    """What it takes to VIOLATE this rule -- the formula Track B negates.
+    """What it takes to VIOLATE this rule -- the formula patient_checker negates.
 
     For an obligation that is `when AND NOT then`. For a permission it is
     FALSE, unconditionally: a permitted action that was not taken is not a
@@ -1477,7 +1473,7 @@ def loads(s: str) -> list[Rule | Refusal]:
 
 # ---------------------------------------------------------- interface bundle
 
-# The DEV_PLAN's Track A / Track B contract is "the typed intermediate DSL and
+# The DEV_PLAN's CQL_converter / patient_checker contract is "the typed intermediate DSL and
 # its JSON serialization". Rules alone do not satisfy it: a rule is a set of
 # names, and without the REGISTRY those names have no type, no unit, no
 # terminology binding and no plausible range -- so the consumer cannot build a
@@ -1522,7 +1518,7 @@ def bundle_to_dict(reg: Registry, rules: Iterable[Rule],
     statements that were refused. The refusals travel WITH the rules on
     purpose -- a consumer that sees only what compiled cannot report the
     residue, and the residue is a deliverable."""
-    # Canonicalise at the serialisation boundary, so Track B is never handed a
+    # Canonicalise at the serialisation boundary, so patient_checker is never handed a
     # registry in which one concept appears twice. `merged_concepts` records
     # what was collapsed: a merge is a claim about the guideline, and a claim a
     # governance committee cannot see is a claim it cannot check.

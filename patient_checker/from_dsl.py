@@ -44,7 +44,7 @@ class LoadedRule:
     domain: list = field(default_factory=list)   # per-rule, not global
     holes: tuple = ()                    # unbound predicates, left free
     # `source` is the citation the fixtures carry ("BNF / NICE guidance"); for a
-    # Track A rule the citation IS the provenance, so /rules renders both kinds
+    # CQL_converter rule the citation IS the provenance, so /rules renders both kinds
     # without special-casing.
     source: str = ""
     source_page: int | None = None
@@ -122,7 +122,7 @@ def load_bundle(path: str) -> tuple[list[LoadedRule], list, "dsl.Registry", list
             taken=dsl.to_z3(r.then, env),
             var_refs={n: env[n] for n in names if n in env},
             source_sentence=r.source_span or "",
-            source=f"Track A · {r.rule_id}"
+            source=f"CQL_converter · {r.rule_id}"
                    + (f" · page {r.source_page}" if r.source_page else ""),
             domain=list(axioms),
             holes=dsl.open_holes(r, reg),
@@ -209,7 +209,7 @@ if __name__ == "__main__":
     import argparse
 
     ap = argparse.ArgumentParser(
-        description="Inspect a Track A bundle: the rules, and the residue.")
+        description="Inspect a CQL_converter bundle: the rules, and the residue.")
     ap.add_argument("bundle", nargs="?", default="bundle.json")
     ap.add_argument("--residue", action="store_true",
                     help="show only what was refused, and why")

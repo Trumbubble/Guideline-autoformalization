@@ -1,7 +1,7 @@
 """The guideline library: the fixture set plus any uploaded, processed
 guidelines, each its own dsl bundle. Uses CQL_converter's segment/gate/bind/dsl
 modules to turn an uploaded document into a bundle -- nothing here
-duplicates that logic, and nothing is written into CQL_converter. See CHECKER.md."""
+duplicates that logic, and nothing is written into CQL_converter."""
 
 from __future__ import annotations
 
@@ -209,9 +209,9 @@ def server_has_api_key() -> bool:
 
 
 def _events_in(rule) -> list:
-    """Delegates. This was a third copy of the same walker (demo.py had one,
-    cql.py had another) and it handled `Since` only, so a rule with a `Delta`
-    shipped with `events: []` and was rejected at load as UNKNOWN_EVENT. One
+    """Delegates, rather than being a third copy of the same walker (demo.py
+    has one, cql.py another) -- a copy handling `Since` only would ship a
+    `Delta` rule with `events: []`, rejected at load as UNKNOWN_EVENT. One
     walker, in the module that owns the node types."""
     return list(dsl.events_in(rule))
 
@@ -222,15 +222,13 @@ def _merged_registry(triages, index, mention_llm, select_llm) -> "dsl.Registry":
     imported, since demo.py is a script, not a library, and CQL_converter is not to
     be modified for this.
 
-    This copy used to re-bind each statement from scratch, which demo.py's
-    original was fixed not to do (RESULTS.md R17a) -- the fix never reached
-    here. It is wrong twice over. Correctness: binding runs through a model
-    selector, so the second call can disagree with the first, and the
-    delivered rule then references a variable the delivered registry does not
-    contain (Track B rejects it as UNKNOWN_VAR -- the safety net working, not
-    the pipeline working). Cost: it is a second full binding pass, three-ish
-    model calls per encodable statement, after every statement has already
-    been bound once.
+    Re-binding each statement from scratch here would be wrong twice over.
+    Correctness: binding runs through a model selector, so a second call can
+    disagree with the first, and the delivered rule would then reference a
+    variable the delivered registry does not contain (patient_checker rejects
+    that as UNKNOWN_VAR -- the safety net working, not the pipeline working).
+    Cost: it would be a second full binding pass, three-ish model calls per
+    encodable statement, after every statement has already been bound once.
 
     Re-binding is kept only as the fallback for a Triage from an older run
     that has no registry attached."""
@@ -247,7 +245,7 @@ def _merged_registry(triages, index, mention_llm, select_llm) -> "dsl.Registry":
                 seen.setdefault(v.name, v)
         # Events BEFORE holes: a `Delta` baseline is derived from an event, and
         # `hole_defs` needs the event declared to recognise it as the lowering's
-        # to emit rather than the registry's (RESULTS.md R34).
+        # to emit rather than the registry's.
         if t.rule is not None:
             for e in _events_in(t.rule):
                 events.setdefault(e, (t.registry.event(e)
@@ -265,9 +263,9 @@ def _build_index(live: bool):
     otherwise -- same construction as demo.py's `_build_index`, duplicated
     rather than imported for the same reason `_merged_registry` is: demo.py
     is a script, not a library, and CQL_converter is not to be modified for
-    this. Getting this wrong (fixture_index() regardless of `live`) is why a
-    real live upload previously bound against 22 fixture concepts instead of
-    terms.db's 634k and came back with everything refused."""
+    this. Getting this wrong (`fixture_index()` regardless of `live`) means a
+    live upload binds against 22 fixture concepts instead of terms.db's 634k,
+    and comes back with everything refused."""
     if not live:
         return bind.fixture_index()
     local = bind.SqliteIndex(os.path.join(_PART_A, "terms.db"))
@@ -328,14 +326,6 @@ def ingest(title: str, *, file_bytes=None, filename=None, text=None,
 
 
 def reprocess(guideline_id: str, *, api_key: str | None = None) -> dict:
-    """Re-run ingest, live, against an existing guideline's ORIGINAL upload,
-    in place -- the fix for "uploaded without live, got zero rules, and then
-    had no way to go back and process it with the model" (the raw content
-    ingest() saves via `_raw_source_path` is what makes this possible; a
-    guideline registered from a Track A bundle via `register_bundle` has no
-    raw upload behind it and can't be reprocessed this way). Always live, so
-    always backgrounded -- see ingest()'s docstring for the returned shape
-    and get_progress()."""
     meta = next((e for e in _load_index() if e["id"] == guideline_id), None)
     if meta is None:
         raise IngestError(f"unknown guideline {guideline_id!r}")
@@ -398,17 +388,6 @@ CQL_DIR = Path(__file__).parent / "cql"
 
 def _lower_and_compile(guideline_id: str, rules, reg) -> dict:
     """Lower every rule to CQL and put it through the REAL HL7 translator.
-
-    Without this the upload path produced no CQL at all, so "executable" was
-    a claim about the DSL rather than about anything a site could run, and
-    nothing the pipeline emitted had been seen by a compiler. `demo.py --live`
-    already gated its output this way (`compiler = toolchain.cql_to_elm`);
-    this is the same gate on the path the UI actually uses.
-
-    The translator is a JVM subprocess, ~0.6s per rule, which is nothing
-    beside the model calls that produced the rule. Its absence is recorded,
-    never silently treated as a pass: a missing toolchain and a clean compile
-    must not look alike (RESULTS.md R33a is exactly that bug).
     """
     import cql as _cql
 
@@ -541,8 +520,7 @@ def _run_ingest(guideline_id, title, filename, live, api_key, stmts,
     bundle_path = STORE_DIR / f"{guideline_id}.json"
     # Findings travel with the bundle so /guidelines/<id>/report can show the
     # cautions -- a rule that compiled but that a check flagged. Same builder
-    # demo.py uses; the alternative is a second copy of it, which is exactly
-    # how the same walker bug appeared in three files (RESULTS.md R34).
+    # demo.py uses; the alternative is a second copy of it.
     import report as _report
     findings = [_report.finding(t, reg) for t in triages]
     dsl.write_bundle(str(bundle_path), reg, rules, refusals, findings)
@@ -598,7 +576,7 @@ def _run_ingest_tracked(guideline_id, title, filename, live, api_key,
 
 def register_bundle(bundle_path, title: str | None = None,
                     guideline_id: str | None = None) -> dict:
-    """Put a bundle Track A wrote on disk into the library the UI serves.
+    """Put a bundle CQL_converter wrote on disk into the library the UI serves.
 
     demo.py and this module both produce bundles, but only this one's landed in
     the store -- so a document formalized from the CLI was invisible to the
@@ -657,7 +635,7 @@ def register_bundle(bundle_path, title: str | None = None,
 
 # demo.html links to these two ids by fixed name -- not the `title-hex` ids
 # ingest() generates -- so it can point at a fixed URL. Each is backed by
-# Track A's own committed bundle (checked into git, unlike guidelines/
+# CQL_converter's own committed bundle (checked into git, unlike guidelines/
 # itself, which is gitignored runtime data).
 _DEMO_SEEDS = [
     ("pmc12355350", "PMC12355350",
@@ -672,8 +650,7 @@ def seed_demo_guidelines() -> None:
     """Register demo.html's two fixed-id guidelines from their committed
     bundles, if this machine's local store doesn't have them yet.
 
-    Without this, "no setup" (CHECKER.md's own description of the demo
-    page) was only true on whichever machine happened to have someone run
+    Without this, "no setup" was only true on whichever machine happened to have someone run
     register_bundle() by hand at some point -- a fresh clone 404s on
     GET /guidelines/pmc12355350 instead. Skips (rather than re-registering)
     an id that is already present, so this costs nothing on every normal
@@ -845,7 +822,7 @@ def list_guidelines(owner: str | None = None) -> list:
 def get_guideline(guideline_id: str):
     """-> (rules, refusals, registry_or_None, meta), or None if unknown.
 
-    Fixture rules already carry var_refs/predicate as a SpecClause; a Track A
+    Fixture rules already carry var_refs/predicate as a SpecClause; a CQL_converter
     bundle needs `from_dsl.load_bundle` to lower it the same way.
     """
     if guideline_id == FIXTURES_ID:
@@ -874,8 +851,8 @@ def get_guideline(guideline_id: str):
     if hit is not None and hit[0] == stamp:
         rules, refusals, reg, rejected = hit[1]
     else:
-        # Track B re-verifies before it loads: a bundle can be written by an
-        # older Track A or hand-edited, and a VACUOUS_RULE that survived doesn't
+        # patient_checker re-verifies before it loads: a bundle can be written by an
+        # older CQL_converter or hand-edited, and a VACUOUS_RULE that survived doesn't
         # fail loudly -- it reports CERTIFIED-compliant for everyone. Rejects
         # are OUR defect, not the guideline's residue, so they travel separately
         # from refusals rather than being folded into that count.

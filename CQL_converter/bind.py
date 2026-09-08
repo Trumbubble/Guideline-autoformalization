@@ -72,7 +72,7 @@ KIND_SYSTEMS: dict[Kind, tuple[str, ...]] = {
 SET_VALUED_KINDS = {"condition", "drug_class", "procedure"}
 
 # A lab is a measured quantity; everything else is a yes/no about the patient
-# or the plan. `role` is what Track B needs to write frame axioms.
+# or the plan. `role` is what patient_checker needs to write frame axioms.
 KIND_VARTYPE: dict[Kind, str] = {"lab": "real", "condition": "bool", "procedure": "bool",
                                  "drug": "bool", "drug_class": "bool"}
 KIND_ROLE: dict[Kind, str] = {"lab": "observation", "condition": "observation",
@@ -321,15 +321,15 @@ class SqliteIndex:
         # phrase rarely matches a terminology term token-for-token, so requiring
         # every token (AND) loses far more than the noise it removes.
         q = " OR ".join(f'"{t}"*' for t in toks)
-        # The kind and system filters MUST be inside the query. They used to be
-        # applied in Python after `LIMIT 40`, so the limit was spent on rows of
-        # the wrong kind: "insulin" filled all forty slots with LOINC assays and
-        # SNOMED findings, and a drug search returned ONE candidate out of
-        # 171,231 drug rows -- with `Insulin` (SNOMED 67866001) sitting in the
-        # table under exactly that term. The same starvation explains
-        # `albuminuria` finding nothing as a lab and `blind` returning only
-        # "Blind staggers": in each case the matching rows existed and never
-        # reached the ranker.
+        # The kind and system filters MUST be inside the query, not applied in
+        # Python after `LIMIT 40` -- filtering post-limit spends the limit on
+        # rows of the wrong kind: "insulin" fills all forty slots with LOINC
+        # assays and SNOMED findings before a drug search ever sees `Insulin`
+        # (SNOMED 67866001), returning one candidate out of 171,231 drug rows
+        # despite it sitting in the table under exactly that term. The same
+        # starvation would make `albuminuria` find nothing as a lab and `blind`
+        # return only "Blind staggers" -- the matching rows exist but never
+        # reach the ranker.
         clauses = ["concept_fts MATCH ?", "kind = ?"]
         params: list = [q, kind]
         if systems:
@@ -488,10 +488,6 @@ _GENERIC_HEADS = {
     "factor", "factors", "measure", "measures", "score", "scores", "index",
     "rate", "function", "assessment", "monitoring", "intervention", "drug",
     "drugs", "medication", "medications", "condition", "state", "study",
-    # Measured: "premixed insulin regimen" backed off to "regimen" and
-    # retrieved *Transfeminine Regimens* -- the backoff actively injecting
-    # noise. A head that names a FORM of treatment rather than the treatment
-    # discriminates nothing.
     "regimen", "regimens", "dose", "doses", "dosing", "schedule", "protocol",
     "programme", "program", "plan", "approach", "strategy",
 }
@@ -525,12 +521,6 @@ KIND_FALLBACK: dict[Kind, tuple[Kind, ...]] = {
     "condition": ("procedure",),
     "drug": ("drug_class",),
     "drug_class": ("drug",),
-    # `lab` had no fallback at all, which made an entire class of concept
-    # unreachable: a guideline says "monitoring for albuminuria" and the model
-    # calls it a lab, but SNOMED files `Albuminuria` (274769005) as a FINDING
-    # and `Antiphospholipid antibody measurement` (82886000) as a PROCEDURE.
-    # Measured: the expected code for `albuminuria` sits in the index and is
-    # reachable only under `condition`. Two extra local queries.
     "lab": ("condition", "procedure"),
 }
 
@@ -737,12 +727,6 @@ def search_all(index: TerminologyIndex, mention: Mention, k: int,
             return found[:k] + extra
     return found[:k]
 
-# Minimal UCUM comparison. String equality is wrong here and the failure is
-# silent: LOINC records 9318-7 (albumin/creatinine MASS ratio) as
-# `ug/mg{creat}`, which is dimensionally identical to the `mg/g` a guideline
-# writes -- so a textual comparison rejects the correct code and, worse, has no
-# way to tell it apart from `mg/mmol`, which is a MOLAR ratio and a genuinely
-# different quantity. Dimension first, then scale.
 _SI = {"y": 1e-24, "z": 1e-21, "a": 1e-18, "f": 1e-15, "p": 1e-12, "n": 1e-9,
        "u": 1e-6, "m": 1e-3, "c": 1e-2, "d": 1e-1, "": 1.0,
        "k": 1e3, "M": 1e6, "G": 1e9}
@@ -962,15 +946,6 @@ SELECT_SCHEMA = {
         # select() range-checks the value instead.
         "choice": {"type": "integer"},
         "reason": {"type": "string"},
-        # Only meaningful when choice is -1. classify_unbound() used to
-        # re-derive this by re-searching the bare phrase alone, with no
-        # sentence context -- which cannot tell a coin-flip miss on a real
-        # concept ("at start LRD") apart from a confident, context-aware
-        # rejection of a lexically-similar but wrong concept ("Exhaling" for
-        # a weightlifting breathing cue). select() already has the sentence
-        # in view; asking it directly is a structured signal, not a second
-        # guess. Measured (6/6 clean separation on a known set, see
-        # BACKLOG.md item 5) before this field existed in production.
         "data_capturable": {"type": "boolean"},
     },
 }

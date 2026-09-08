@@ -66,7 +66,7 @@ DEFINITE_VIOLATION = {"MUST-violate"}
 
 
 # ----------------------------------------------------------------- accessors
-# Fixtures are SpecClause, Track A rules are LoadedRule.  Duck-typed, so the
+# Fixtures are SpecClause, CQL_converter rules are LoadedRule.  Duck-typed, so the
 # harness does not need to know which it has.
 
 def domain_of(rule) -> list:
@@ -379,7 +379,7 @@ def main(argv=None) -> int:
     ap.add_argument("--seed", type=int, default=0, help="RNG seed (default 0)")
     ap.add_argument("--out", default="ablation.csv", help="per-pair CSV")
     ap.add_argument("--no-fixtures", action="store_true",
-                    help="Track A bundles only")
+                    help="CQL_converter bundles only")
     ap.add_argument("--no-ranges", action="store_true",
                     help="generated rules without plausible ranges, as the live "
                          "pipeline supplies them")

@@ -1,6 +1,5 @@
-"""Track B fixture library: a Registry + ten dsl.Rules + a SpecClause view
-over each. See CHECKER.md for what this is, why it goes through the DSL
-instead of raw Z3, and what each field means."""
+"""patient_checker fixture library: a Registry + ten dsl.Rules + a SpecClause view
+over each. ."""
 
 import sys
 from dataclasses import dataclass, field
@@ -237,7 +236,7 @@ RULES_BY_ID = {rule.rule_id: rule for rule in RULES}
 ENV = dsl.make_env(REGISTRY)
 DOMAIN_AXIOMS = dsl.domain_axioms(REGISTRY, ENV)
 
-# ---------------------------------------------------------------- Track B view
+# ---------------------------------------------------------------- patient_checker view
 
 CATEGORY_BY_RULE_ID = {
     "ace_inhibitor_hyperkalemia_contraindication": "contraindication",

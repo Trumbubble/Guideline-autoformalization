@@ -204,7 +204,7 @@ def finding(t, reg, cql_files: dict | None = None) -> dict:
     """One statement's outcome, in the form a reader needs: the sentence, the
     decision, the rule in ENGLISH, and every check that fired.
 
-    Lives here, not in demo.py, because Track B's upload path builds the
+    Lives here, not in demo.py, because patient_checker's upload path builds the
     same bundle from the same triages. Two copies of a walker is how R34
     happened three times over.
 

@@ -444,21 +444,10 @@ def triage(statement: str, index, *, statement_id: str = "s",
         prate = sum(1 for o in outs if isinstance(o, dsl.Refusal)) / len(outs)
         if prules:
             rule, iss = _best(prules, wide)
-            # Record them. Only `blocked_codes` was kept here, so every
-            # validator WARNING raised on the partial path was discarded --
-            # a rule with a CIRCULAR_BASELINE reached the bundle reporting
-            # nothing wrong, while the identical finding on the strict path
-            # printed. Third time this branch has silently dropped evidence the
-            # other one keeps.
             ev += [Evidence("validator", i.code, i.message) for i in iss]
             blocked_codes |= {i.code for i in iss if i.severity == "error"}
             if not [i for i in iss if i.severity == "error"]:
                 open_ = dsl.open_holes(rule, wide)
-                # Also on this path. It only ran on the strict-encode branch,
-                # so the dropped clause in "...in favour of SGLT-2i or GLP-1 RA;
-                # AND a weak recommendation against finerenone in adults with
-                # CKD" went unreported -- `on_finerenone` bound, reached the
-                # registry, and was simply never used.
                 _used = dsl._vars_in(rule.when) | dsl._vars_in(rule.then)
                 _unused = sorted(n for n in wide.names()
                                  if n not in _used and not wide[n].unbound)

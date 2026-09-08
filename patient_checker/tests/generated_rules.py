@@ -26,7 +26,7 @@ The vocabulary is synthetic and the distribution is designed for coverage, not
 realism.  Read it beside the real-rule numbers, never instead of them.
 
 ONE DELIBERATE DIFFERENCE from the current live pipeline: every numeric
-variable here carries a plausible range.  Track A supplies none, so results on
+variable here carries a plausible range.  CQL_converter supplies none, so results on
 generated rules will look cleaner than results on extracted ones -- not because
 generated rules are easier, but because the extracted ones are missing that
 constraint.  Reported separately for exactly that reason.
