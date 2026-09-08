@@ -16,17 +16,18 @@ number while asserting something false about the patient.
 
 ## The approach
 
-This project treats **refusal as a measured output**: every run reports the rule set and a per-statement account of
-what it declined to encode, with a reason and the source sentence. Three
-things make that possible, and each is also why this differs from the
-alternatives (substituting a default, or asking a model if it's
-unsure): terminology codes are always **retrieved** instead of generated, 
-so it doesn't hallucinated code; an undefined predicate stays a **named free variable** 
-instead of a silent stub; and **deontic force is an operator** in the rule language itself, 
-so a permission has no violating patient by construction. 
-Every rule is also checked twice -- on write and on load -- and a patient check returns one of three
-verdicts (violates, compliant, genuinely undetermined), giving more information
-than a simple yes/no.
+This project treats **refusal as a measured output**: every run reports the
+rule set and a per-statement account of what it declined to encode, with a
+reason and the source sentence. Three things make that possible, and each is
+also why this differs from the alternatives (substituting a default, or
+asking a model if it's unsure): terminology codes are always **retrieved**
+instead of generated, so a hallucinated code isn't possible; an undefined
+predicate stays a **named free variable** instead of a silent stub; and
+**deontic force is an operator** in the rule language itself, so a permission
+has no violating patient by construction. Every rule is also checked twice --
+on write and on load -- and a patient check returns one of three verdicts
+(violates, compliant, genuinely undetermined), giving more information than a
+simple yes/no.
 
 ## Run it
 
