@@ -1,29 +1,55 @@
-# CQL_converter: Documentation
+# GuidelineForge: Documentation
 
-CQL_converter turns a clinical guideline document into formally checkable rules —
-refusing rather than guessing wherever it can't.
+Two halves of one system. **CQL_converter** turns a clinical guideline
+document into formally checkable rules — refusing rather than guessing
+wherever it can't. **patient_checker** takes a rule, a patient and a partial
+care plan and decides whether the plan complies — and when it might not,
+produces a minimal, concrete witness instead of a vague "maybe."
 
 ---
 
 ## 1. Overview
 
 Document → **Segment** → **Bind** → **Gate** (which synthesizes a DSL
-`Rule`/`Refusal`) → **CQL**.
+`Rule`/`Refusal`) → **CQL**, then the checker.
 
-- [`segment.py`](segment.py) — a document in, verbatim recommendation
+**The pipeline** ([`CQL_converter/`](CQL_converter/)):
+
+Document → **Segment** → **Bind** → **Gate** → **CQL**.
+
+- [`segment.py`](CQL_converter/segment.py) — a document in, verbatim recommendation
   statements out, each with a provenance span.
-- [`bind.py`](bind.py) — a statement's clinical phrases in, a closed
+- [`bind.py`](CQL_converter/bind.py) — a statement's clinical phrases in, a closed
   `dsl.Registry` of retrieved (never generated) codes out.
-- [`dsl.py`](dsl.py) — the typed intermediate representation every other
+- [`dsl.py`](CQL_converter/dsl.py) — the typed intermediate representation every other
   stage reads or writes: `Registry`, `Rule`, `Refusal`, the Z3 lowering. Not
   a separate sequential stage — Bind produces a `dsl.Registry` and Gate's
   `triage()` produces a `dsl.Rule`/`Refusal` directly, which CQL then
   lowers; it's the shared substrate everything else is built from, not a
   fifth stage in a line.
-- [`gate.py`](gate.py) — per statement, decide encode / partial / refuse,
+- [`gate.py`](CQL_converter/gate.py) — per statement, decide encode / partial / refuse,
   aggregating deterministic evidence before ever asking a model.
-- [`cql.py`](cql.py) — a validated `dsl.Rule` in, an HL7 CQL library out, by
+- [`cql.py`](CQL_converter/cql.py) — a validated `dsl.Rule` in, an HL7 CQL library out, by
   a deterministic, re-runnable lowering.
+
+
+**The checker** ([`patient_checker/`](patient_checker/)):
+
+
+- [`real_rules.py`](patient_checker/real_rules.py) — ten hand-authored guideline rules
+  through the real DSL, so there's always real material to check against.
+- [`guidelines.py`](patient_checker/guidelines.py) — runs CQL_converter's actual pipeline
+  (segment → `gate.triage`, which binds and formalizes per statement →
+  `dsl.write_bundle`, then the real `cql-to-elm` translator) over an
+  uploaded document and stores the result as another checkable guideline.
+- [`api.py`](patient_checker/api.py) — the Flask app: lists rules, runs checks, serves the
+  UI pages.
+- [`ui.html`](patient_checker/ui.html) / [`demo.html`](patient_checker/demo.html) / [`dashboard.html`](patient_checker/dashboard.html)
+  / [`demo-toy.html`](patient_checker/demo-toy.html) — the click-through checker, a no-setup
+  live demo, the guideline library/upload page, and the toy page at
+  `/demo/toy` (one hand-authored rule, three patients, three verdicts), kept
+  because it isolates the three-valued verdict better than a real document
+  can.
 
 ## 2. How It Works
 
@@ -53,24 +79,23 @@ renders **26 of 26 tables as embedded JPEG images with zero extractable
 text**, so the XML route reaches only the narrative restatements, never the
 formal boxed ones — `_table_rows` emits a `figure` block carrying the
 caption instead, landing the gap in `manifest["figures_uncovered"]` rather
-than letting it vanish silently. The real, independently-typeset PDF for
+than letting it vanish. The real, independently-typeset PDF for
 that same document *does* carry the missing tables as selectable text — XML
-and PDF can diverge in completeness — but `load_pdf`'s box-recovery path is
-presently broken (`page.rect.get_area()`, a method the installed `pymupdf`
-no longer has) and has never executed against a real guideline.
+and PDF can diverge in completeness — but `load_pdf`'s box-recovery path has
+only ever run against synthetic fixtures, never against a real guideline PDF.
 
 For table rows specifically: the condition and the action sit in different
 columns, so no contiguous span of the document *is* the rule. Rows are
-rendered header-folded (`Finding: eGFR below 30; Action: refer to
-nephrology`), provenance points at the `<tr>`, and every cell *value* is
+rendered header-folded ("Finding: eGFR below 30; Action: refer to
+nephrology"), provenance points at the `<tr>`, and every cell *value* is
 verbatim even though the assembled string is not — a documented exception,
 not a bug.
 
 ### 2.2 Binder
 
-It is not a lookup service the compiler calls -- it builds the closed
+It builds the closed
 vocabulary the compiler is then constrained to, so whatever it cannot bind
-never becomes a variable but a `Refusal(unbound_concept)` instead. The
+becomes a `Refusal(unbound_concept)` instead. The
 model is shown a numbered candidate list and returns an index (or ABSTAIN),
 never a code string, so a hallucinated code cannot be expressed at all.
 
@@ -79,7 +104,7 @@ kind) → rerank by unit (deterministic, before any model) → select (index or
 ABSTAIN) → validate (chosen code must be in the index) → `Binding` or
 `Refusal`.
 
-**Sources, no UMLS account needed:** SNOMED via `tx.fhir.org`
+**Sources** SNOMED via `tx.fhir.org`
 (`$expand?filter=`, `?fhir_vs=isa/<code>`, `$validate-code`), LOINC via NLM
 Clinical Tables, drugs and ATC classes via RxNav. A UMLS licence adds
 **VSAC**'s curated, steward-versioned value sets — better than a computed
@@ -87,7 +112,7 @@ is-a expansion — routed ahead of SNOMED/ATC for the set-valued kinds
 (`condition`, `drug_class`, `procedure`) and unioned with them; nothing is
 blocked without it.
 
-**Why a real vocabulary matters, measured directly.** "eGFR" searched
+**Why a real vocabulary matters** "eGFR" searched
 against live LOINC returned *only* an EGFR-gene genetics test — epidermal
 growth factor receptor, not kidney function — and being the sole candidate,
 a naive selector called it a "clear lexical win"; being the only candidate
@@ -132,13 +157,13 @@ no bulk loader in this codebase for that system, unlike SNOMED/LOINC/RxNorm.
 
 ### 2.3 DSL
 
-A rule is a formula, not a label. `Rule.when` / `Rule.then` denote
+A rule is a formula. `Rule.when` / `Rule.then` denote
 `phi = when -> then`; a patient violates the rule iff `phi` is false for
 them, and a Z3 counterexample is a model of `NOT phi`. `action` / `target`
 are a human-readable gloss with no semantics — branching on `rule.action` in
 verification code is a sign something has gone wrong.
 
-**The registry variables are a symbolic patient, not an index over real patients.** 
+**The registry variables are a symbolic patient** 
 `egfr` is not "some particular person's eGFR", it stands for
 *any* patient's eGFR; when Z3 returns `sat`, the model it hands back **is**
 a concrete patient (`egfr=29, has_diabetes=True, on_acei_arb=False, ...`).
@@ -167,7 +192,7 @@ disjunctions, it silently converts them to conjunctions — one measured
 AND-for-OR substitution flipped the verdict for 69.5% of the plausible
 patient population, and it typechecked the whole way.
 
-**Time is flattened to derived state, not indexed.** `Since(event, days)`
+**Time is flattened to derived state** `Since(event, days)`
 lowers to `<event>_occurred AND days_since_<event> <= days`. The occurrence
 flag is load-bearing: without it, a bare day-count is satisfiable for a
 patient who was *never checked* — the solver just picks a small number —
@@ -179,7 +204,7 @@ variables (`var[t]` over a horizon) is additive — no existing rule would
 need to change — but it changes the headline formalizability number, so
 that's an explicit measurement decision not yet made, not an oversight.
 
-**`Rule.deontic` is an operator, not a label.**
+**`Rule.deontic` is an operator**
 ```
 obligation   O(then | when)    violation = when AND NOT then
 permission   P(then | when)    violation = FALSE, unconditionally
@@ -191,20 +216,14 @@ violated nothing. GRADE-conditional wording ("we suggest X") is **not**
 treated as permission, since the weakness there is in the evidence, not the
 obligation — only explicit permission language counts, or treating every
 weak recommendation as optional would silence most of a guideline.
-Prohibition isn't a third case: `F(p) = O(NOT p)`, already written as
-`action="avoid"` with a negated consequent. `deontic` is a *required* field
-in the decoding schema so a default can't silently promote a permission
-into an obligation, and `deontic_of()` only ever promotes
-obligation→permission from wording, never the reverse — guessing permission
-wrongly silences an alert (recoverable), guessing obligation wrongly accuses
-a clinician (not). A permission gets its own four-outcome verdict lattice
+A permission gets its own four-outcome verdict lattice
 (`OPTION-taken` / `OPTION-not-taken` / `OPTION-not-applicable` /
 `OPTION-available`), none of them an accusation. Measured: dropping this
 operator for a wording-only guard flips the verdict on 4 of 5
 permissive/obligation pairs — the largest single effect measured across the
 whole ablation study.
 
-**Canonical form: two names can be one concept.** A model-generated
+**Canonical form** A model-generated
 registry can bind the same real concept under two different variable names
 in a way a person never would — measured on a real guideline, the
 formalizer wrote both `pca` and `patient_controlled_intravenous_analgesia`,
@@ -222,7 +241,7 @@ runs automatically before the vacuity check below, and the bundle format
 records every merge under `merged_concepts` rather than silently
 collapsing it, since a merge is a claim about the guideline.
 
-**Modal predicates are a closed word class, and they get refused, not turned into holes.** 
+**Modal predicates** 
 *"Epidural analgesia may be considered"* correctly
 filled `Rule.strength` with `"suggest (conditional)"`, but also put the
 modal itself into the antecedent as `has_may` — a rule that can never run,
@@ -234,20 +253,16 @@ as a legitimate hole. `validate_rule` reports a bare modal as the
 `MODAL_PREDICATE` error, and the gate refuses the statement as `defeasible`
 rather than shipping a hole nothing will ever populate.
 
-**`VACUOUS_RULE` is the check a type system cannot do for you.** A spec no
+**Type checking cannot detect a vacuous rule** A spec no
 patient can ever violate passes every syntactic gate and typechecks
 cleanly — it certifies nothing. This is exactly what the canonical-form
 `pca` example above produces, and why canonicalizing before this check runs
 matters: without it, the aliasing is invisible to every other validator,
 which inspects the rule tree alone.
 
-**The validator's diagnosis sets the refusal reason**, rather than falling
-through to a generic one: `MODAL_PREDICATE` among the blocking issues means
+**The validator's diagnosis sets the refusal reason** `MODAL_PREDICATE` among the blocking issues means
 the reason code is `defeasible` (the guideline hedged); `VACUOUS_RULE` means
-`beyond_dsl` (no non-vacuous obligation could be extracted). Previously both
-fell through to `unbound_concept` or a generic `beyond_dsl`, which told a
-reader to go looking for a missing terminology code when the real problem
-was that the sentence had no checkable content at all.
+`beyond_dsl` (no non-vacuous obligation could be extracted). 
 
 **Issue codes** `validate_rule`/`check_nondegenerate` can raise — errors
 block compilation, warnings are advisory:
@@ -270,14 +285,14 @@ block compilation, warnings are advisory:
 | `VACUOUS_RULE` | error | `NOT(when -> then)` is unsat: the rule forbids nothing |
 | `TAUTOLOGICAL_ANTECEDENT` | warn | the rule applies to everyone |
 
-**Fragments.** `fragment_of(*exprs)` returns the weakest logical fragment
+**Fragments** `fragment_of(*exprs)` returns the weakest logical fragment
 containing the expressions — `PROP` (booleans/code equality), `LIA` (any
 numeric/ordered comparison), or `MTL` (any `Since`) — computed from the
 tree itself, not inferred from variable names, so the headline
 formalizability spectrum falls out of the code rather than out of an
 annotator's judgement.
 
-**Verification, from Track B:**
+**Verification from patient-checker:**
 ```
 env = make_env(registry)              # the symbolic patient
 D   = domain_axioms(registry, env)    # physiology, well-formedness, frame axioms
@@ -293,28 +308,29 @@ completions of unconstrained latent state, and a single-call
 
 ### 2.4 Gate
 
-Most of the refusal decision is *not* "ask a model if this is vague" — that
-is circular, and even purpose-built diagnostic models measure only ~0.71 F1
-on this kind of error categorisation (arXiv:2607.04655). The gate
-aggregates deterministic evidence the earlier stages already produced —
-what the binder couldn't resolve, what the validator rejects, what the
-solver shows to be degenerate — and only *then* asks a model to try.
+Assigns a refusal reason, or clears a statement for formalization.
 
-Be precise about how much that buys, though: of the six refusal codes, only
-**two** are actually deterministic. The full picture:
+**Inputs.** Binder output (unresolved concepts), validator flags
+(`MODAL_PREDICATE`, `VACUOUS_RULE`), segmenter classification.
 
-| reason_code | who decides | what actually sets it |
+**Order.** Deterministic evidence is consumed first; the model is called only
+on statements that survive it. Two reason codes never require a model call.
+
+| Reason code | Set by | Trigger |
 |---|---|---|
-| `unbound_concept` | **deterministic** (binder) | `bind.bind()` when the selector returns ABSTAIN, no candidate survives, or a value set expands to no codes |
-| `defeasible` | **deterministic** (validator) | `MODAL_PREDICATE` among the blocking codes — the guideline hedged, so the "predicate" is its deontic force wearing a patient fact's clothes. The model may also name it directly. |
-| `beyond_dsl` | **mixed** | `VACUOUS_RULE` deterministically; otherwise the model's own declared refusal code, or the fallback when nothing bound-specific applies |
-| `not_patient_level` | **model** (segmenter's classifier) | `is_patient_level is False` — an LLM call made *upstream*, on a live run; heuristic only when that call errors or its quote isn't verbatim. Never independently derived inside the gate. |
-| `vague_predicate` | **model** | the formalizer declining |
-| `unsupported_temporal` | **model** | the formalizer declining. No deterministic check produces it — there is no fragment test for "needs a second timepoint", only the model recognising one. |
+| `unbound_concept` | deterministic | binder: selector abstained, or no candidate returned |
+| `defeasible` | deterministic | validator: `MODAL_PREDICATE` |
+| `beyond_dsl` | mixed | `VACUOUS_RULE`, else model or fallback |
+| `not_patient_level` | model | segmenter classifier, upstream |
+| `vague_predicate` | model | formalizer declines |
+| `unsupported_temporal` | model | formalizer declines |
 
-An earlier version of this table wrongly claimed four of six were
-deterministic; the tests now pin exactly which codes are reachable with no
-model at all, so the claim can't drift silently again.
+**Invariant.** No deterministic path assigns `unsupported_temporal`. Pinned by
+`test_gate.py`, which fails if one does.
+
+**Rationale.** Asking a model whether a statement is too vague is circular, and
+weak in practice (~0.71 F1 on error categorisation, arXiv:2607.04655), so the
+model is the last check rather than the first.
 
 **One deliberate non-inference**: an empty binding is *never* labelled
 `not_patient_level` on its own. *"Consider referral after an adequate
@@ -331,7 +347,7 @@ calibrated on, deliberately independent of the exact fragment (two
 independent labelling passes agreed 28/29 on this binary but only 71.8% on
 the exact fragment).
 
-**`partial` is the verdict that actually matters.** *"Start an ACE
+**`partial` verdict** *"Start an ACE
 inhibitor when eGFR falls below 30 or the patient is at high risk"* — one
 clause binds, one doesn't. Stubbing the undefined clause to `false` (what a
 prior baseline system does) is unsafe in the direction that matters:
@@ -345,25 +361,32 @@ made — but a retrieval failure is *never* turned into one: "refer to
 nephrology" is perfectly bindable, and a missed index is a coverage bug to
 fix, not a finding to launder into a free variable.
 
-**Sample count (`samples=k`) is a confidence estimator, not an ambiguity detector — and that took a real measurement to establish.** 
-The original
-idea (from arXiv:2605.13817) was that k repeated calls on a vague statement
-should *disagree*, giving a vagueness signal without needing ground truth.
-Measured on 20 hand-labelled statements (10 precise, 10 vague) at K=8 real
-calls, the model doesn't produce 8 different encodings for a vague
-statement, it produces 8 *refusals*: all 80 vague-statement samples were
-refused, and 0 of the encoded statements produced more than one semantic
-reading (decided by Z3 over the domain axioms, not string comparison — 9 of
-10 precise statements produced textually different encodings, up to 6
-distinct strings for one meaning, that the solver correctly collapsed to
-one class). So separation comes from refusal, not sampling variance, and
-one constrained decode does what an 8-sample estimator was built to do, at
-an eighth of the cost. `confidence = 1 - (refusals / k)` is a graded score,
-not just bimodal — a deliberately borderline statement ("Monitor serum
-potassium at least annually") came back 6/8; `samples=1` is the production
-default, `k>1` worth paying for only when building an evaluation curve.
 
-**Reporting.** `Triage.evidence` is a tuple of `Evidence(source, code, detail)` tagged by where it came from (`binder`/`validator`/`solver`/
+**`samples=k`**
+
+Number of formalization attempts per statement. Default `1`.
+
+`confidence = 1 - (refusals / k)`.
+
+***Measurement*** 20 hand-labelled statements (10 precise, 10 vague), K=8 real
+calls. Semantic equivalence decided by Z3 over the domain axioms, not string
+comparison.
+
+| | result |
+|---|---|
+| Vague statements | 80/80 samples refused |
+| Precise statements | 0 produced more than one semantic reading |
+| Textual variation on precise statements | 9/10 varied, up to 6 distinct strings per meaning |
+
+Separation comes from refusal, not sampling variance, so one constrained
+decode does what the 8-sample estimator (arXiv:2605.13817) was built to do.
+The score is graded rather than bimodal: a borderline statement ("Monitor
+serum potassium at least annually") returned 6/8.
+
+***When to raise k*** Only when building an evaluation curve. Production runs
+use `samples=1`.
+
+***Reporting*** `Triage.evidence` is a tuple of `Evidence(source, code, detail)` tagged by where it came from (`binder`/`validator`/`solver`/
 `model`) — a clinician asking "why was this refused" gets those, not a
 score. `spectrum(triages)` computes the six-bucket formalizability table
 (`PROP`/`LIA`/`MTL` for what encoded, the six reason codes for what didn't)
@@ -385,7 +408,7 @@ converges on whatever happens to compile, which is exactly the failure this
 project argues against (LLM self-correction is measured to be unreliable in
 general; arXiv:2502.12065).
 
-**An unbound predicate lowers to CQL's native `null`, not `true`/`false`.**
+**An unbound predicate lowers to CQL's native `null`**
 CQL is natively three-valued (`true and null` is `null`, `false and null`
 is `false`), so an unbound hole propagates exactly the uncertainty it
 should — a rule's `"Compliant"` define evaluates to `null` rather than a
@@ -396,7 +419,7 @@ over-fires; leaving it `null` isn't an invention, since the target language
 already has three-valued logic, so the honest option is also the native
 one.
 
-**Time is kept in CQL, not flattened the way Z3 needs it.** The DSL has two
+**Time is kept in CQL** The DSL has two
 different lowerings of the same `Since` node: for Z3 (no notion of a
 patient timeline) it flattens to an occurrence flag plus a day count; for
 CQL (which evaluates over the actual record) it becomes a genuine bounded
@@ -409,28 +432,74 @@ doesn't need time-indexed variables for the CQL to already be faithful.
 value sets named "Diabetes" in VSAC can differ by nine years, and that
 pinned version is what a reviewer actually resolves against.
 
-**`check_cql()` is structural only** — brackets balance and quoted names
+**`check_cql()` is structural** — brackets balance and quoted names
 resolve — and is explicitly *not* a compiler. The real gate is `cql-to-elm`
 (from `cqframework/clinical_quality_language`, Java, published on Maven
 Central), wired in as an injected `compiler` callable; without it,
 `COMPILER_UNAVAILABLE` is raised at warn severity, saying plainly that only
-structural checks ran — and as of this writing nothing has been run against
-a real `cql-to-elm` translation or a FHIR bundle, so every library that
-exists has passed structural checks only, a much weaker claim than
-"compiles."
+structural checks ran. That gate is now live rather than aspirational:
+`patient_checker/engine/` builds the JVM+Node toolchain (`setup.sh`),
+`toolchain.available()` reports it, `test_toolchain.py` compiles generated
+libraries with the official translator and executes the resulting ELM
+against FHIR bundles (`patient-violating.json` / `patient-compliant.json`),
+and `guidelines._lower_and_compile` puts every rule from an upload through
+the same translator. A missing toolchain is recorded as
+`compiler_available: false`, never counted as a pass.
+
+### 2.6 Checking a patient
+
+A rule is `phi = when -> then`. A *plan* is partial — only some values are
+known, the rest are free — so "does this violate the rule" has three
+answers, not two:
+
+```
+MUST-violate         no completion of the unknowns can satisfy the rule
+CERTIFIED-compliant  no completion of the unknowns can violate the rule
+MAY-violate          otherwise — the solver returns a concrete witness
+```
+
+A single `SAT` check can't tell MUST-violate from MAY-violate apart, so
+every verdict is two solver calls, not one, and both run against the same
+physiological domain axioms every rule shares.
+
+Those three are the verdicts for an **obligation**. Deontic force selects
+the question, not just the wording of the answer: a permission cannot be
+violated, so `check_rule` dispatches on `rule.deontic` to a four-outcome
+applicability lattice instead, none of whose outcomes is an accusation.
+
+```
+OPTION-not-applicable  the patient cannot meet the conditions for the option
+OPTION-taken           the conditions hold and the option was taken
+OPTION-not-taken       the conditions hold and it was not
+OPTION-available       applicability or the choice is still undetermined
+```
+
+A guideline is either the built-in `fixtures` (from `real_rules.py`) or
+something uploaded and run through CQL_converter live. Formalizing a sentence
+into a rule is a **model step** — without an API key, a document still
+segments and triages (real statement counts, real refusals) but produces
+**zero rules**, reported honestly as `needs_model_count` rather than as a
+guideline that "can't be encoded." A rule can also be **partial**: an
+undefined predicate becomes a declared free variable (a hole), not a
+silent drop or a stub.
 
 ## 3. How To Use It
+
+### 3.1 The pipeline
 
 **Offline** (the default): every stage runs fully offline with a heuristic
 or mock callable standing in for its model hook — no API key, no network.
 Each stage's own test file (`test_segment.py`, `test_bind.py`,
-`test_gate.py`, `test_dsl.py`, `test_cql.py`) exercises exactly this path.
+`test_gate.py`, `test_dsl.py`, `test_cql.py`) exercises exactly this path,
+alongside `test_cassette.py`, `test_evaluate.py`, `test_exhaustive.py` and
+`test_replay.py`. `test_toolchain.py` is the one exception: it shells out to
+a JVM and Node, so it skips loudly unless the toolchain is built.
 
 **Live**: pass real callables for the injected hooks — `llm.classify_block`
 (segmenter), `llm.propose_mentions` / `llm.select_candidate` (binder),
 `llm.formalize` (gate) — and a populated or remote terminology index
-(`SqliteIndex` / `RemoteIndex` / `CachedIndex`). `demo.py` and
-`goldset.py` show the live wiring end to end.
+(`SqliteIndex` / `RemoteIndex` / `CachedIndex`). `demo.py`, at the
+repository root, shows the live wiring end to end.
 
 One sentence, end to end:
 
@@ -463,10 +532,51 @@ python3 tests/test_segment.py / tests/test_bind.py / tests/test_gate.py / tests/
 ```
 
 The full offline suite runs with no API key, and one real run replays
-byte-for-byte from a recorded cassette (`test_replay.py`) — also no key
-needed, since prompts and responses are stored as SHA-256 hashes.
+byte-for-byte from a recorded cassette (`cassette.py`, driven by
+`test_replay.py`) — also no key needed, since prompts and responses are
+stored as SHA-256 hashes. Responses are kept as a list per key rather than
+collapsed to one value, because `gate` relies on K identical-prompt calls
+genuinely disagreeing; a prompt with no recorded response raises
+`CassetteMiss` rather than falling through to the network.
+
+### 3.2 The checker
+
+```sh
+cd patient_checker
+```
+
+```sh
+../.venv/bin/python3 -m pip install -r ../requirements.txt
+../.venv/bin/python3 api.py
+# open http://localhost:8000/        (dashboard)
+# open http://localhost:8000/demo    (no setup, 18 live checks over 3 guidelines)
+# open http://localhost:8000/demo/toy (one rule, three patients, three verdicts)
+```
+
+```sh
+curl -s localhost:8000/guidelines/fixtures/rules | python3 -m json.tool
+
+curl -s -X POST localhost:8000/guidelines/fixtures/check \
+  -H 'Content-Type: application/json' \
+  -d '{"patient": {"potassium": 5.4}, "plan": {"ace_inhibitor_on": true}}'
+```
+
+`GET /guidelines/<id>/residue` shows what CQL_converter refused to encode for
+that guideline, and why — the other half of the deliverable: a checker
+that only shows what compiled tells a reader the tool covered everything.
 
 ## 4. Glossary
+
+**Checker verdicts**
+- **MUST-violate / CERTIFIED-compliant / MAY-violate** — the three verdicts
+  for an obligation (§2.6); MAY-violate always carries a minimized
+  counterexample, the smallest set of still-free values that alone forces
+  the violation.
+- **OPTION-taken / OPTION-not-taken / OPTION-not-applicable /
+  OPTION-available** — the four verdicts for a permission (§2.6). A permission
+  is never violated, so none of these accuses anyone.
+- **Fixtures** — the ten always-available rules in `real_rules.py`, as
+  opposed to an uploaded guideline.
 
 **Pipeline data types**
 - `Statement` — one candidate recommendation: verbatim text + `Provenance`.
@@ -505,7 +615,10 @@ needed, since prompts and responses are stored as SHA-256 hashes.
   variable; no terminology publishes this, and it is asserted at solve
   time.
 - Deontic (obligation / permission) — an obligation's violation is
-  `when AND NOT then`; a permission's is `false`, by construction.
+  `when AND NOT then`; a permission's is `false`, by construction. It is
+  an operator on the rule rather than a label on the verdict;
+  `guidelines.py` carries it out of the DSL and the checker dispatches
+  on it.
 - Modal predicate — a hedge word ("may", "appropriate") that is the
   guideline's own deontic force wearing a patient predicate's clothes; it
   is refused, never turned into a hole.
@@ -521,16 +634,12 @@ needed, since prompts and responses are stored as SHA-256 hashes.
 - library / define — a CQL module, and one named logical clause inside it.
 - valueset / code declaration — a version-pinned reference to an external
   terminology set, or to a single code.
-- ELM — the typed JSON IR `cql-to-elm` emits; what an execution engine
+- ELM — Expression Logical Model; the typed JSON IR `cql-to-elm` emits; what an execution engine
   actually consumes (CQL text itself is not executable).
 - Three-valued logic — CQL's native `true` / `false` / `null`, used so an
   unbound predicate propagates honest uncertainty instead of being stubbed.
 
-**Gold-standard labels** — the labels a human annotator assigns to a
-statement, written *before* ever running the pipeline on it (criteria
-derived from a tool's own output cannot be used to measure that tool). The
-question for each statement: could a careful person encode this faithfully
-in the DSL, and if not, why not?
+**Labels**
 
 | label | means |
 |---|---|
@@ -539,15 +648,12 @@ in the DSL, and if not, why not?
 | `REFUSE` | no faithful encoding; pick exactly one of the six reason codes (§2.4) |
 | `NOT_A_RECOMMENDATION` | the segmenter was wrong — background, methods, an evidence summary, a heading. Labelled, not discarded, since this is the segmenter's own error rate |
 
-Decision order (work down the list, stop at the first that applies):
+Decision order:
 1. Is it a recommendation about a patient at all? No → `NOT_A_RECOMMENDATION`
    (a heading/evidence summary) or `not_patient_level` (about a service,
    institution, or research agenda — **institutional capability counts
    here**, e.g. "where expertise is available").
-2. Is the action nameable as a variable? No → `unbound_concept` (note in
-   `notes` whether the concept genuinely has no code anywhere, versus
-   retrieval simply missing it — the latter is a bug in us, not the
-   guideline).
+2. Is the action nameable as a variable? No → `unbound_concept`.
 3. Does it need something the fragment can't express? →
    `unsupported_temporal` or `beyond_dsl`.
 4. Is the obligation explicitly overridable by clinician judgement? →
