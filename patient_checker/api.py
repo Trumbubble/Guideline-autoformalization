@@ -473,9 +473,7 @@ def guideline_report(guideline_id):
             bundle = _json.load(fh)
     else:
         # The built-in fixture library has no stored bundle -- its rules are
-        # hand-written SpecClauses, not a CQL_converter artifact. It is also the ONLY
-        # guideline on a fresh dashboard, so 404ing here made the report link
-        # broken for every first-time visitor. Render what these rules do
+        # hand-written SpecClauses, not a CQL_converter artifact. Render what these rules do
         # carry: the source sentence, what the rule is for, and its holes.
         # There is no registry, so no English clause -- the page says less
         # rather than claiming more.

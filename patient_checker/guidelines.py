@@ -222,14 +222,6 @@ def _merged_registry(triages, index, mention_llm, select_llm) -> "dsl.Registry":
     imported, since demo.py is a script, not a library, and CQL_converter is not to
     be modified for this.
 
-    Re-binding each statement from scratch here would be wrong twice over.
-    Correctness: binding runs through a model selector, so a second call can
-    disagree with the first, and the delivered rule would then reference a
-    variable the delivered registry does not contain (patient_checker rejects
-    that as UNKNOWN_VAR -- the safety net working, not the pipeline working).
-    Cost: it would be a second full binding pass, three-ish model calls per
-    encodable statement, after every statement has already been bound once.
-
     Re-binding is kept only as the fallback for a Triage from an older run
     that has no registry attached."""
     seen, events = {}, {}
@@ -633,10 +625,6 @@ def register_bundle(bundle_path, title: str | None = None,
     return entry
 
 
-# demo.html links to these two ids by fixed name -- not the `title-hex` ids
-# ingest() generates -- so it can point at a fixed URL. Each is backed by
-# CQL_converter's own committed bundle (checked into git, unlike guidelines/
-# itself, which is gitignored runtime data).
 _DEMO_SEEDS = [
     ("pmc12355350", "PMC12355350",
      "Type 2 diabetes: cardiovascular, kidney and weight-loss therapeutics "
