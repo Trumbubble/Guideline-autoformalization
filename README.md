@@ -88,6 +88,18 @@ pick.
   page is one self-contained file Flask serves directly.
 - **Deployment** -- Docker, deployed to Fly.io
 
+## Clinician validation
+
+[`doctor_validation/`](doctor_validation/) holds the clinician check of the
+system's encoding decisions:
+
+- `Doctor validation test - Neurips 2026.pdf` -- the instructions given to the
+  clinician: what the system does, and the labels (fully / partially
+  encodable, or refused) with examples.
+- `clinician-validation-test-statements.xlsx` -- the guideline statements,
+  each with the clinician's classification and optional comments, to compare
+  against the machine's output.
+
 ## Documentation
 
 - [`DOCUMENTATION.md`](DOCUMENTATION.md) -- the whole system in detail: the
